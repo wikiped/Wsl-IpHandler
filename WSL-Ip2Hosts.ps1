@@ -12,69 +12,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-function IsElevated {
-    $id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
-    $p = New-Object System.Security.Principal.WindowsPrincipal($id)
-    if ($p.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) { $true }
-    else { $false }
-}
-
-function EncodeCommand {
-    param ($Command)
-    $bytes = [System.Text.Encoding]::Unicode.GetBytes($command)
-    [Convert]::ToBase64String($bytes)
-}
-
-function GetPowerShellExecutablePath {
-    $psName = If ($PSVersionTable.PSVersion.Major -le 5) { 'powershell' } Else { 'pwsh' }
-    $psexe = Join-Path $PSHOME "${psName}.exe"
-    if (!(Test-Path -Path $psexe -PathType Leaf)) {
-        Write-Error "PowerShell Executable Cannot be located: $psexe" -ErrorAction Stop
-    }
-    $psexe
-}
-
-function RunElevated {
-    param($CommandToEncode)
-    $encodedCommand = EncodeCommand $CommandToEncode
-    $argList = '-WindowStyle', 'Hidden', '-EncodedCommand', $encodedCommand
-    Write-Debug 'Requesting Administrator Permissions...'
-    $psexe = (GetPowerShellExecutablePath)
-    Start-Process $psexe -WindowStyle Hidden -Verb RunAs -ArgumentList $argList
-}
-
-function ContainsIpAddress {
-    param ([string]$Line, [string]$regexIpAddress)
-    $Line -match "^\s*$regexIpAddress"
-}
-
-function ContainsHost {
-    param ([string]$Line, [string]$regexHostName)
-    $Line -match ".*$regexHostName.*"
-}
-
-function HostAssignedToAnotherIpAddress {
-    param ([string]$Line, [string]$regexIpAddress, [string]$regexHostName)
-    $reIp = '^\s*(((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))\.){3}(((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))(\s|$))'
-    ($Line -match $reIp) -and (ContainsHost $Line $regexHostName) -and -not (ContainsIpAddress $Line $regexIpAddress)
-}
-
-function GetIpHostsComment ($Line) {
-    $Ip, $rest = $Line.Trim() -split ' ', 2
-    $Hosts, $Comment = $rest.Trim() -split '#', 2
-    $Ip.Trim(), $Hosts.Trim(), ('#' + $Comment)
-}
-
-function GetHostsCount ($Hosts) {
-    $hostsArray = $Hosts -split ' '
-    $hostsArray.Count
-}
-
-function CreateAssignment ($IpAddress, $HostName, $comment = '  # Added by WSL-Ip2Hosts.ps1') {
-    $line = $IpAddress.PadRight(17, ' ')
-    $line += $HostName
-    $line + ($comment ? $comment.PadLeft(80 - $line.Length, ' ') : '')
-}
+. (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve)
+. (Join-Path $PSScriptRoot 'FunctionsHostsFile.ps1' -Resolve)
 
 function ProcessContent {
     param (
@@ -171,7 +110,7 @@ if ($contentModified) {
     if (-not (IsElevated)) {
         $newHostsContent = $newHostsContent -join "`n"
         $command = "Set-Content -Path `"$hostsFilePath`" -Value `"$newHostsContent`" -Encoding ASCII"
-        RunElevated $command
+        Invoke-CommandEncodedElevated $command
     }
     else {
         Set-Content -Path $hostsFilePath -Value $newHostsContent -Encoding ASCII

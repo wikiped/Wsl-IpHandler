@@ -10,11 +10,12 @@ set -o ignoreeof
 set -o pipefail
 
 import() {
+	local filename
 	filename="$1"
 	local script_path
 	script_path="$(dirname -- "$0")"
-	local -r script_path
-	declare -rx filepath="${script_path}/$filename"
+	readonly script_path
+	local -r filepath="${script_path}/$filename"
 	if [[ ! -f "${filepath}" ]]; then
 		printf '[FATAL] Could not find %s\n' "${filepath}" 1>&2
 		exit 1
@@ -45,15 +46,24 @@ script_target="${2%/}/${script_source##*/}"  # Only file name from source is nee
 win_hosts_edit_script_path="$3"
 windows_host=$4
 wsl_host=$5
-wsl_ip_offset=$6
-test "$wsl_ip_offset" -ge 0 -a "$wsl_ip_offset" -lt 255 || error ${LINENO} "$wsl_ip_offset - is not valid ip offset!" 1
+wsl_static_ip_or_offset=$6
 
 echo_debug "script_source:  $script_source" ${LINENO}
 echo_debug "script_target:  $script_target" ${LINENO}
 echo_debug "windows_host:   $windows_host" ${LINENO}
 echo_debug "wsl_host:       $wsl_host" ${LINENO}
-echo_debug "wsl_ip_offset:  $wsl_ip_offset" ${LINENO}
+echo_debug "wsl_static_ip_or_offset:  $wsl_static_ip_or_offset" ${LINENO}
 echo_verbose "Finised Processing Incoming Arguments."
+
+if is_valid_ip_address "$wsl_static_ip_or_offset"
+then
+	wsl_static_ip="$wsl_static_ip_or_offset"
+	wsl_ip_offset=""
+else
+	wsl_static_ip=""
+	wsl_ip_offset="$wsl_static_ip_or_offset"
+	test "$wsl_ip_offset" -ge 0 -a "$wsl_ip_offset" -lt 255 || error ${LINENO} "$wsl_ip_offset - is not valid ip offset!" 1
+fi
 
 # Install required Package
 echo_verbose "Installing Required Packages..."
@@ -64,7 +74,12 @@ echo_verbose "Installed Required Packages."
 echo_verbose "Setting Config Options in /etc/wsl.conf..."
 set_config 'windows_host' "$windows_host" || error ${LINENO} "set_config 'windows_host'"
 set_config 'wsl_host' "$wsl_host" || error ${LINENO} "set_config 'wsl_host'"
-set_config 'ip_offset' "$wsl_ip_offset" || error ${LINENO} "set_config 'wsl_ip_offset'"
+if [[ -n "$wsl_static_ip" ]]
+then
+	set_config 'static_ip' "$wsl_static_ip" || error ${LINENO} "set_config 'static_ip' $wsl_static_ip"
+else
+	set_config 'ip_offset' "$wsl_ip_offset" || error ${LINENO} "set_config 'ip_offset' $wsl_ip_offset"
+fi
 echo_verbose "Finised Setting Config Options in /etc/wsl.conf."
 
 # Copy Autorun Script
@@ -76,7 +91,7 @@ echo_verbose "Copied Autorun Script: $script_target"
 echo_verbose "Editing Autorun Script to use actual path to powershell script..."
 var_name='win_hosts_edit_script'
 echo_debug "win_hosts_edit_script_path: $win_hosts_edit_script_path"
-sed -i "s%^${var_name}=.*$%${var_name}=\"${win_hosts_edit_script_path//\\/\\\\}\"%" "$script_target"
+sed -i "s%${var_name}=.*$%${var_name}=\"${win_hosts_edit_script_path//\\/\\\\}\"%" "$script_target"
 echo_verbose "Finised Editing Autorun Script to use actual path to powershell script."
 
 # Set ownership and permisions for Autorun script

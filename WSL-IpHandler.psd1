@@ -12,7 +12,7 @@
     RootModule        = 'WSL-IpHandler'
 
     # Version number of this module.
-    ModuleVersion     = '0.0.1'
+    ModuleVersion     = '0.2.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -70,16 +70,30 @@
 
     # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
     # FunctionsToExport = '*'
-    FunctionsToExport = @('Install-WSLIpHandler', 'Uninstall-WSLIpHandler', 'Invoke-WslStatic', 'Get-IpOffset', 'Set-IpOffset')
+    FunctionsToExport = @(
+        'Install-WSLIpHandler',
+        'Uninstall-WSLIpHandler',
+        'Invoke-WslStatic',
+        'Get-WslIpOffset',
+        'Set-WslIpOffset',
+        'Set-WslNetworkParameters',
+        'Remove-WslNetworkParameters',
+        'Set-WslNetworkAdapter',
+        'Remove-WslNetworkAdapter',
+        'Test-WslInstallation'
+    )
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
-    CmdletsToExport   = '*'
+    # CmdletsToExport   = '*'
+    CmdletsToExport   = @()
 
     # Variables to export from this module
-    VariablesToExport = '*'
+    # VariablesToExport = '*'
+    VariablesToExport = @()
 
     # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
-    AliasesToExport   = '*'
+    # AliasesToExport   = '*'
+    AliasesToExport   = @('wsl')
 
     # DSC resources to export from this module
     # DscResourcesToExport = @()
@@ -89,6 +103,7 @@
 
     # List of all files packaged with this module
     FileList          = @(
+        'functions.sh',
         'install-wsl-ip2hosts.sh',
         'uninstall-wsl-ip2hosts.sh',
         'wsl-ip2hosts.sh'
@@ -108,13 +123,20 @@
         }
 
         WslConfig       = @{
-            NetworkSectionName = 'network'
-            StaticIpAddressesSectionName = 'static_ip_addresses'
-            IpOffsetSectionName = 'ip-addresses_offsets'
-            GatewayIpAddressKeyName = 'gateway_ip_address'
-            PrefixLengthKeyName = 'prefix_length'
-            DnsServersKeyName = 'dns_servers'
+            NetworkSectionName           = 'network'
+            StaticIpAddressesSectionName = 'static_ips'
+            IpOffsetSectionName          = 'ip_offsets'
+            GatewayIpAddressKeyName      = 'gateway_ip'
+            PrefixLengthKeyName          = 'prefix_length'
+            DnsServersKeyName            = 'dns_servers'
         }
+
+        ProfileContent  = @(
+            '# Start of WSL-IpHandler Section',
+            'Import-Module WSL-IpHandler -Force',
+            # 'Set-Alias wsl Invoke-WslStatic',
+            '# End of WSL-IpHandler Section'
+        )
 
         PSData          = @{
 

@@ -76,6 +76,16 @@ install_packages() {
 	# fi
 }
 
+is_valid_ip_address() {
+	ip_pattern='^(((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))\.){3}((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))$'
+	if (echo "$1" | grep -Pqs "$ip_pattern" &>/dev/null)
+	then
+		true
+	else
+		false
+	fi
+}
+
 set_config() {
 	key=$1
 	value=$2

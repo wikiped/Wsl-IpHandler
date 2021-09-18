@@ -5,21 +5,22 @@ $script:PrivateData = $null
 function Get-PrivateData {
     [CmdletBinding()]
     param()
-    Write-Debug 'Get-PrivateData...'
+    $fn = $MyInvocation.MyCommand.Name
+
     if ($null -eq $script:PrivateData) {
-        Write-Debug 'PrivateData is Null'
-        # $Invocation = (Get-Variable MyInvocation -Scope 0).Value
+        Write-Debug "${fn}: PrivateData does not exist!"
         try {
             $script:PrivateData = $MyInvocation.MyCommand.Module.PrivateData.Clone()
         }
         catch {
             # Write-Host "MyInvocation: $($MyInvocation | Out-String)"
-            Write-Error "MyInvocation: $($MyInvocation | Out-String)`nError Cloning PrivateData: $($_.Exception.Message | Out-String)"
+            Write-Error "${fn}: MyInvocation: $($MyInvocation | Out-String)`nError Cloning PrivateData: $($_.Exception.Message | Out-String)"
         }
-        Write-Debug "Cloned PrivateData - Count: $($script:PrivateData.Count)"
+        Write-Debug "${fn}: Cloned PrivateData - Count: $($script:PrivateData.Count)"
         $script:PrivateData.Remove('PSData')
-        Write-Debug 'PsData removed from PrivateData'
+        Write-Debug "${fn}: PsData removed from PrivateData"
     }
+    Write-Debug "${fn}: Returning PrivateData: $($script:PrivateData | Out-String)"
     $script:PrivateData
 }
 
@@ -28,7 +29,7 @@ function Get-ScriptName {
     param($ScriptName)
     $local:ScriptNames = (Get-PrivateData)['ScriptNames']
     $errorMessage = "Wrong ScriptName: '$ScriptName'. Valid names:`n$($ScriptNames.Keys | Out-String)"
-    $local:ScriptNames.ContainsKey($ScriptName) ? `
+    $local:ScriptNames.Contains($ScriptName) ? `
         $local:ScriptNames[$ScriptName] : (Write-Error $errorMessage -ErrorAction Stop)
 }
 
@@ -37,7 +38,7 @@ function Get-ScriptLocation {
     param($ScriptName)
     $local:ScriptLocations = (Get-PrivateData)['ScriptLocations']
     $errorMessage = "Wrong ScriptName: '$ScriptName'. Valid names:`n$($ScriptLocations.Keys | Out-String)"
-    $local:ScriptLocations.ContainsKey($ScriptName) ? `
+    $local:ScriptLocations.Contains($ScriptName) ? `
         $local:ScriptLocations[$ScriptName] : (Write-Error $errorMessage -ErrorAction Stop)
 }
 
@@ -66,16 +67,10 @@ function Get-StaticIpAddressesSectionName {
     (Get-PrivateData).WslConfig.StaticIpAddressesSectionName
 }
 
-function Get-IpOffsetSectionName {
+function Get-WslIpOffsetSectionName {
     [CmdletBinding()]
     param()
     (Get-PrivateData).WslConfig.IpOffsetSectionName
-}
-
-function Get-GatewayIpAddressKeyName {
-    [CmdletBinding()]
-    param()
-    (Get-PrivateData).WslConfig.GatewayIpAddressKeyName
 }
 
 function Get-GatewayIpAddressKeyName {
@@ -94,6 +89,12 @@ function Get-DnsServersKeyName {
     [CmdletBinding()]
     param()
     (Get-PrivateData).WslConfig.DnsServersKeyName
+}
+
+function Get-ProfileContent {
+    [CmdletBinding()]
+    param()
+    (Get-PrivateData).ProfileContent
 }
 
 #endregion Helper Functions
