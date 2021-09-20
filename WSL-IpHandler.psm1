@@ -7,7 +7,7 @@ Set-StrictMode -Version latest
 . (Join-Path $PSScriptRoot 'HelpersPrivateData.ps1' -Resolve)
 . (Join-Path $PSScriptRoot 'HelpersWslConfig.ps1' -Resolve)
 
-function Install-WSLIpHandler {
+function Install-WslIpHandler {
     [CmdletBinding(DefaultParameterSetName = 'Dynamic')]
     param (
         [Parameter(Mandatory)]
@@ -86,24 +86,24 @@ function Install-WSLIpHandler {
         Write-Debug "${fn}: Seting Wsl Network Parameters: GatewayIpAddress=$GatewayIpAddress PrefixLength=$PrefixLength DNSServerList=$DNSServerList"
         Set-WslNetworkParameters -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $DNSServerList
 
-        Set-WslNetworkAdapter
+        Set-WslNetworkAdapterConfig
     }
 
-    if ($null -ne $WslInstanceIpAddress) {
-        $null = Test-ValidStaticIpAddress $WslInstanceIpAddress -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength
-
-        Write-Debug "${fn}: Seting Wsl Config Value: SectionName=$(Get-StaticIpAddressesSectionName) KeyName=$WslInstanceName Value=$($WslInstanceIpAddress.IPAddressToString)"
-
-        Set-WslConfigValue (Get-StaticIpAddressesSectionName) $WslInstanceName $WslInstanceIpAddress.IPAddressToString -UniqueValue
-
-        $WslHostIpOrOffset = $WslInstanceIpAddress.IPAddressToString
-    }
-    else {
+    if ($null -eq $WslInstanceIpAddress) {
         $WslIpOffset = Get-WslIpOffset $WslInstanceName
         Write-Verbose "Setting Automatic Ip Offset: $WslIpOffset for $WslInstanceName."
         Set-WslIpOffset $WslInstanceName $WslIpOffset
 
         $WslHostIpOrOffset = $WslIpOffset
+    }
+    else {
+        $null = Test-ValidStaticIpAddress $WslInstanceIpAddress -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength
+
+        Write-Debug "${fn}: Setting Wsl Config Value: SectionName=$(Get-StaticIpAddressesSectionName) KeyName=$WslInstanceName Value=$($WslInstanceIpAddress.IPAddressToString)"
+
+        Set-WslConfigValue (Get-StaticIpAddressesSectionName) $WslInstanceName $WslInstanceIpAddress.IPAddressToString -UniqueValue
+
+        $WslHostIpOrOffset = $WslInstanceIpAddress.IPAddressToString
     }
 
     Write-WslConfig -Backup:$BackupWslConfig
@@ -144,7 +144,7 @@ function Install-WSLIpHandler {
     Write-Host "PowerShell Successfully Installed WSL-IpHandler to $WslInstanceName."
 }
 
-function Uninstall-WSLIpHandler {
+function Uninstall-WslIpHandler {
     [CmdletBinding()]
     param (
         [AllowNull()][AllowEmptyString()]
@@ -264,7 +264,7 @@ function Remove-WslNetworkParameters {
     Write-WslConfig -Backup:$BackupWslConfig
 }
 
-function Set-WslNetworkAdapter {
+function Set-WslNetworkAdapterConfig {
     param(
         [Parameter()][Alias('Gateway')]
         [ipaddress]$GatewayIpAddress,
@@ -430,7 +430,7 @@ function Invoke-WslStatic {
         Write-Debug "${fn}: `$args: $args_copy"
         Write-Debug "${fn}: Passed arguments require Setting WSL Netwrok Adapter."
 
-        Set-WslNetworkAdapter
+        Set-WslNetworkAdapterConfig
     }
 
     Write-Debug "${fn}: Invoking wsl.exe $args_copy"
