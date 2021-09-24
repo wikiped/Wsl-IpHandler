@@ -2,7 +2,7 @@
 $WslConfig = $null
 
 $script:NoSection = '_'  # Variable Required by Get-IniContent.ps1 and Out-IniFile.ps1
-. (Join-Path $PSScriptRoot 'HelpersPrivateData.ps1' -Resolve)
+. (Join-Path $PSScriptRoot 'FunctionsPrivateData.ps1' -Resolve)
 . (Join-Path $PSScriptRoot 'Get-IniContent.ps1' -Resolve)
 . (Join-Path $PSScriptRoot 'Out-IniFile.ps1' -Resolve)
 
@@ -21,6 +21,48 @@ function Get-WslConfig {
     $WslConfig
 }
 
+function Test-WslConfigSectionExists {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
+        [string]$SectionName,
+
+        [switch]$ForceReadFileFromDisk
+    )
+    $fn = $MyInvocation.MyCommand.Name
+    $config = Get-WslConfig -ForceReadFileFromDisk:$ForceReadFileFromDisk
+    Write-Debug "${fn}: `$SectionName = '$SectionName'"
+
+    if ($config.Contains($SectionName)) {
+        Write-Debug "${fn}: Section '$SectionName' Exists!"
+        $true
+    }
+    else {
+        Write-Debug "${fn}: Section '$SectionName' Does NOT Exist!"
+        $false
+    }
+}
+
+function Get-WslConfigSectionCount {
+    [OutputType([int])]
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
+        [string]$SectionName,
+
+        [switch]$ForceReadFileFromDisk
+    )
+    $fn = $MyInvocation.MyCommand.Name
+    Write-Debug "${fn}: `$SectionName = '$SectionName'"
+
+    if (Test-WslConfigSectionExists $SectionName -ForceReadFileFromDisk:$ForceReadFileFromDisk) {
+        (Get-WslConfigSection $SectionName -ForceReadFileFromDisk:$ForceReadFileFromDisk).Count
+    }
+    else {
+        -1
+    }
+}
+
 function Get-WslConfigSection {
     [CmdletBinding()]
     param(
@@ -29,15 +71,49 @@ function Get-WslConfigSection {
 
         [switch]$ForceReadFileFromDisk
     )
-    $name = $MyInvocation.MyCommand.Name
+    $fn = $MyInvocation.MyCommand.Name
     $config = Get-WslConfig -ForceReadFileFromDisk:$ForceReadFileFromDisk
-    Write-Debug "${name}: `$SectionName = '$SectionName'"
+    Write-Debug "${fn}: `$SectionName = '$SectionName'"
 
-    if (-not $config.Contains($SectionName)) {
-        Write-Debug "${name}: Section '$SectionName' not found in Wsl Config. Empty Section Created!"
+    if (-not (Test-WslConfigSectionExists $SectionName)) {
+        Write-Debug "${fn}: Empty Section '$SectionName' Created!"
         $config[$SectionName] = New-Object System.Collections.Specialized.OrderedDictionary([System.StringComparer]::OrdinalIgnoreCase)
     }
     $config[$SectionName]
+}
+
+function Remove-WslConfigSection {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
+        [string]$SectionName,
+
+        [Parameter(Mandatory)]
+        [ref]$Modified,
+
+        [switch]$OnlyIfEmpty,
+
+        [switch]$ForceReadFileFromDisk
+    )
+    $fn = $MyInvocation.MyCommand.Name
+    $config = Get-WslConfig -ForceReadFileFromDisk:$ForceReadFileFromDisk
+    Write-Debug "${fn}: `$SectionName = '$SectionName'"
+
+    if ($config.Contains($SectionName)) {
+        if ($OnlyIfEmpty.IsPresent) {
+            Write-Debug "${fn}: Only Remove Empty Section is specified."
+            if ($config[$SectionName].Count -eq 0) {
+                $config.Remove($SectionName)
+                $Modified.Value = $true
+                Write-Debug "${fn}: Conditionally Removed Empty Section '$SectionName'."
+            }
+        }
+        else {
+            $config.Remove($SectionName)
+            $Modified.Value = $true
+            Write-Debug "${fn}: Unconditionally Removed Section '$SectionName'."
+        }
+    }
 }
 
 function Get-WslConfigValue {
@@ -51,6 +127,8 @@ function Get-WslConfigValue {
 
         [Parameter()]
         [object]$DefaultValue,
+
+        [ref]$Modified,
 
         [switch]$ForceReadFileFromDisk
     )
@@ -66,6 +144,9 @@ function Get-WslConfigValue {
         if ($PSBoundParameters.ContainsKey('DefaultValue')) {
             Write-Debug "${name}: DefaultValue '$DefaultValue' will be assigned to '$KeyName'"
             $section[$KeyName] = $DefaultValue
+            if ($PSBoundParameters.ContainsKey('Modified') -and $null -ne $Modified) {
+                $Modified.Value = $true
+            }
         }
         else {
             Write-Error "${name}: Section '$SectionName' has no key: '$KeyName' and no DefaultValue is given!" -ErrorAction Stop
@@ -87,6 +168,9 @@ function Set-WslConfigValue {
         [Parameter(Mandatory)][ValidateNotNull()]
         [object]$Value,
 
+        [Parameter(Mandatory)]
+        [ref]$Modified,
+
         [switch]$UniqueValue,
 
         [switch]$ForceReadFileFromDisk
@@ -99,19 +183,22 @@ function Set-WslConfigValue {
     $section = Get-WslConfigSection $SectionName -ForceReadFileFromDisk:$ForceReadFileFromDisk
     Write-Debug "${fn}: Initial Section Content: $($section | Out-String)"
 
-    if ($UniqueValue) {
-        if ($Value -in $section.Values) {
-            Write-Debug "${fn}: with `$UniqueValue=$UniqueValue found existing value: '$Value'"
-            $usedOwner = ($Section.GetEnumerator() |
-                    Where-Object { $_.Value -eq $Value } |
-                    Select-Object -ExpandProperty Name)
-            if ($usedOwner -ne $KeyName) {
-                Write-Error "${fn}: Value: '$Value' is already used by: $usedOwner" -ErrorAction Stop
-            }
-            return
+    if ($UniqueValue -and $Value -in $section.Values) {
+        Write-Debug "${fn}: with `$UniqueValue=$UniqueValue found existing value: '$Value'"
+        $usedOwner = ($Section.GetEnumerator() |
+                Where-Object { $_.Value -eq $Value } |
+                Select-Object -ExpandProperty Name)
+        if ($usedOwner -ne $KeyName) {
+            Write-Error "${fn}: Value: '$Value' is already used by: $usedOwner" -ErrorAction Stop
         }
+        Write-Error "${fn}: Value: '$Value' is already set to: $usedOwner" -ErrorAction Stop
+        return
     }
-    ${section}[$KeyName] = $Value
+
+    if (${section}[$KeyName] -ne $Value) {
+        ${section}[$KeyName] = $Value
+        $Modified.Value = $true
+    }
 
     Write-Debug "${fn}: '$KeyName' = '$Value'"
     Write-Debug "${fn}: Final Section Content: $($section | Out-String)"
@@ -126,6 +213,9 @@ function Remove-WslConfigValue {
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
         [string]$KeyName,
 
+        [Parameter(Mandatory)]
+        [ref]$Modified,
+
         [switch]$ForceReadFileFromDisk
     )
     $fn = $MyInvocation.MyCommand.Name
@@ -135,15 +225,21 @@ function Remove-WslConfigValue {
     $section = Get-WslConfigSection $SectionName -ForceReadFileFromDisk:$ForceReadFileFromDisk
     Write-Debug "${fn}: Initial Section Content: $($section | Out-String)"
 
-    ${section}.Remove($KeyName)
+    if (${section}.Contains($KeyName)) {
+        ${section}.Remove($KeyName)
+        $Modified.Value = $true
+    }
 
     Write-Debug "${fn}: Final Section Content: $($section | Out-String)"
+
+    Remove-WslConfigSection $SectionName -OnlyIfEmpty:$true -Modified $Modified
 }
 
 function Get-AvailableStaticIpAddress {
     [OutputType([ipaddress])]
     [CmdletBinding()]
     param( [ipaddress]$GatewayIpAddress )
+
     $fn = $MyInvocation.MyCommand.Name
     $GatewayIpAddress ??= Get-WslConfigValue (Get-NetworkSectionName) (Get-GatewayIpAddressKeyName) -DefaultValue $null
     $PrefixLength = Get-WslConfigValue (Get-NetworkSectionName) (Get-PrefixLengthKeyName) -DefaultValue 24
@@ -160,10 +256,12 @@ function Get-AvailableStaticIpAddress {
     Write-Debug "${fn}: `$GatewayIpAddress=$GatewayIpAddress"
     Write-Debug "${fn}: `$PrefixLength=$PrefixLength"
 
-    $secion = Get-WslConfigSection -SectionName (Get-StaticIpAddressesSectionName)
     $ipcalc = Join-Path $PSScriptRoot 'IP-Calc.ps1' -Resolve
 
-    if ($secion.Count) {
+    $SectionName = (Get-StaticIpAddressesSectionName)
+
+    if (Get-WslConfigSectionCount -gt 0) {
+        $secion = Get-WslConfigSection -SectionName $SectionName
         Write-Debug "${fn}: There are $($secion.Count) in Static IP addresses section."
         if ($null -eq $GatewayIpAddress) {
             Write-Warning 'Without Gateway IP address for WSL SubNet available Static IP address will be based on simple sorting algorithm, without any guaranties.'
@@ -208,6 +306,8 @@ function Get-WslIpOffsetSection {
         [Parameter()][ValidateNotNullOrEmpty()]
         [string]$SectionName,
 
+        [ref]$Modified,
+
         [switch]$ForceReadFileFromDisk
     )
     $name = $MyInvocation.MyCommand.Name
@@ -215,7 +315,7 @@ function Get-WslIpOffsetSection {
     if ([string]::IsNullOrWhiteSpace($SectionName)) { $SectionName = (Get-WslIpOffsetSectionName) }
     Write-Debug "${name}: `$SectionName: '$SectionName'"
 
-    Get-WslConfigSection $SectionName -ForceReadFileFromDisk:$ForceReadFileFromDisk
+    Get-WslConfigSection -SectionName $SectionName -ForceReadFileFromDisk:$ForceReadFileFromDisk
 }
 
 function Test-ValidStaticIpAddress {
@@ -343,16 +443,21 @@ function Set-WslIpOffset {
         [Parameter(Mandatory)][ValidateRange(1, 254)]
         [int]$IpOffset,
 
+        [Parameter(Mandatory)]
+        [ref]$Modified,
+
         [switch]$ForceReadFileFromDisk,
 
         [switch]$BackupWslConfig
     )
-    $name = $MyInvocation.MyCommand.Name
+    $fn = $MyInvocation.MyCommand.Name
+
     $Section = (Get-WslIpOffsetSection -ForceReadFileFromDisk:$ForceReadFileFromDisk)
-    Write-Debug "$Name for $WslInstanceName to: $IpOffset."
-    Write-Debug "$Name Initial Section Content: $($Section | Out-String)"
+    Write-Debug "${fn}: for $WslInstanceName to: $IpOffset."
+    Write-Debug "${fn}: Initial Section Content: $($Section | Out-String)"
+
     if ($IpOffset -in $Section.Values) {
-        Write-Debug "$name Found that offset: $IpOffset is already in use."
+        Write-Debug "${fn}: Found that offset: $IpOffset is already in use."
         $usedIPOwner = ($Section.GetEnumerator() |
                 Where-Object { [int]$_.Value -eq $IpOffset } |
                 Select-Object -ExpandProperty Name)
@@ -361,8 +466,12 @@ function Set-WslIpOffset {
         }
         return
     }
-    ${Section}[$WslInstanceName] = [string]$IpOffset
-    Write-Debug "$name Final Section Content: $($Section | Out-String)"
+
+    if ([string]${Section}[$WslInstanceName] -ne [string]$IpOffset) {
+        ${Section}[$WslInstanceName] = [string]$IpOffset
+        $Modified.Value = $true
+    }
+    Write-Debug "${fn}: Final Section Content: $($Section | Out-String)"
 }
 
 function Write-WslConfig {

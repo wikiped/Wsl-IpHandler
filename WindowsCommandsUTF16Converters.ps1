@@ -20,6 +20,27 @@
     }
 }
 
+function Convert-UTF16toUTF8 {
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowEmptyString()][AllowNull()]
+        [string[]]$CommandOutput,
+
+        [Parameter()]
+        [switch]$IncludeEmptyLines
+    )
+    $array = @($input)
+    if ($array.Count) { $CommandOutput = $array }
+    if (!(Test-Path variable:CommandOutput)) { $CommandOutput = @() }
+
+    $utf8 = [System.Text.Encoding]::GetEncoding('utf-8')
+    $utf16 = [System.Text.Encoding]::GetEncoding('utf-16')
+
+    $output = $utf8.GetString([System.Text.Encoding]::Convert($utf16, $utf8, $utf8.GetBytes($CommandOutput -join "`n"))) -split "`n"
+    if ($IncludeEmptyLines.IsPresent) { $output }
+    else { $output | Where-Object { $_.Length -gt 0 } }
+}
+
 function Get-WslIsRunning {
     [CmdletBinding()]
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'isRunning', Justification = 'False Positive')]
@@ -29,7 +50,8 @@ function Get-WslIsRunning {
     )
     $isRunning = $false
     $patternRunning = ".*\b${WslInstanceName}\b\s+\brunning\b\.*"
-    Get-CommandOutputInUTF16AsUTF8 'wsl.exe' '-l', '-v' |
+    wsl.exe -l -v |
+        Convert-UTF16toUTF8 |
         Select-Object -Skip 1 |
         ForEach-Object { if ($_ -match $patternRunning) { $isRunning = $true } }
     $isRunning

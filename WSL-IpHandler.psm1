@@ -4,10 +4,12 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version latest
 
 . (Join-Path $PSScriptRoot 'WindowsCommandsUTF16Converters.ps1' -Resolve)
-. (Join-Path $PSScriptRoot 'HelpersPrivateData.ps1' -Resolve)
-. (Join-Path $PSScriptRoot 'HelpersWslConfig.ps1' -Resolve)
+. (Join-Path $PSScriptRoot 'FunctionsPrivateData.ps1' -Resolve)
+. (Join-Path $PSScriptRoot 'FunctionsWslConfig.ps1' -Resolve)
+. (Join-Path $PSScriptRoot 'FunctionsHostsFile.ps1' -Resolve)
 
 function Install-WslIpHandler {
+
     [CmdletBinding(DefaultParameterSetName = 'Dynamic')]
     param (
         [Parameter(Mandatory)]
@@ -57,6 +59,7 @@ function Install-WslIpHandler {
         [switch]$BackupWslConfig
     )
     $fn = $MyInvocation.MyCommand.Name
+
     $debug_var = if ($DebugPreference -eq 'Continue') { 'DEBUG=1' } else { '' }
     $verbose_var = if ($VerbosePreference -eq 'Continue') { 'VERBOSE=1' } else { '' }
 
@@ -81,10 +84,12 @@ function Install-WslIpHandler {
     #endregion WSL Autorun Script Path
 
     #region Save Parameters to .wslconfig
+    $configModified = $false
+
     if ($null -ne $GatewayIpAddress) {
         $DNSServerList = [string]::IsNullOrWhiteSpace($DNSServerList) ? $GatewayIpAddress : $DNSServerList
         Write-Debug "${fn}: Seting Wsl Network Parameters: GatewayIpAddress=$GatewayIpAddress PrefixLength=$PrefixLength DNSServerList=$DNSServerList"
-        Set-WslNetworkParameters -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $DNSServerList
+        Set-WslNetworkParameters -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $DNSServerList -Modified ([ref]$configModified)
 
         Set-WslNetworkAdapterConfig
     }
@@ -92,7 +97,7 @@ function Install-WslIpHandler {
     if ($null -eq $WslInstanceIpAddress) {
         $WslIpOffset = Get-WslIpOffset $WslInstanceName
         Write-Verbose "Setting Automatic Ip Offset: $WslIpOffset for $WslInstanceName."
-        Set-WslIpOffset $WslInstanceName $WslIpOffset
+        Set-WslIpOffset $WslInstanceName $WslIpOffset -Modified ([ref]$configModified)
 
         $WslHostIpOrOffset = $WslIpOffset
     }
@@ -101,12 +106,12 @@ function Install-WslIpHandler {
 
         Write-Debug "${fn}: Setting Wsl Config Value: SectionName=$(Get-StaticIpAddressesSectionName) KeyName=$WslInstanceName Value=$($WslInstanceIpAddress.IPAddressToString)"
 
-        Set-WslConfigValue (Get-StaticIpAddressesSectionName) $WslInstanceName $WslInstanceIpAddress.IPAddressToString -UniqueValue
+        Set-WslConfigValue (Get-StaticIpAddressesSectionName) $WslInstanceName $WslInstanceIpAddress.IPAddressToString -Modified ([ref]$configModified) -UniqueValue
 
         $WslHostIpOrOffset = $WslInstanceIpAddress.IPAddressToString
     }
 
-    Write-WslConfig -Backup:$BackupWslConfig
+    if ($configModified) { Write-WslConfig -Backup:$BackupWslConfig }
     #endregion Save Parameters to .wslconfig
 
     #region Run Bash Installation Script
@@ -132,8 +137,9 @@ function Install-WslIpHandler {
         Test-WslInstallation -WslInstanceName $WslInstanceName -WslHostName $WslHostName -WindowsHostName $WindowsHostName
     }
     catch {
-        throw
-        exit 1
+        Write-Debug "${fn} Error: $_"
+        Write-Host "$_" -ForegroundColor Red
+        return
     }
     finally {
         wsl.exe -t $WslInstanceName
@@ -170,6 +176,7 @@ function Uninstall-WslIpHandler {
 
         [switch]$BackupWslConfig
     )
+    $fn = $MyInvocation.MyCommand.Name
     $debug_var = if ($DebugPreference -eq 'Continue') { 'DEBUG=1' } else { '' }
     $verbose_var = if ($VerbosePreference -eq 'Continue') { 'VERBOSE=1' } else { '' }
 
@@ -189,23 +196,52 @@ function Uninstall-WslIpHandler {
     $BashUninstallParams = "$BashAutorunScriptName", "$BashAutorunScriptTarget"
 
     Write-Verbose "Running WSL Uninstallation script $BashUninstallScript"
-    Write-Debug "`$DebugPreference=$DebugPreference"
-    Write-Debug "`$VerbosePreference=$VerbosePreference"
+    Write-Debug "${fn}: `$DebugPreference=$DebugPreference"
+    Write-Debug "${fn}: `$VerbosePreference=$VerbosePreference"
 
     wsl.exe -d $WslInstanceName sudo -E env '"PATH=$PATH"' $debug_var $verbose_var bash $BashUninstallScriptWslPath @BashUninstallParams
+    Write-Debug "${fn}: Removed Bash Autorun scripts."
     #endregion Remove Bash Autorun
 
     #region Restart WSL Instance
     wsl.exe -t $WslInstanceName
+    Write-Debug "${fn}: Restarted $WslInstanceName"
     #endregion Restart WSL Instance
 
+    $wslconfigModified = $false
+    #region Remove WSL Instance Static IP from .wslconfig
+    Write-Debug "${fn}: Removing Static IP address for $WslInstanceName from .wslconfig..."
+    Remove-WslConfigValue (Get-StaticIpAddressesSectionName) $WslInstanceName -Modified ([ref]$wslconfigModified)
+    #endregion Remove WSL Instance Static IP from .wslconfig
+
+    #region Remove WSL Instance IP Offset from .wslconfig
+    Write-Debug "${fn}: Removing IP address offset for $WslInstanceName from .wslconfig..."
+    Remove-WslConfigValue (Get-WslIpOffsetSectionName) $WslInstanceName -Modified ([ref]$wslconfigModified)
+    #endregion Remove WSL Instance IP Offset from .wslconfig
+
+    #region Remove WSL Network Configuration from .wslconfig
+    Write-Debug "${fn}: Removing WSL Network Configuration for $WslInstanceName ..."
+    Remove-WslNetworkParameters -BackupWslConfig:$BackupWslConfig -Modified ([ref]$wslconfigModified)
+    #endregion Remove WSL Network Configuration from .wslconfig
+
+    #region Remove WSL Instance IP from windows hosts file
+    $hostsModified = $false
+    Write-Debug "${fn}: Removing record for $WslInstanceName from Windows Hosts ..."
+    $content = (Get-HostsFileContent)
+    Write-Debug "${fn}: Removing Host: $WslInstanceName from $($content.Count) Windows Hosts records ..."
+    $content = Remove-HostFromRecords -Records $content -HostName $WslInstanceName -Modified ([ref]$hostsModified)
+    Write-Debug "${fn}: Setting Windows Hosts file with $($content.Count) records ..."
+    #endregion Remove WSL Instance IP from windows hosts file
+
+    #region Save Modified .wslconfig and hosts Files
+    if ($wslconfigModified) { Write-WslConfig -Backup:$BackupWslConfig }
+    if ($hostsModified) { Write-HostsFileContent -Records $content }
+    #endregion Save Modified .wslconfig and hosts Files
+
     #region Remove Content from Powershell Profile
+    Write-Debug "${fn}: Removing Powershell Profile Modifications ..."
     Remove-ProfileContent
     #endregion Remove Content from Powershell Profile
-
-    #region Remove WSL Network Configuration
-    Remove-WslNetworkParameters -BackupWslConfig:$BackupWslConfig
-    #endregion Remove WSL Network Configuration
 
     Write-Host "PowerShell Successfully Uninstalled WSL-IpHandler from $WslInstanceName."
 }
@@ -241,27 +277,41 @@ function Set-WslNetworkParameters {
         [Alias('DNS')]
         [string]$DNSServerList, # String with Comma separated ipaddresses/hosts
 
+        [Parameter(Mandatory)]
+        [ref]$Modified,
+
         [switch]$BackupWslConfig
     )
-    Set-WslConfigValue (Get-NetworkSectionName) (Get-GatewayIpAddressKeyName) $GatewayIpAddress.IPAddressToString
+    Set-WslConfigValue (Get-NetworkSectionName) (Get-GatewayIpAddressKeyName) $GatewayIpAddress.IPAddressToString -Modified $Modified
 
-    Set-WslConfigValue (Get-NetworkSectionName) (Get-PrefixLengthKeyName) $PrefixLength
+    Set-WslConfigValue (Get-NetworkSectionName) (Get-PrefixLengthKeyName) $PrefixLength -Modified $Modified
 
-    Set-WslConfigValue (Get-NetworkSectionName) (Get-DnsServersKeyName) $DNSServerList
-
-    Write-WslConfig -Backup:$BackupWslConfig
+    Set-WslConfigValue (Get-NetworkSectionName) (Get-DnsServersKeyName) $DNSServerList -Modified $Modified
 }
 
 function Remove-WslNetworkParameters {
     [CmdletBinding()]
-    param ( [switch]$BackupWslConfig )
-    Remove-WslConfigValue (Get-NetworkSectionName) (Get-GatewayIpAddressKeyName)
+    param (
+        [Parameter(Mandatory)]
+        [ref]$Modified,
 
-    Remove-WslConfigValue (Get-NetworkSectionName) (Get-PrefixLengthKeyName)
+        [switch]$BackupWslConfig,
+        [switch]$Force
+    )
+    $networkSectionName = (Get-NetworkSectionName)
+    $staticIpSectionName = (Get-StaticIpAddressesSectionName)
 
-    Remove-WslConfigValue (Get-NetworkSectionName) (Get-DnsServersKeyName)
+    if ( $Force.IsPresent -or (Get-WslConfigSectionCount $staticIpSectionName) -le 0) {
+        Remove-WslConfigValue $networkSectionName (Get-GatewayIpAddressKeyName) -Modified $Modified
 
-    Write-WslConfig -Backup:$BackupWslConfig
+        Remove-WslConfigValue $networkSectionName (Get-PrefixLengthKeyName) -Modified $Modified
+
+        Remove-WslConfigValue $networkSectionName (Get-DnsServersKeyName) -Modified $Modified
+    }
+    else {
+        $staticIpSection = Get-WslConfigSection $staticIpSectionName
+        Write-Warning "WSL Network Adapter Parameters cannont be removed because there are Static IP Addresses remaining in .wslconfig:`n$([pscustomobject]$staticIpSection | Out-String)"
+    }
 }
 
 function Set-WslNetworkAdapterConfig {
@@ -278,7 +328,12 @@ function Set-WslNetworkAdapterConfig {
     $fn = $MyInvocation.MyCommand.Name
     $networkSectionName = (Get-NetworkSectionName)
 
-    $GatewayIpAddress ??= Get-WslConfigValue -SectionName $networkSectionName -KeyName (Get-GatewayIpAddressKeyName)
+    $GatewayIpAddress ??= Get-WslConfigValue -SectionName $networkSectionName -KeyName (Get-GatewayIpAddressKeyName) -DefaultValue $null
+
+    if ($null -eq $GatewayIpAddress) {
+        Write-Debug "${fn}: Gateway IP Address is not specified neither as parameter nor in .wslconfig. Aborting!"
+        return
+    }
 
     $PrefixLength = $PSBoundParameters.ContainsKey('PrefixLength') ? $PrefixLength : (Get-WslConfigValue -SectionName $networkSectionName -KeyName (Get-PrefixLengthKeyName) -DefaultValue 24)
 
@@ -340,6 +395,7 @@ function Remove-WslNetworkAdapter {
 }
 
 function Test-WslInstallation {
+    [CmdletBinding()]
     param (
         [ValidateNotNullOrEmpty()]
         [Alias('Name')]
@@ -351,33 +407,39 @@ function Test-WslInstallation {
         [ValidateNotNullOrEmpty()]
         [string]$WindowsHostName
     )
+    $fn = $MyInvocation.MyCommand.Name
     $failed = $false
+
     $error_message = @(
         "PowerShell finished installation of WSL-IpHandler to $WslInstanceName with errors:"
     )
 
     $testCommand = "ping -c1 $WindowsHostName"
-    Write-Debug "Testing Ping from WSL instance ${WslInstanceName}: `"$testCommand`""
+    Write-Debug "${fn}: Testing Ping from WSL instance ${WslInstanceName}: `"$testCommand`""
     $wslTest = (wsl.exe -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$testCommand`")
 
-    if (! ($wslTest -match ', 0% packet loss')) {
+    if (-not $wslTest -match ', 0% packet loss') {
+        Write-Debug "${fn}: Failed Ping from WSL Result:`n$wslTest"
+        Write-Debug "${fn}:`$wslTest: $($wslTest.Gettype())"
+
         $failed = $true
-        $error_message += "Pinging $WindowsHostName from $WslInstanceName Failed with error:`n$wslTest`n"
+        $error_message += "Pinging $WindowsHostName from $WslInstanceName Failed with error:`n$wslTest"
     }
 
     # Before testing WSL IP address - make sure WSL Instance is up and running
     if (-not (Get-WslIsRunning $WslInstanceName)) {
         $runCommand = 'exit'  # Even after 'exit' wsl instance should be running in background
-        Write-Debug "Running WSL instance $WslInstanceName for testing ping from Windows."
-        wsl.exe -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$runCommand`"
+        Write-Debug "${fn}: Running WSL instance $WslInstanceName for testing ping from Windows."
+        $null = (wsl.exe -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$runCommand`")
     }
 
     if (Get-WslIsRunning $WslInstanceName) {
         $windowsTest = $(ping -n 1 $WslHostName)
 
-        if ( ! ($windowsTest -match 'Lost = 0 \(0% loss\)')) {
+        if (-not $windowsTest -match 'Lost = 0 \(0% loss\)') {
+            Write-Debug "${fn}: Failed Ping from Windows Result:`n$windowsTest"
             $failed = $true
-            $error_message += "Pinging $WslHostName from windows Failed with error:`n$windowsTest`n"
+            $error_message += "Pinging $WslHostName from Windows Failed with error:`n$windowsTest"
         }
     }
     else {
@@ -386,8 +448,10 @@ function Test-WslInstallation {
     }
 
     if ($failed) {
-        Write-Error ($error_message -join "`n") -ErrorAction Stop
+        Write-Verbose "${fn}: Test Failed!"
+        Throw ($error_message -join "`n")
     }
+    Write-Verbose "${fn}: Test Succeded!"
 }
 
 function Invoke-WslStatic {
