@@ -39,6 +39,14 @@ script_name="$1"
 script_target="${2:-'/usr/local/bin'}"
 script_target="${script_target%/}/${script_name##*/}"
 
+# Remove Config options in /etc/wsl.conf
+echo_verbose "Removing Config Options in /etc/wsl.conf..."
+remove_config 'windows_host' || error ${LINENO} "remove_config 'windows_host'"
+remove_config 'wsl_host' || error ${LINENO} "remove_config 'wsl_host'"
+remove_config 'static_ip' || error ${LINENO} "remove_config 'static_ip'"
+remove_config 'ip_offset' || error ${LINENO} "set_config 'ip_offset'"
+echo_verbose "Finised Removing Config Options in /etc/wsl.conf."
+
 # Remove Autorun Script
 echo_verbose "Removing Autorun Script: $script_target"
 if [[ -f "${script_target}" ]]
@@ -50,7 +58,7 @@ else
 fi
 
 # Remove startup script file in /etc/profile.d/
-profile_d_script="/etc/profile.d/run-wsl-ip2hosts.sh"
+profile_d_script="/etc/profile.d/run-wsl-iphandler.sh"
 echo_verbose "Removing startup script file: $profile_d_script"
 if [[ -f "${profile_d_script}" ]]
 then
@@ -60,8 +68,8 @@ else
 	echo_verbose "File was not found: $profile_d_script"
 fi
 
-# Remove sudoers file wsl-ip2hosts from /etc/sudoers.d folder
-sudoers_file="/etc/sudoers.d/wsl-ip2hosts"
+# Remove sudoers file wsl-iphandler from /etc/sudoers.d folder
+sudoers_file="/etc/sudoers.d/wsl-iphandler"
 echo_verbose "Removing sudoers permissions file: $sudoers_file"
 if [[ -f "${sudoers_file}" ]]
 then

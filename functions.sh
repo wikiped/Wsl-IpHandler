@@ -21,9 +21,9 @@ error() {
 }
 
 echo_log() {
-	level="${1:-'INFO'}"
-	message="$2"
-	parent_lineno="${3:+"${3}: "}"
+	local level="${1:-'INFO'}"
+	local message="$2"
+	local parent_lineno="${3:+"${3}: "}"
 	printf '[%s] %s%s\n' "$level" "$parent_lineno" "$message"
 }
 
@@ -54,6 +54,7 @@ sudo_run() {
 }
 
 install_packages() {
+	local wsl_os
 	wsl_os="$(grep ^ID= /etc/os-release | cut -d= -f2)"
 	case "$wsl_os" in
 		"ubuntu" )
@@ -77,7 +78,7 @@ install_packages() {
 }
 
 is_valid_ip_address() {
-	ip_pattern='^(((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))\.){3}((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))$'
+	local ip_pattern='^(((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))\.){3}((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))$'
 	if (echo "$1" | grep -Pqs "$ip_pattern" &>/dev/null)
 	then
 		true
@@ -87,31 +88,49 @@ is_valid_ip_address() {
 }
 
 set_config() {
-	key=$1
-	value=$2
-	file='/etc/wsl.conf'
-	# echo "Setting key: '$key' to '$value' in config file: '$file'"
+	local key=$1
+	local value=$2
+	local file=${3:-'/etc/wsl.conf'}
+	echo_debug "Setting key: '$key' to '$value' in config file: '$file'"
 	if [[ $key != "" ]]
 	then
-		replacement="$key = $value"
+		local replacement="$key = $value"
 
-		test -f $file || (printf "[network]\n%s\n" "$replacement" > $file; return 0)
-		# echo "Modifying existing config file..."
+		test -f "$file" || (printf "[network]\n%s\n" "$replacement" > "$file"; return 0)
+		echo_debug "Modifying existing config file..." ${LINENO}
 
-		if grep -Pqs "^\s*$key\s*=" $file &>/dev/null
+		if grep -Pqs "^\s*$key\s*=" "$file" &>/dev/null
 		then
-			# echo "Replacing existing key: $key"
-			sed -i -e "s/^\s*$key\s*=.*/$replacement/g" $file
+			echo_debug "Replacing existing key: $key" ${LINENO}
+			sed -i -e "s/^\s*$key\s*=.*/$replacement/g" "$file"
 		else
-			# echo "Adding key: $replacement"
-			if grep -Pqs '^\[network\]' $file 2>/dev/null
+			echo_debug "Adding key: $replacement" ${LINENO}
+			if grep -Pqs '^\[network\]' "$file" 2>/dev/null
 			then
-				# echo "To existing [network] section"
-				sed -i -e "s/^\[network\].*/[network]\n$replacement/g" $file
+				echo_debug "To existing [network] section" ${LINENO}
+				sed -i -e "s/^\[network\].*/[network]\n$replacement/g" "$file"
 			else
-				# echo "To created [network] section"
-				printf "\n[network]\n%s\n" "$replacement" >> $file
+				echo_debug "To created [network] section" ${LINENO}
+				printf "\n[network]\n%s\n" "$replacement" >> "$file"
 			fi
+		fi
+	fi
+}
+
+remove_config() {
+	local key=$1
+	local file=${2:-'/etc/wsl.conf'}
+	echo_debug "Removing key: '$key' in config file: '$file'" ${LINENO}
+	if [[ $key != "" ]]
+	then
+		test -f "$file" || (echo_debug "File '$file' does noit exist. Exiting..." ${LINENO}; return 0)
+
+		if grep -Pqs "^\s*$key\s*=" "$file" &>/dev/null
+		then
+			echo_debug "Removing existing key: $key" ${LINENO}
+			sed -i -e "/^\s*$key\s*=.*$/d" "$file"
+		else
+			echo_debug "Key '$key' not found."
 		fi
 	fi
 }

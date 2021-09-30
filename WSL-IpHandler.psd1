@@ -12,7 +12,7 @@
     RootModule        = 'WSL-IpHandler'
 
     # Version number of this module.
-    ModuleVersion     = '0.3.0'
+    ModuleVersion     = '0.4.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -68,16 +68,18 @@
     # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
     # FunctionsToExport = '*'
     FunctionsToExport = @(
-        'Install-WslIpHandler',
-        'Uninstall-WslIpHandler',
-        'Invoke-WslStatic',
-        'Get-WslIpOffset',
-        'Set-WslIpOffset',
-        'Set-WslNetworkParameters',
-        'Remove-WslNetworkParameters',
-        'Set-WslNetworkAdapter',
-        'Remove-WslNetworkAdapter',
+        'Install-WslIpHandler'
+        'Uninstall-WslIpHandler'
+        'Set-ProfileContent'
+        'Remove-ProfileContent'
+        'Set-WslNetworkParameters'
+        'Remove-WslNetworkParameters'
+        'Set-WslInstanceStaticIpAddress'
+        'Remove-WslInstanceStaticIpAddress'
+        'Set-WslNetworkAdapter'
+        'Remove-WslNetworkAdapter'
         'Test-WslInstallation'
+        'Invoke-WslStatic'
     )
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
@@ -90,7 +92,7 @@
 
     # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
     # AliasesToExport   = '*'
-    AliasesToExport   = @('wsl')
+    AliasesToExport   = @()
 
     # DSC resources to export from this module
     # DscResourcesToExport = @()
@@ -100,19 +102,21 @@
 
     # List of all files packaged with this module
     FileList          = @(
-        'functions.sh',
-        'install-wsl-ip2hosts.sh',
-        'uninstall-wsl-ip2hosts.sh',
-        'wsl-ip2hosts.sh'
+        'functions.sh'
+        'install-wsl-iphadler.sh'
+        'uninstall-wsl-iphandler.sh'
+        'wsl-iphandler.sh'
+        'README.md'
+        'LICENSE.txt'
     )
 
     # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
     PrivateData       = @{
         ScriptNames     = @{
-            WinHostsEdit  = 'WSL-Ip2Hosts.ps1'
-            BashInstall   = 'install-wsl-ip2hosts.sh'
-            BashUninstall = 'uninstall-wsl-ip2hosts.sh'
-            BashAutorun   = 'wsl-ip2hosts.sh'
+            WinHostsEdit  = 'WSL-WinHostsEdit.ps1'
+            BashInstall   = 'install-wsl-iphandler.sh'
+            BashUninstall = 'uninstall-wsl-iphandler.sh'
+            BashAutorun   = 'wsl-iphandler.sh'
         }
 
         ScriptLocations = @{
@@ -131,7 +135,7 @@
         ProfileContent  = @(
             '# Start of WSL-IpHandler Section',
             'Import-Module WSL-IpHandler -Force',
-            # 'Set-Alias wsl Invoke-WslStatic',
+            'Set-Alias wsl Invoke-WslStatic',
             '# End of WSL-IpHandler Section'
         )
 

@@ -102,15 +102,15 @@ echo_verbose "Autorun Script permissions have been set."
 
 # Craate startup script file in /etc/profile.d/
 echo_verbose "Creating startup script file in /etc/profile.d/..."
-profile_d_script="/etc/profile.d/run-wsl-ip2hosts.sh"
+profile_d_script="/etc/profile.d/run-wsl-iphandler.sh"
 echo_debug "profile_d_script=$profile_d_script" ${LINENO}
 echo "sudo PATH=\"\$PATH\" ${script_target}" > "$profile_d_script" || error ${LINENO} "Error creating $profile_d_script"
 chown root:root "$profile_d_script"
 chmod +x "$profile_d_script"
 echo_verbose "Created startup script file: $profile_d_script"
 
-# Add sudo permissions for $script_target to /etc/sudoers.d folder in a file wsl-ip2hosts
-sudoers_file="/etc/sudoers.d/wsl-ip2hosts"
+# Add sudo permissions for $script_target to /etc/sudoers.d folder in a file wsl-iphandler
+sudoers_file="/etc/sudoers.d/wsl-iphandler"
 echo_verbose "Adding sudo permissions for $script_target in $sudoers_file..."
 printf "ALL\tALL=(root) NOPASSWD:SETENV: %s\n" "$script_target" > "$sudoers_file"
 test $? = 0 || error ${LINENO} "Error creating $sudoers_file"
@@ -123,4 +123,4 @@ echo_verbose "Validating that sudoers.d folder is included in /etc/sudoers..."
 grep -P '#includedir\s+/etc/sudoers.d' /etc/sudoers &>/dev/null || sudo bash -c "printf \"#includedir /etc/sudoers.d\n\" >> /etc/sudoers"
 echo_verbose "Successfully validated that sudoers.d folder is included in /etc/sudoers"
 
-echo "Bash Installed wsl-ip2hosts."
+echo "Bash Installed wsl-iphandler!"

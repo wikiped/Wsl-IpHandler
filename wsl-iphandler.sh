@@ -13,7 +13,7 @@ set -o pipefail
 # fi
 
 declare -r dev='eth0'
-declare -r win_hosts_edit_script='Should be substituted during installation by install-wsl-ip2hosts.sh'
+declare -r win_hosts_edit_script='Should be substituted during installation by install-wsl-iphandler.sh'
 
 echo_log() {
 	local message="$1"
@@ -166,7 +166,7 @@ ip_addr_add() {
 	esac
 
 	local label
-	label="${dev}:ip2hosts"  # Number of symbols after ':' must not exceed 10!
+	label="${dev}:wsliphndlr"  # Number of symbols after ':' must not exceed 10!
 	ip addr add "$ip_prefix" broadcast + dev $dev label $label
 }
 

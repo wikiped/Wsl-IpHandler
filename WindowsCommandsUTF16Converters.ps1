@@ -20,7 +20,7 @@
     }
 }
 
-function Convert-UTF16toUTF8 {
+function ConvertFrom-UTF16toUTF8 {
     param(
         [Parameter(Mandatory, ValueFromPipeline)]
         [AllowEmptyString()][AllowNull()]
@@ -46,12 +46,13 @@ function Get-WslIsRunning {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'isRunning', Justification = 'False Positive')]
     param(
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
+        [ArgumentCompleter( { WslNameCompleter } )]
         [string]$WslInstanceName
     )
     $isRunning = $false
     $patternRunning = ".*\b${WslInstanceName}\b\s+\brunning\b\.*"
     wsl.exe -l -v |
-        Convert-UTF16toUTF8 |
+        ConvertFrom-UTF16toUTF8 |
         Select-Object -Skip 1 |
         ForEach-Object { if ($_ -match $patternRunning) { $isRunning = $true } }
     $isRunning
