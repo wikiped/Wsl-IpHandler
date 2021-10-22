@@ -216,7 +216,6 @@ Function Out-IniFile {
                         -Delimiter $delimiter `
                         -Invocation $MyInvocation
                 }
-
             }
         }
         Write-Verbose "$($MyInvocation.MyCommand.Name):: Finished Writing to file: $FilePath"

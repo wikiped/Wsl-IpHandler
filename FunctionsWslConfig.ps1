@@ -1,23 +1,44 @@
-﻿$WslConfigPath = Join-Path $HOME '.wslconfig'
-$WslConfig = $null
+﻿$WslConfig = $null
 
-$script:NoSection = '_'  # Variable Required by Get-IniContent.ps1 and Out-IniFile.ps1
-. (Join-Path $PSScriptRoot 'FunctionsPrivateData.ps1' -Resolve)
+Set-Variable NoSection '_'  # Variable Required by Get-IniContent.ps1 and Out-IniFile.ps1
 . (Join-Path $PSScriptRoot 'Get-IniContent.ps1' -Resolve)
 . (Join-Path $PSScriptRoot 'Out-IniFile.ps1' -Resolve)
+. (Join-Path $PSScriptRoot 'FunctionsPrivateData.ps1' -Resolve)
+. (Join-Path $PSScriptRoot 'FunctionsHostsFile.ps1' -Resolve)
+
+function Get-WslConfigPath {
+    [CmdletBinding()]param([switch]$Resolve)
+    Join-Path $HOME '.wslconfig' -Resolve:$Resolve
+}
 
 function Get-WslConfig {
     [CmdletBinding()]
     param(
         [Parameter()][AllowEmptyString()][AllowNull()]
-        [string]$ConfigPath = $WslConfigPath,
+        [string]$ConfigPath,
 
         [switch]$ForceReadFileFromDisk
     )
-    Write-Debug "Get-WslConfig loads config from: $ConfigPath"
-    if (($null -eq $WslConfig) -or $ForceReadFileFromDisk) {
-        $script:WslConfig = Get-IniContent $ConfigPath
+    $fn = $MyInvocation.MyCommand.Name
+
+    if (($null -eq $script:WslConfig) -or $ForceReadFileFromDisk) {
+        if ([string]::IsNullOrWhiteSpace($ConfigPath)) {
+            try {
+                $ConfigPath = (Get-WslConfigPath -Resolve)
+                Write-Debug "${fn}: Loading config from: $ConfigPath"
+                $script:WslConfig = Get-IniContent $ConfigPath
+            }
+            catch {
+                Write-Debug "${fn}: No ConfigPath specified. Return empty hashtable."
+                $script:WslConfig = New-Object System.Collections.Specialized.OrderedDictionary([System.StringComparer]::OrdinalIgnoreCase)
+            }
+        }
+        else {
+            Write-Debug "${fn}: Loading config from: $ConfigPath"
+            $script:WslConfig = Get-IniContent $ConfigPath
+        }
     }
+    Write-Debug "${fn}: Returning Cached Config..."
     $WslConfig
 }
 
@@ -72,8 +93,8 @@ function Get-WslConfigSection {
         [switch]$ForceReadFileFromDisk
     )
     $fn = $MyInvocation.MyCommand.Name
-    $config = Get-WslConfig -ForceReadFileFromDisk:$ForceReadFileFromDisk
     Write-Debug "${fn}: `$SectionName = '$SectionName'"
+    $config = Get-WslConfig -ForceReadFileFromDisk:$ForceReadFileFromDisk
 
     if (-not (Test-WslConfigSectionExists $SectionName)) {
         Write-Debug "${fn}: Empty Section '$SectionName' Created!"
@@ -98,6 +119,9 @@ function Remove-WslConfigSection {
     $fn = $MyInvocation.MyCommand.Name
     $config = Get-WslConfig -ForceReadFileFromDisk:$ForceReadFileFromDisk
     Write-Debug "${fn}: `$SectionName = '$SectionName'"
+    Write-Debug "${fn}: `$OnlyIfEmpty = $OnlyIfEmpty"
+    Write-Debug "${fn}: `$Modified = $($Modified.Value)"
+    Write-Debug "${fn}: `$ForceReadFileFromDisk = $ForceReadFileFromDisk"
 
     if ($config.Contains($SectionName)) {
         if ($OnlyIfEmpty.IsPresent) {
@@ -173,6 +197,8 @@ function Set-WslConfigValue {
 
         [switch]$UniqueValue,
 
+        [switch]$RemoveOtherKeyWithUniqueValue,
+
         [switch]$ForceReadFileFromDisk
     )
     $fn = $MyInvocation.MyCommand.Name
@@ -184,23 +210,33 @@ function Set-WslConfigValue {
     Write-Debug "${fn}: Initial Section Content: $($section | Out-String)"
 
     if ($UniqueValue -and $Value -in $section.Values) {
-        Write-Debug "${fn}: with `$UniqueValue=$UniqueValue found existing value: '$Value'"
+        Write-Debug "${fn}: `$UniqueValue=$UniqueValue and value: '$Value' already exists."
         $usedOwner = ($Section.GetEnumerator() |
                 Where-Object { $_.Value -eq $Value } |
                 Select-Object -ExpandProperty Name)
-        if ($usedOwner -ne $KeyName) {
-            Write-Error "${fn}: Value: '$Value' is already used by: $usedOwner" -ErrorAction Stop
+
+        Write-Debug "${fn}: Value: '$Value' is already set to: $usedOwner"
+        if ($usedOwner -eq $KeyName) {
+            return
         }
-        Write-Error "${fn}: Value: '$Value' is already set to: $usedOwner" -ErrorAction Stop
-        return
+        else {
+            if ($RemoveOtherKeyWithUniqueValue) {
+                Write-Debug "${fn}: Removing existing key: $usedOwner"
+                ${section}.Remove($usedOwner)
+                ${section}[$KeyName] = $Value
+                $Modified.Value = $true
+            }
+            else {
+                Write-Error "${fn}: Value: '$Value' is NOT Unique as it is already used by: $usedOwner" -ErrorAction Stop
+            }
+        }
     }
 
     if (${section}[$KeyName] -ne $Value) {
+        Write-Debug "${fn}: Setting '$KeyName' = '$Value'"
         ${section}[$KeyName] = $Value
         $Modified.Value = $true
     }
-
-    Write-Debug "${fn}: '$KeyName' = '$Value'"
     Write-Debug "${fn}: Final Section Content: $($section | Out-String)"
 }
 
@@ -221,35 +257,45 @@ function Remove-WslConfigValue {
     $fn = $MyInvocation.MyCommand.Name
     Write-Debug "${fn}: `$SectionName = '$SectionName'"
     Write-Debug "${fn}: `$KeyName = '$KeyName'"
+    Write-Debug "${fn}: `$Modified = '$($Modified.Value)'"
 
     $section = Get-WslConfigSection $SectionName -ForceReadFileFromDisk:$ForceReadFileFromDisk
     Write-Debug "${fn}: Initial Section Content: $($section | Out-String)"
 
     if (${section}.Contains($KeyName)) {
+        Write-Debug "${fn}: Section Contains Key: $KeyName. Removing it."
         ${section}.Remove($KeyName)
         $Modified.Value = $true
+        Write-Debug "${fn}: Set `$Modified = '$($Modified.Value)'"
+        Remove-WslConfigSection $SectionName -OnlyIfEmpty:$true -Modified $Modified
     }
-
     Write-Debug "${fn}: Final Section Content: $($section | Out-String)"
-
-    Remove-WslConfigSection $SectionName -OnlyIfEmpty:$true -Modified $Modified
+    Write-Debug "${fn}: Final `$Modified = '$($Modified.Value)'"
 }
 
 function Get-AvailableStaticIpAddress {
     [OutputType([ipaddress])]
     [CmdletBinding()]
-    param( [ipaddress]$GatewayIpAddress )
+    param(
+        [ipaddress]$GatewayIpAddress,
+        [switch]$RequireGatewayIpAddress
+    )
 
     $fn = $MyInvocation.MyCommand.Name
     $GatewayIpAddress ??= Get-WslConfigValue (Get-NetworkSectionName) (Get-GatewayIpAddressKeyName) -DefaultValue $null
     $PrefixLength = Get-WslConfigValue (Get-NetworkSectionName) (Get-PrefixLengthKeyName) -DefaultValue 24
 
     if ($null -eq $GatewayIpAddress) {
-        Write-Debug "${fn}: GatewayIpAddress is not configured in .wslconfig -> Trying System WSL adapter."
+        Write-Debug "${fn}: GatewayIpAddress was not specified and is not configured in .wslconfig -> Trying System WSL adapter."
         $wslIpObj = Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias 'vEthernet (WSL)' -ErrorAction SilentlyContinue
         if (-not $null -eq $wslIpObj) {
             $GatewayIpAddress = $wslIpObj.IPAddress
             $PrefixLength = $wslIpObj.PrefixLength
+        }
+        else {
+            if ($RequireGatewayIpAddress.IsPresent) {
+                Throw "${fn}: Cannot proceed when GatewayIpAddress parameter is neither specified, nor found in .wslconfig and no existing WSL adapter to take it from."
+            }
         }
     }
 
@@ -260,44 +306,57 @@ function Get-AvailableStaticIpAddress {
 
     $SectionName = (Get-StaticIpAddressesSectionName)
 
-    if (Get-WslConfigSectionCount -gt 0) {
-        $secion = Get-WslConfigSection -SectionName $SectionName
-        Write-Debug "${fn}: There are $($secion.Count) in Static IP addresses section."
+    if ((Get-WslConfigSectionCount $SectionName) -gt 0) {
+        $section = Get-WslConfigSection -SectionName $SectionName
+        Write-Debug "${fn}: Count of Static IP addresses section: $($section.Count)."
         if ($null -eq $GatewayIpAddress) {
             Write-Warning 'Without Gateway IP address for WSL SubNet available Static IP address will be based on simple sorting algorithm, without any guaranties.'
-            $maxIP = $secion.Values |
-                Sort-Object { ([ipaddress]$_).IPAddressToString -as [Version] } -Bottom 1
+            $maxIP = $section.Values | Get-IpAddressFromString |
+                Sort-Object { $_.IPAddressToString -as [Version] } -Bottom 1
 
             Write-Debug "${fn}: Max IP address: $maxIP"
             $maxIPobj = & $ipcalc -IpAddress $maxIP -PrefixLength $PrefixLength
-            $newIP = [ipaddress]$maxIPobj.Add(1).IpAddress
-            Write-Debug "${fn}: Returning IP: $newIP"
-            $newIP
+            $newIP = $maxIPobj.Add(1).IpAddress
         }
         else {
-            Write-Debug "${fn}: Selecting available IP address for defined WSL Gateway."
-            $ipobj = & $ipcalc -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
-            $newIP = [ipaddress]($ipobj.GetIParray() |
-                    ForEach-Object { [ipaddress]$_ } |
-                    Where-Object {
-                        $i = $_.IPAddressToString
-                        ($i -notin $secion.Values) -and ([version]$i -ne [version]$ipobj.IP)
-                    } |
-                    Select-Object -First 1
-            )
-            Write-Debug "${fn}: Returning IP: $newIP"
+            Write-Debug "${fn}: Selecting available IP address for WSL GatewayIpAddress: $GatewayIpAddress."
+
+            $ipObj = & $ipcalc -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
+            foreach ($i in 1..$ipObj.IPcount) {
+                $_ip = $ipObj.Add($i).IpAddress
+                if ($_ip -notin $section.Values) {
+                    $newIP = [ipaddress]($_ip)
+                    break
+                }
+            }
+
+            # [ipaddress]($ipObj.GetIParray() | # .GetIParray() can be very long/expensive
+            #         ForEach-Object { [ipaddress]$_ } |
+            #         Where-Object {
+            #             $i = $_.IPAddressToString
+            #             ($i -notin $section.Values) -and ([version]$i -ne [version]$ipObj.IP)
+            #         } |
+            #         Select-Object -First 1
+            # )
         }
     }
     else {
         if ($null -eq $GatewayIpAddress) {
             Write-Warning 'Cannot Find available IP address without Gateway IP address for WSL SubNet and without any Static IP addresses in .wslconfig.'
-            $null
+            Write-Error "GatewayIpAddress in ${fn} is `$null and not found in .wslconfig and no WSL Network Adapter!"
         }
         else {
-            $ipobj = & $ipcalc -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
-            [ipaddress]$ipobj.Add(1).IpAddress
+            $ipObj = & $ipcalc -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
+            $newIP = $ipObj.Add(1).IpAddress
         }
     }
+
+    if ($null -eq $newIP) {
+        Throw "${fn} could not find available IP Address with GatewayIpAddress: $GatewayIpAddress and PrefixLength: $PrefixLength"
+    }
+
+    Write-Debug "${fn}: Returning IP: $newIP"
+    [ipaddress]$newIP
 }
 
 function Get-WslIpOffsetSection {
@@ -321,7 +380,7 @@ function Get-WslIpOffsetSection {
 function Test-ValidStaticIpAddress {
     [CmdletBinding(DefaultParameterSetName = 'Automatic')]
     param (
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory)][ValidateNotNull()]
         [Parameter(ParameterSetName = 'Automatic')]
         [Parameter(ParameterSetName = 'Manual')]
         [ipaddress]$IpAddress,
@@ -357,7 +416,7 @@ function Test-ValidStaticIpAddress {
         Write-Debug "${fn}: `$PrefixLength=$PrefixLength"
 
         if ($null -eq $GatewayIpAddress) {
-            $warnMsg += 'within currently UnKnownn WSL SubNet that will be set by Windows OS and might have different SubNet!'
+            $warnMsg += 'within currently Unknown WSL SubNet that will be set by Windows OS and might have different SubNet!'
         }
         else {
             $GatewayIpObject = (& $ipcalc -IpAddress $GatewayIpAddress.IPAddressToString -PrefixLength $PrefixLength)
@@ -389,12 +448,19 @@ function Test-ValidStaticIpAddress {
         $GatewayIPObject = (& $ipcalc -IpAddress $GatewayIpAddress.IPAddressToString -PrefixLength $PrefixLength)
         Write-Debug "${fn}: `$GatewayIPObject: $($GatewayIPObject | Out-String)"
         if ($GatewayIPObject.Compare($IpAddress)) {
-            Write-Debug "${fn}: $IpAddress is within $($GatewayIPObject.CIDR)"
+            Write-Debug "${fn}: $IpAddress is VALID and is within $($GatewayIPObject.CIDR) SubNet."
             $true
         }
         else {
-            Write-Debug "${fn}: $IpAddress is NOT within $($GatewayIPObject.CIDR)"
-            Write-Error "You are setting Static IP Address: $IpAddress which does not match Static Subnet: $($GatewayIPObject.CIDR)!`nEiter change IpAddress or redefine SubNet in -GatewayIpAddress Parameter of 'Install-WslHandler' or 'Set-WslNetworkParameters' commands!" -ErrorAction Stop
+            Write-Warning "You are setting Static IP Address: $IpAddress which does not match Static Subnet: $($GatewayIPObject.CIDR)!`nEither change IpAddress or redefine SubNet in -GatewayIpAddress Parameter of 'Install-WslHandler' or 'Set-WslNetworkParameters' commands!"
+            $PSCmdlet.ThrowTerminatingError(
+                [System.Management.Automation.ErrorRecord]::new(
+                    [System.ArgumentException]::new("$IpAddress is NOT Valid as it is outside of $($GatewayIPObject.CIDR) SubNet.", 'IpAddress'),
+                    'WSLIpHandler.StaticIpAddressValidationError',
+                    [System.Management.Automation.ErrorCategory]::InvalidArgument,
+                    $IpAddress
+                )
+            )
         }
     }
 }
@@ -479,15 +545,26 @@ function Write-WslConfig {
     param(
         [switch]$Backup
     )
+    $fn = $MyInvocation.MyCommand.Name
+    $configPath = Get-WslConfigPath
+
     if ($Backup) {
         $newName = Get-Date -Format 'yyyy.MM.dd-HH.mm.ss'
-        $oldName = Split-Path -Leaf $WslConfigPath
-        $folder = Split-Path -Parent $WslConfigPath
+        $oldName = Split-Path -Leaf $configPath
+        $folder = Split-Path -Parent $configPath
         $newPath = Join-Path $folder ($newName + $oldName)
-        Copy-Item -Path $WslConfigPath -Destination $newPath -Force
+        Copy-Item -Path $configPath -Destination $newPath -Force
     }
-    $local:name = $MyInvocation.MyCommand.Name
-    Write-Debug "$name current to write: $(Get-WslConfig | ConvertTo-Json)"
-    Write-Debug "$name target path: $WslConfigPath"
-    Out-IniFile -FilePath $WslConfigPath -InputObject (Get-WslConfig) -Force -Loose -Pretty
+    Write-Debug "${fn}: current config to write: $(Get-WslConfig | ConvertTo-Json)"
+    Write-Debug "${fn}: target path: $configPath"
+    $outIniParams = @{
+        FilePath    = $configPath
+        InputObject = (Get-WslConfig)
+        Force       = $true
+        Loose       = $true
+        Pretty      = $true
+    }
+
+    Write-Debug "${fn}: Invoking Out-IniFile with Parameters:`n$($outIniParams | Out-String)"
+    Out-IniFile @outIniParams
 }

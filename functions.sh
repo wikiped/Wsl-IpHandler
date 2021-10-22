@@ -123,7 +123,7 @@ remove_config() {
 	echo_debug "Removing key: '$key' in config file: '$file'" ${LINENO}
 	if [[ $key != "" ]]
 	then
-		test -f "$file" || (echo_debug "File '$file' does noit exist. Exiting..." ${LINENO}; return 0)
+		test -f "$file" || (echo_debug "File '$file' does not exist. Exiting..." ${LINENO}; return 0)
 
 		if grep -Pqs "^\s*$key\s*=" "$file" &>/dev/null
 		then

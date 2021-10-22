@@ -1,4 +1,24 @@
-﻿function Get-HostsFileContent {
+﻿function Get-IpAddressPattern {
+    '(((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))\.){3}(((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))(\s|$))'
+}
+
+Function Get-IpAddressFromString {
+    [OutputType([ipaddress])]
+    param(
+        [Parameter(Mandatory, ValueFromPipeline)]
+        [AllowEmptyString()][ValidateNotNull()]
+        [array]$InputString
+    )
+    $array = @($input)
+    if ($array.Count) { $InputString = $InputString }
+    if (!(Test-Path variable:InputString)) { $InputString = @() }
+    $IpPattern = Get-IpAddressPattern
+    $InputString | ForEach-Object {
+        [ipaddress](($_ -split ' ') -match $IpPattern | Select-Object -First 1)
+    }
+}
+
+function Get-HostsFileContent {
     param (
         [Parameter()]
         [ValidateScript( { Test-Path $_ -PathType Leaf } )]
@@ -69,7 +89,7 @@ function Test-RecordContainsHost {
 function Test-IsHostAssignedToIpAddress {
     [CmdLetBinding()]
     param ([string]$Record, [string]$regexIpAddress, [string]$regexHostName)
-    $ip_pattern = '^\s*(((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))\.){3}(((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))(\s|$))'
+    $ip_pattern = "^\s*$(Get-IpAddressPattern)"
     ($Record -match $ip_pattern) -and (Test-RecordContainsHost $Record $regexHostName) -and -not (Test-RecordContainsIpAddress $Record $regexIpAddress)
 }
 

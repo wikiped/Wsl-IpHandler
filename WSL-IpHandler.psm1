@@ -3,9 +3,9 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version latest
 
 . (Join-Path $PSScriptRoot 'WindowsCommandsUTF16Converters.ps1' -Resolve)
-. (Join-Path $PSScriptRoot 'FunctionsPrivateData.ps1' -Resolve)
 . (Join-Path $PSScriptRoot 'FunctionsWslConfig.ps1' -Resolve)
 . (Join-Path $PSScriptRoot 'FunctionsHostsFile.ps1' -Resolve)
+. (Join-Path $PSScriptRoot 'FunctionsPrivateData.ps1' -Resolve)
 
 function WslNameCompleter {
     param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameter)
@@ -72,7 +72,7 @@ function Install-WslIpHandler {
     Optional. Defaults to GatewayIpAddress.
 
     .PARAMETER WslInstanceIpAddress
-    Optional. Static IP Address of WSL Instance. It will be assigned to the isntance when it starts. This address will be also added to Windows HOSTS file so that a given WSL Instance can be accessed via its WSLHostName.
+    Optional. Static IP Address of WSL Instance. It will be assigned to the instance when it starts. This address will be also added to Windows HOSTS file so that a given WSL Instance can be accessed via its WSLHostName.
 
     .PARAMETER WslHostName
     Optional. Defaults to WslInstanceName. The name to use to access the WSL Instance on WSL SubNet. This name together with WslInstanceIpAddress are added to Windows HOSTS file.
@@ -81,7 +81,7 @@ function Install-WslIpHandler {
     Optional. Defaults to `windows`. Name of Windows Host that can be used to access windows host from WSL Instance. This will be added to /etc/hosts on WSL Instance system.
 
     .PARAMETER DontModifyPsProfile
-    Optional. If specifies will not modify Powershell Profile (default profile: CurrentUserAllHosts). Otherwise profile will be modified to Import this module and create an Alias `wsl` which will transparently pass through any and all paramaters to `wsl.exe` and, if neccessary, initialize beforehand WSL Hyper-V network adapter to allow usage of Static IP Addresses. Will be ignored in Dynamic Mode.
+    Optional. If specifies will not modify Powershell Profile (default profile: CurrentUserAllHosts). Otherwise profile will be modified to Import this module and create an Alias `wsl` which will transparently pass through any and all paramaters to `wsl.exe` and, if necessary, initialize beforehand WSL Hyper-V network adapter to allow usage of Static IP Addresses. Will be ignored in Dynamic Mode.
 
     .PARAMETER BackupWslConfig
     Optional. If specified will create backup of ~/.wslconfig before modifications.
@@ -111,7 +111,7 @@ function Install-WslIpHandler {
     Use Powershell command prompt to launch WSL Instance(s) in Static Mode, especially after system restart.
     Executing `wsl.exe` from within Windows cmd.exe after Windows restarts will allow Windows to take control over WSL network setup and will break Static IP functionality.
 
-    To mannualy take control over WSL Network setup use this module's command: Set-WslNetworkConfig
+    To mannerly take control over WSL Network setup use this module's command: Set-WslNetworkConfig
     #>
     [CmdletBinding()]
     param (
@@ -171,24 +171,22 @@ function Install-WslIpHandler {
     $configModified = $false
 
     if ($null -ne $GatewayIpAddress) {
-
         Set-WslNetworkConfig -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $DNSServerList -Modified ([ref]$configModified)
 
         Set-WslNetworkAdapter
+
+        Write-Verbose "Setting Static IP Address: $($WslInstanceIpAddress.IPAddressToString) for $WslInstanceName."
+        Set-WslInstanceStaticIpAddress -WslInstanceName $WslInstanceName -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -WslInstanceIpAddress $WslInstanceIpAddress.IPAddressToString -Modified ([ref]$configModified)
+
+        $WslHostIpOrOffset = $WslInstanceIpAddress.IPAddressToString
     }
 
-    if ($null -eq $WslInstanceIpAddress) {
+    else {
         $WslIpOffset = Get-WslIpOffset $WslInstanceName
         Write-Verbose "Setting Automatic IP Offset: $WslIpOffset for $WslInstanceName."
         Set-WslIpOffset $WslInstanceName $WslIpOffset -Modified ([ref]$configModified)
 
         $WslHostIpOrOffset = $WslIpOffset
-    }
-    else {
-        Write-Verbose "Setting Static IP Address: $($WslInstanceIpAddress.IPAddressToString) for $WslInstanceName."
-        Set-WslInstanceStaticIpAddress -WslInstanceName $WslInstanceName -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -WslInstanceIpAddress $WslInstanceIpAddress.IPAddressToString -Modified ([ref]$configModified)
-
-        $WslHostIpOrOffset = $WslInstanceIpAddress.IPAddressToString
     }
 
     if ($configModified) {
@@ -287,7 +285,7 @@ function Uninstall-WslIpHandler {
     $BashUninstallScriptWslPath = '$(wslpath "' + "$BashUninstallScript" + '")'
     $BashUninstallParams = "$BashAutorunScriptName", "$BashAutorunScriptTarget"
 
-    Write-Verbose "Running WSL Uninstallation script $BashUninstallScript"
+    Write-Verbose "Running WSL Uninstall script $BashUninstallScript"
     Write-Debug "${fn}: `$DebugPreference=$DebugPreference"
     Write-Debug "${fn}: `$VerbosePreference=$VerbosePreference"
 
@@ -366,11 +364,14 @@ function Set-ProfileContent {
     #>
     [CmdletBinding()]
     param($ProfilePath = $profile.CurrentUserAllHosts)
-    $handlerContent = (Get-ProfileContent)
+    $fn = $MyInvocation.MyCommand.Name
+    Write-Debug "${fn}: ProfilePath: $ProfilePath"
+
+    $handlerContent = Get-ProfileContent
     $content = (Get-Content -Path $ProfilePath -ErrorAction SilentlyContinue) ?? @()
     $content += $handlerContent
     Set-Content -Path $ProfilePath -Value $content -Force
-    . $ProfilePath
+    # . $ProfilePath  # !!! DONT DO THAT -> IT Removes ALL Sourced functions (i.e. '. File.ps1')
 }
 
 function Remove-ProfileContent {
@@ -386,10 +387,15 @@ function Remove-ProfileContent {
     #>
     [CmdletBinding()]
     param($ProfilePath = $profile.CurrentUserAllHosts)
-    $handlerContent = (Get-ProfileContent)
+    $fn = $MyInvocation.MyCommand.Name
+
+    Write-Debug "${fn}: ProfilePath: $ProfilePath"
+
+    $handlerContent = Get-ProfileContent
     $content = (Get-Content -Path $ProfilePath -ErrorAction SilentlyContinue) ?? @()
     if ($content) {
-        $content = ($content -join "`n") -replace ($handlerContent -join "`n")
+        $content = $content | Where-Object { $handlerContent -notcontains $_ }
+        # $content = (($content -join "`n") -replace ($handlerContent -join "`n")) -split "`n"
         Set-Content -Path $ProfilePath -Value $content -Force
     }
 }
@@ -397,10 +403,10 @@ function Remove-ProfileContent {
 function Set-WslInstanceStaticIpAddress {
     <#
     .SYNOPSIS
-    Sets Static IP Address for the specified WSL Instatnce.
+    Sets Static IP Address for the specified WSL Instance.
 
     .DESCRIPTION
-    Sets Static IP Address for the specified WSL Instatnce. Given WslInstanceIpAddress will be validated against specified GatewayIpAddress and PrefixLength, error will be thrown if it is incorrect.
+    Sets Static IP Address for the specified WSL Instance. Given WslInstanceIpAddress will be validated against specified GatewayIpAddress and PrefixLength, error will be thrown if it is incorrect.
 
     .PARAMETER WslInstanceName
     Required. Name of WSL Instance as listed by `wsl.exe -l` command.
@@ -415,10 +421,10 @@ function Set-WslInstanceStaticIpAddress {
     Required. IP v4 Address to assign to WSL Instance.
 
     .PARAMETER Modified
-    Optional. Reference to boolean variable. Will be set to True if given parameters will lead to change of existing settings. If this parameter is specified - any occuring changes will have to be saved with Write-WslConfig command. This paramter cannot be used together with BackupWslConfig paramter.
+    Optional. Reference to boolean variable. Will be set to True if given parameters will lead to change of existing settings. If this parameter is specified - any occuring changes will have to be saved with Write-WslConfig command. This parameter cannot be used together with BackupWslConfig parameter.
 
     .PARAMETER BackupWslConfig
-    Optional. If given - original version of .wslconfig file will be saved as backup. This paramter cannot be used together with Modified paramter.
+    Optional. If given - original version of .wslconfig file will be saved as backup. This parameter cannot be used together with Modified parameter.
 
     .EXAMPLE
     Set-WslInstanceStaticIpAddress -WslInstanceName Ubuntu -GatewayIpAddress 172.16.0.1 -WslInstanceIpAddress 172.16.0.11
@@ -426,7 +432,7 @@ function Set-WslInstanceStaticIpAddress {
     Will set Ubuntu WSL Instance Static IP address to 172.16.0.11
 
     .NOTES
-    This command only checks against spcified Gateway IP Address, not actual one (even if it exists). Any changes made will require restart of WSL instance for them to take effect.
+    This command only checks against specified Gateway IP Address, not actual one (even if it exists). Any changes made will require restart of WSL instance for them to take effect.
     #>
     param (
         [Parameter(Mandatory)]
@@ -440,7 +446,7 @@ function Set-WslInstanceStaticIpAddress {
         [Alias('Prefix')]
         [int]$PrefixLength = 24,
 
-        [Parameter(Mandatory)][Alias('IpAddress')]
+        [Alias('IpAddress')]
         [ipaddress]$WslInstanceIpAddress,
 
         [Parameter(Mandatory, ParameterSetName = 'SaveExternally')]
@@ -456,11 +462,26 @@ function Set-WslInstanceStaticIpAddress {
         $Modified = [ref]$localModified
     }
 
-    Write-Debug "${fn}: `$WslInstanceName=$WslInstanceName `$GatewayIpAddress=$GatewayIpAddress `$PrefixLength=$PrefixLength `$WslInstanceIpAddress=$($WslInstanceIpAddress.IPAddressToString)"
+    $sectionName = Get-StaticIpAddressesSectionName
+
+    if ($null -eq $WslInstanceIpAddress) {
+        $existingIp = Get-WslConfigValue -SectionName $sectionName -KeyName $WslInstanceName -DefaultValue $null -Modified $Modified
+        if ($existingIp) {
+            Write-Debug "${fn}: `$WslInstanceIpAddress is `$null. Using existing assignment:  for $WslInstanceName = $existingIp"
+            $WslInstanceIpAddress = $existingIp
+        }
+        else {
+            Write-Debug "${fn}: `$WslInstanceIpAddress is `$null. Getting Available Static Ip Address."
+            $WslInstanceIpAddress = Get-AvailableStaticIpAddress $GatewayIpAddress
+        }
+    }
+
+    Write-Debug "${fn}: `$WslInstanceName=$WslInstanceName `$GatewayIpAddress=$GatewayIpAddress `$PrefixLength=$PrefixLength `$WslInstanceIpAddress=$($WslInstanceIpAddress ? $WslInstanceIpAddress.IPAddressToString : "`$null")"
 
     $null = Test-ValidStaticIpAddress -IpAddress $WslInstanceIpAddress -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength
 
-    Set-WslConfigValue (Get-StaticIpAddressesSectionName) $WslInstanceName $WslInstanceIpAddress.IPAddressToString -Modified $Modified -UniqueValue
+
+    Set-WslConfigValue $sectionName $WslInstanceName $WslInstanceIpAddress.IPAddressToString -Modified $Modified -UniqueValue
 
     if ($PSCmdlet.ParameterSetName -eq 'SaveHere' -and $localModified) {
         Write-WslConfig -Backup:$BackupWslConfig
@@ -470,19 +491,19 @@ function Set-WslInstanceStaticIpAddress {
 function Remove-WslInstanceStaticIpAddress {
     <#
     .SYNOPSIS
-    Removes Static IP Address for the specified WSL Instatnce from .wslconfig.
+    Removes Static IP Address for the specified WSL Instance from .wslconfig.
 
     .DESCRIPTION
-    Removes Static IP Address for the specified WSL Instatnce from .wslconfig.
+    Removes Static IP Address for the specified WSL Instance from .wslconfig.
 
     .PARAMETER WslInstanceName
     Required. Name of WSL Instance as listed by `wsl.exe -l` command.
 
     .PARAMETER Modified
-    Optional. Reference to boolean variable. Will be set to True if given parameters will lead to change of existing settings. If this parameter is specified - any occuring changes will have to be saved with Write-WslConfig command. This paramter cannot be used together with BackupWslConfig paramter.
+    Optional. Reference to boolean variable. Will be set to True if given parameters will lead to change of existing settings. If this parameter is specified - any occuring changes will have to be saved with Write-WslConfig command. This parameter cannot be used together with BackupWslConfig parameter.
 
     .PARAMETER BackupWslConfig
-    Optional. If given - original version of .wslconfig file will be saved as backup. This paramter cannot be used together with Modified paramter.
+    Optional. If given - original version of .wslconfig file will be saved as backup. This parameter cannot be used together with Modified parameter.
 
     .EXAMPLE
     Remove-WslInstanceStaticIpAddress -WslInstanceName Ubuntu
@@ -508,9 +529,13 @@ function Remove-WslInstanceStaticIpAddress {
     }
 
     Write-Debug "${fn}: `$WslInstanceName=$WslInstanceName"
+    Write-Debug "${fn}: Before Calling Remove-WslConfigValue `$Modified=$($Modified.Value)"
+
     Remove-WslConfigValue (Get-StaticIpAddressesSectionName) $WslInstanceName -Modified $Modified
+    Write-Debug "${fn}: After Calling Remove-WslConfigValue `$Modified=$($Modified.Value)"
 
     if ($PSCmdlet.ParameterSetName -eq 'SaveHere' -and $localModified) {
+        Write-Debug "${fn}: Calling Write-WslConfig -Backup:$BackupWslConfig"
         Write-WslConfig -Backup:$BackupWslConfig
     }
 }
@@ -533,10 +558,10 @@ function Set-WslNetworkConfig {
     Optional. Defaults to GatewayIpAddress. DNS servers to set for the network adapater. The list is a string with comma separated servers.
 
     .PARAMETER Modified
-    Optional. Reference to boolean variable. Will be set to True if given parameters will lead to change of existing settings. If this parameter is specified - any occuring changes will have to be saved with Write-WslConfig command. This paramter cannot be used together with BackupWslConfig paramter.
+    Optional. Reference to boolean variable. Will be set to True if given parameters will lead to change of existing settings. If this parameter is specified - any occuring changes will have to be saved with Write-WslConfig command. This parameter cannot be used together with BackupWslConfig parameter.
 
     .PARAMETER BackupWslConfig
-    Optional. If given - original version of .wslconfig file will be saved as backup. This paramter cannot be used together with Modified paramter.
+    Optional. If given - original version of .wslconfig file will be saved as backup. This parameter cannot be used together with Modified parameter.
 
     .EXAMPLE
     Set-WslNetworkConfig -GatewayIpAddress 172.16.0.1 -BackupWslConfig
@@ -570,7 +595,7 @@ function Set-WslNetworkConfig {
         $Modified = [ref]$localModified
     }
 
-    $DNSServerList = [string]::IsNullOrWhiteSpace($DNSServerList) ? $GatewayIpAddress : $DNSServerList
+    $DNSServerList = $DNSServerList ? $DNSServerList : $GatewayIpAddress
     Write-Debug "${fn}: Seting Wsl Network Parameters: GatewayIpAddress=$GatewayIpAddress PrefixLength=$PrefixLength DNSServerList=$DNSServerList"
 
     Set-WslConfigValue (Get-NetworkSectionName) (Get-GatewayIpAddressKeyName) $GatewayIpAddress.IPAddressToString -Modified $Modified
@@ -593,10 +618,10 @@ function Remove-WslNetworkConfig {
     Removes all WSL network adapter parameters that are set by Set-WslNetworkConfig command: -GatewayIpAddress, -PrefixLength, -DNSServerList. If there are any static ip address assignments in a .wslconfig file there will be a warning and command will have no effect. To override this limitation use -Force parameter.
 
     .PARAMETER Modified
-    Optional. Reference to boolean variable. Will be set to True if given parameters will lead to change of existing settings. If this parameter is specified - any occuring changes will have to be saved with Write-WslConfig command. This paramter cannot be used together with BackupWslConfig paramter.
+    Optional. Reference to boolean variable. Will be set to True if given parameters will lead to change of existing settings. If this parameter is specified - any occuring changes will have to be saved with Write-WslConfig command. This parameter cannot be used together with BackupWslConfig parameter.
 
     .PARAMETER BackupWslConfig
-    Optional. If given - original version of .wslconfig file will be saved as backup. This paramter cannot be used together with Modified paramter.
+    Optional. If given - original version of .wslconfig file will be saved as backup. This parameter cannot be used together with Modified parameter.
 
     .PARAMETER Force
     Optional. If specified will clear network parameters from .wslconfig file even if there are static ip address assignments remaining. This might make those static ip addresses invalid.
@@ -607,7 +632,7 @@ function Remove-WslNetworkConfig {
     Clears GatewayIpAddress, PrefixLength and DNSServerList settings from .wsl.config file, without saving a backup.
 
     .NOTES
-    This command only clears parameters of the network adapter in .wslconfig file, without any effect on active adapter (if it exists). To remove adapter itsetl use command Remove-WslNetworkAdapter.
+    This command only clears parameters of the network adapter in .wslconfig file, without any effect on active adapter (if it exists). To remove adapter itself use command Remove-WslNetworkAdapter.
     #>
     [CmdletBinding()]
     param (
@@ -636,7 +661,7 @@ function Remove-WslNetworkConfig {
     }
     else {
         $staticIpSection = Get-WslConfigSection $staticIpSectionName
-        Write-Warning "WSL Network Adapter Parameters cannont be removed because there are Static IP Addresses remaining in .wslconfig:`n$([pscustomobject]$staticIpSection | Out-String)"
+        Write-Warning "WSL Network Adapter Parameters cannot be removed because there are Static IP Addresses remaining in .wslconfig:`n$([pscustomobject]$staticIpSection | Out-String)"
     }
 
     if ($PSCmdlet.ParameterSetName -eq 'SaveHere' -and $localModified) {
@@ -647,10 +672,10 @@ function Remove-WslNetworkConfig {
 function Set-WslNetworkAdapter {
     <#
     .SYNOPSIS
-    Sets up WSL network adapter. Requires Administrator priviledges.
+    Sets up WSL network adapter. Requires Administrator privileges.
 
     .DESCRIPTION
-    Sets up WSL network adapter. Requires Administrator priviledges. If executed from non elevated powershell prompt - will ask for confirmation to grant required permissions.
+    Sets up WSL network adapter. Requires Administrator privileges. If executed from non elevated powershell prompt - will ask for confirmation to grant required permissions. Any running WSL Instances will be shutdown before the adapter is installed. If there is adapter with required parameters - no changes will be made.
 
     .PARAMETER GatewayIpAddress
     Optional. Gateway IP v4 Address of vEthernet (WSL) network adapter. Defaults to the setting in .wslconfig file. If there is not value in .wslconfig will issue a warning and exit.
@@ -709,15 +734,15 @@ function Set-WslNetworkAdapter {
         $currentPrefixLength = $wslAdapter.PrefixLength
 
         $ipcalc = Join-Path $PSScriptRoot 'IP-Calc.ps1' -Resolve
-        $currentIpObj = (& $ipcalc -IpAddress $currentIpAddress -PrefixLength $currentPrefixLength)
-        $requiredIpObj = (& $ipcalc -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength)
+        $currentIpObj = & $ipcalc -IpAddress $currentIpAddress -PrefixLength $currentPrefixLength
+        $requiredIpObj = & $ipcalc -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
 
         if ($currentIpAddress -eq $GatewayIpAddress -and $($currentIpObj.CIDR) -eq ($requiredIpObj.CIDR)) {
             Write-Debug "${fn}: WSL Adapter with IpAddress/Prefix: '$($currentIpObj.CIDR)' and GatewayAddress: '$currentIpAddress' already exists!"
             return
         }
     }
-    Write-Debug "${fn}: Shutting down all WSL isntances..."
+    Write-Debug "${fn}: Shutting down all WSL instances..."
     wsl.exe --shutdown
 
     . (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve)
@@ -743,7 +768,7 @@ function Remove-WslNetworkAdapter {
     Removes WSL Network Adapter from the system if there is any.
 
     .DESCRIPTION
-    Removes WSL Network Adapter from the system if there is any. If there is none - does nothing. Requires Administrator priviledges. If executed from non elevated powershell prompt - will ask for confirmation to grant required permissions.
+    Removes WSL Network Adapter from the system if there is any. If there is none - does nothing. Requires Administrator privileges. If executed from non elevated powershell prompt - will ask for confirmation to grant required permissions.
 
     .EXAMPLE
     Remove-WslNetworkAdapter
@@ -841,24 +866,24 @@ function Test-WslInstallation {
     }
     else {
         $failed = $true
-        $error_message += "Could not start WSL Instance: $WslInstanceName to test Ping from Widnows"
+        $error_message += "Could not start WSL Instance: $WslInstanceName to test Ping from Windows"
     }
 
     if ($failed) {
         Write-Verbose "${fn}: Test Failed!"
         Throw ($error_message -join "`n")
     }
-    Write-Verbose "${fn}: Test Succeded!"
+    Write-Verbose "${fn}: Test Succeeded!"
 }
 
 function Invoke-WslStatic {
     <#
     .SYNOPSIS
-    Takes any paramters and passes them transparently to wsl.exe. If parameter(s) requires actually starting up WSL Instance - will set up WSL Network Adapter using settings in .wslconfig. Requires administrator priviledges if required adapter is not active.
+    Takes any parameters and passes them transparently to wsl.exe. If parameter(s) requires actually starting up WSL Instance - will set up WSL Network Adapter using settings in .wslconfig. Requires administrator privileges if required adapter is not active.
 
     .DESCRIPTION
-    This command acts a wrapper around `wsl.exe` taking all it's paramters and passing them along.
-    Before actually executing `wsl.exe` this command checks if WSL Network Adapter with required parameters is active (i.e. checks if network parameters in .wslconfig are in effect). If acitve adapter parameters are different from those in .wslconfig - active adapter is removed and new one with required parameters is activated. Requires administrator priviledges if required adapter is not active.
+    This command acts a wrapper around `wsl.exe` taking all it's parameters and passing them along.
+    Before actually executing `wsl.exe` this command checks if WSL Network Adapter with required parameters is active (i.e. checks if network parameters in .wslconfig are in effect). If active adapter parameters are different from those in .wslconfig - active adapter is removed and new one with required parameters is activated. Requires administrator privileges if required adapter is not active.
 
     .PARAMETER arguments
     All arguments accepted by wsl.exe
@@ -873,7 +898,7 @@ function Invoke-WslStatic {
     Will check if WSL Network Adapter is active and if not initialize it. Then it will execute `wsl.exe -d Ubuntu`. Thus allowing to use WSL instances with static ip addressed without manual interaction with network settings, etc.
 
     .NOTES
-    During execution of Install-WslHandler, when a static mode of operation is specified, there will be an alias created: `wsl` for Invoke-WslStatic. When working in Powershell this alias shadows actual windows `wsl` command to enable effortless operation in Static IP Mode. When there is a need to execute actual windows `wsl` command from withing Powershell use `wsl.exe` (i.e. with extension) to execute native windoiws command.
+    During execution of Install-WslHandler, when a static mode of operation is specified, there will be an alias created: `wsl` for Invoke-WslStatic. When working in Powershell this alias shadows actual windows `wsl` command to enable effortless operation in Static IP Mode. When there is a need to execute actual windows `wsl` command from withing Powershell use `wsl.exe` (i.e. with extension) to execute native Windows command.
     #>
     function ArgsAreExec {
         param($arguments)
@@ -912,7 +937,7 @@ function Invoke-WslStatic {
 
     if ($args_copy.Count -eq 0 -or (ArgsAreExec $args_copy)) {
         Write-Debug "${fn}: `$args: $args_copy"
-        Write-Debug "${fn}: Passed arguments require Setting WSL Netwrok Adapter."
+        Write-Debug "${fn}: Passed arguments require Setting WSL Network Adapter."
 
         $networkSectionName = (Get-NetworkSectionName)
 

@@ -1,45 +1,62 @@
 ﻿#region Helper Functions to work with PrivateData hashtable from Module's PSD1 file.
 
-$script:PrivateData = $null
+$WslPrivateData = $null
 
 function Get-PrivateData {
     [CmdletBinding()]
-    param()
+    param($ModuleInfo, [switch]$Force)
     $fn = $MyInvocation.MyCommand.Name
 
-    if ($null -eq $script:PrivateData) {
-        Write-Debug "${fn}: PrivateData does not exist!"
-        try {
-            $script:PrivateData = $MyInvocation.MyCommand.Module.PrivateData.Clone()
+    if ($null -eq $script:WslPrivateData -or $Force.IsPresent) {
+        Write-Debug "${fn}: PrivateData is null or -Force parameter has been set!"
+
+        if ($PSBoundParameters.ContainsKey('ModuleInfo') -and $null -ne $ModuleInfo) {
+            $ModuleInfo = [System.Management.Automation.PSModuleInfo]$ModuleInfo
+            Write-Debug "${fn}: Using passed in ModuleInfo: $($ModuleInfo.Name)"
         }
-        catch {
-            # Write-Host "MyInvocation: $($MyInvocation | Out-String)"
-            Write-Error "${fn}: MyInvocation: $($MyInvocation | Out-String)`nError Cloning PrivateData: $($_.Exception.Message | Out-String)"
+        else {
+            $ModuleInfo = $MyInvocation.MyCommand.Module
+            Write-Debug "${fn}: Using `$MyInvocation.MyCommand.Module: $($ModuleInfo.Name)"
         }
-        Write-Debug "${fn}: Cloned PrivateData - Count: $($script:PrivateData.Count)"
-        $script:PrivateData.Remove('PSData')
-        Write-Debug "${fn}: PsData removed from PrivateData"
+
+        if ($null -eq $ModuleInfo.PrivateData) {
+            $PSCmdlet.ThrowTerminatingError(
+                [System.Management.Automation.ErrorRecord]::new(
+                ([System.ArgumentNullException]"ModuleInfo in ${fn} does not have PrivateData!"),
+                    'WSLIpHandler.PrivateDataNotFound',
+                    [System.Management.Automation.ErrorCategory]::InvalidArgument,
+                    $ModuleInfo
+                )
+            )
+        }
+        else {
+            $script:WslPrivateData = $ModuleInfo.PrivateData.Clone()
+            Write-Debug "${fn}: Cloned PrivateData - Count: $($script:WslPrivateData.Count)"
+            $script:WslPrivateData.Remove('PSData')
+            Write-Debug "${fn}: PsData removed from PrivateData"
+            $script:WslPrivateData
+        }
     }
-    Write-Debug "${fn}: Returning PrivateData: $($script:PrivateData | Out-String)"
-    $script:PrivateData
+    else {
+        Write-Debug "${fn}: Returning Cached PrivateData: $($script:WslPrivateData | Out-String)"
+        $script:WslPrivateData
+    }
 }
 
 function Get-ScriptName {
     [CmdletBinding()]
-    param($ScriptName)
-    $local:ScriptNames = (Get-PrivateData)['ScriptNames']
+    param($ScriptName, $ModuleInfo)
+    $local:ScriptNames = (Get-PrivateData $ModuleInfo)['ScriptNames']
     $errorMessage = "Wrong ScriptName: '$ScriptName'. Valid names:`n$($ScriptNames.Keys | Out-String)"
-    $local:ScriptNames.Contains($ScriptName) ? `
-        $local:ScriptNames[$ScriptName] : (Write-Error $errorMessage -ErrorAction Stop)
+    $local:ScriptNames.Contains($ScriptName) ? $local:ScriptNames[$ScriptName] : (Write-Error $errorMessage -ErrorAction Stop)
 }
 
 function Get-ScriptLocation {
     [CmdletBinding()]
-    param($ScriptName)
-    $local:ScriptLocations = (Get-PrivateData)['ScriptLocations']
+    param($ScriptName, $ModuleInfo)
+    $local:ScriptLocations = (Get-PrivateData $ModuleInfo)['ScriptLocations']
     $errorMessage = "Wrong ScriptName: '$ScriptName'. Valid names:`n$($ScriptLocations.Keys | Out-String)"
-    $local:ScriptLocations.Contains($ScriptName) ? `
-        $local:ScriptLocations[$ScriptName] : (Write-Error $errorMessage -ErrorAction Stop)
+    $local:ScriptLocations.Contains($ScriptName) ? $local:ScriptLocations[$ScriptName] : (Write-Error $errorMessage -ErrorAction Stop)
 }
 
 function Get-SourcePath {
@@ -57,44 +74,44 @@ function Get-TargetPath {
 
 function Get-NetworkSectionName {
     [CmdletBinding()]
-    param()
-    (Get-PrivateData).WslConfig.NetworkSectionName
+    param($ModuleInfo)
+    (Get-PrivateData $ModuleInfo).WslConfig.NetworkSectionName
 }
 
 function Get-StaticIpAddressesSectionName {
     [CmdletBinding()]
-    param()
-    (Get-PrivateData).WslConfig.StaticIpAddressesSectionName
+    param($ModuleInfo)
+    (Get-PrivateData $ModuleInfo).WslConfig.StaticIpAddressesSectionName
 }
 
 function Get-WslIpOffsetSectionName {
     [CmdletBinding()]
-    param()
-    (Get-PrivateData).WslConfig.IpOffsetSectionName
+    param($ModuleInfo)
+    (Get-PrivateData $ModuleInfo).WslConfig.IpOffsetSectionName
 }
 
 function Get-GatewayIpAddressKeyName {
     [CmdletBinding()]
-    param()
-    (Get-PrivateData).WslConfig.GatewayIpAddressKeyName
+    param($ModuleInfo)
+    (Get-PrivateData $ModuleInfo).WslConfig.GatewayIpAddressKeyName
 }
 
 function Get-PrefixLengthKeyName {
     [CmdletBinding()]
-    param()
-    (Get-PrivateData).WslConfig.PrefixLengthKeyName
+    param($ModuleInfo)
+    (Get-PrivateData $ModuleInfo).WslConfig.PrefixLengthKeyName
 }
 
 function Get-DnsServersKeyName {
     [CmdletBinding()]
-    param()
-    (Get-PrivateData).WslConfig.DnsServersKeyName
+    param($ModuleInfo)
+    (Get-PrivateData $ModuleInfo).WslConfig.DnsServersKeyName
 }
 
 function Get-ProfileContent {
     [CmdletBinding()]
-    param()
-    (Get-PrivateData).ProfileContent
+    param($ModuleInfo)
+    (Get-PrivateData $ModuleInfo).ProfileContent
 }
 
 #endregion Helper Functions

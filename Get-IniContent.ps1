@@ -100,8 +100,8 @@
         $ini = New-Object System.Collections.Specialized.OrderedDictionary([System.StringComparer]::OrdinalIgnoreCase)
 
         if (!(Test-Path $Filepath)) {
-            Write-Verbose ("Warning: `"{0}`" was not found." -f $Filepath)
-            Write-Output $ini
+            Write-Warning ("`"{0}`" was not found." -f $Filepath)
+            return $ini
         }
 
         $commentCount = 0

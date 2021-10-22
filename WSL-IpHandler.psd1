@@ -10,7 +10,7 @@
     RootModule        = 'WSL-IpHandler'
 
     # Version number of this module.
-    ModuleVersion     = '0.4.1'
+    ModuleVersion     = '0.5.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -70,8 +70,8 @@
         'Uninstall-WslIpHandler'
         'Set-ProfileContent'
         'Remove-ProfileContent'
-        'Set-WslNetworkParameters'
-        'Remove-WslNetworkParameters'
+        'Set-WslNetworkConfig'
+        'Remove-WslNetworkConfig'
         'Set-WslInstanceStaticIpAddress'
         'Remove-WslInstanceStaticIpAddress'
         'Set-WslNetworkAdapter'
@@ -101,7 +101,7 @@
     # List of all files packaged with this module
     FileList          = @(
         'functions.sh'
-        'install-wsl-iphadler.sh'
+        'install-wsl-iphandler.sh'
         'uninstall-wsl-iphandler.sh'
         'wsl-iphandler.sh'
         'README.md'
@@ -131,9 +131,9 @@
         }
 
         ProfileContent  = @(
-            '# Start of WSL-IpHandler Section',
-            'Import-Module WSL-IpHandler -Force',
-            'Set-Alias wsl Invoke-WslStatic',
+            '# Start of WSL-IpHandler Section'
+            'Import-Module WSL-IpHandler -Force'
+            'Set-Alias wsl Invoke-WslStatic'
             '# End of WSL-IpHandler Section'
         )
 
