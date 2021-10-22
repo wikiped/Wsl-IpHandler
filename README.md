@@ -49,7 +49,7 @@ git clone https://github.com/wikiped/Wsl-IpHandler
 ```powershell
 New-Item "$(split-path $Profile)\Modules" -Type Directory -ea SilentlyContinue
 cd "$(split-path $Profile)\Modules"
-Invoke-WebRequest -Uri https://github.com/wikiped/Wsl-IpHanlder/archive/refs/heads/master.zip -OutFile 'Wsl-IpHandler.zip'
+Invoke-WebRequest -Uri https://codeload.github.com/wikiped/WSL-IpHandler/zip/refs/heads/master -OutFile 'Wsl-IpHandler.zip'
 Expand-Archive -Path 'Wsl-IpHandler.zip' -DestinationPath '.'
 Remove-Item -Path 'Wsl-IpHandler.zip'
 Rename-Item -Path 'Wsl-IpHandler-master' -NewName 'Wsl-IpHandler'
