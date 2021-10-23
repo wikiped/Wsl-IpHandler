@@ -250,8 +250,10 @@ process_windows_host_and_ip() {
 
 	if [[ $(get_default_gateway_ip) != "$windows_ip" ]]
 	then
-		ip route add default via "$windows_ip" dev $dev
+		ip route add "$windows_ip" dev $dev
 		test $? = 0 || error ${LINENO} "(ip route add default via $windows_ip dev $dev) failed." 16
+		ip route add default via "$windows_ip" dev $dev
+		test $? = 0 || error ${LINENO} "(ip route add default via $windows_ip dev $dev) failed." 17
 	fi
 }
 
@@ -269,11 +271,11 @@ run_powershell_script_to_edit_windows_hosts() {
 	local psexe
 	psexe="$(type -p pwsh.exe || type -p powershell.exe)"
 	# psexe="/mnt/c/Program Files/PowerShell/7/pwsh.exe"
-	test $? = 0 -o -z "$psexe" || error ${LINENO} 'Could not locate PowerShell executable.' 17
+	test $? = 0 -o -z "$psexe" || error ${LINENO} 'Could not locate PowerShell executable.' 18
 
 	#echo "${psexe}" "${ps_script}" "${ip_address%/*}" "${wsl_host}"
 	"${psexe}" "${ps_script}" "${ip_address}" "${wsl_host}"
-	test $? = 0 || error ${LINENO} "Error executing ${ps_script} ${ip_address} ${wsl_host}" 16
+	test $? = 0 || error ${LINENO} "Error executing ${ps_script} ${ip_address} ${wsl_host}" 19
 
 	echo_verbose "Added ${ip_address} ${wsl_host} to windows hosts file!"
 }
@@ -298,12 +300,12 @@ main() {
 
 		local gateway_prefix
 		gateway_prefix=$(get_gateway_prefix_length)
-		test $? = 0 || error ${LINENO} "'get_gateway_prefix_length' failed." 10
+		test $? = 0 || error ${LINENO} "'get_gateway_prefix_length' failed." 11
 		echo_debug "gateway_prefix=$gateway_prefix"
 
 		local gateway_ip_with_prefix
 		gateway_ip_with_prefix="$gateway_ip/$gateway_prefix"
-		test -n "$gateway_ip_with_prefix" || error ${LINENO} "No gateway IP found!" 11
+		test -n "$gateway_ip_with_prefix" || error ${LINENO} "No gateway IP found!" 12
 		echo_debug "gateway_ip_with_prefix=$gateway_ip_with_prefix"
 
 		local offset
