@@ -952,3 +952,25 @@ function Invoke-WslStatic {
     $DebugPreference = $DebugPreferenceOriginal
     & wsl.exe @args_copy
 }
+
+
+function Update-WslIpHandlerModule {
+    <#
+    .SYNOPSIS
+    Downloads latest master.zip from this Modules repository at github.com and updates local Module's files
+
+    .DESCRIPTION
+    Updates local Module's files to the latest available at Module's repository at github.com.
+    If `git` is available uses `git pull origin master`, otherwise Invoke-WebRequest will be used to download master.zip and expand it to Module's directory replacing all files with downloaded ones.
+
+    .EXAMPLE
+    An example
+
+    .NOTES
+    All file in this Module's folder will be removed before update!
+    #>
+    [CmdletBinding()]
+    param ()
+    $script = Join-Path $PSScriptRoot 'Update-WslIpHandlerModule.ps1' -Resolve
+    & $script
+}
