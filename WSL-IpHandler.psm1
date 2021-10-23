@@ -329,7 +329,7 @@ function Uninstall-WslIpHandler {
 
     #region Remove Content from Powershell Profile
     # Remove Profile Content if there are no more Static IP assignments
-    if ((Get-WslConfigSectionCount $staticIpSectionName) -le 0) {
+    if ((Get-WslConfigSectionCount (Get-StaticIpAddressesSectionName)) -le 0) {
         Write-Debug "${fn}: Removing Powershell Profile Modifications ..."
         Remove-ProfileContent
     }
