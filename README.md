@@ -155,7 +155,7 @@ In Dynamic mode WSL IP Handler does not interfere with how Windows manages WSL n
    1. Activate in Dynamic Mode:
 
       ```powershell
-      Install-Wsl-IpHandler Ubuntu
+      Install-WslIpHandler Ubuntu
       ```
 
    1. Activate in Static Mode:
@@ -163,13 +163,13 @@ In Dynamic mode WSL IP Handler does not interfere with how Windows manages WSL n
       To get WSL Instance IP address assigned automatically:
 
       ```powershell
-      Install-Wsl-IpHandler -WslInstanceName Ubuntu -GatewayIpAddress 172.16.0.1
+      Install-WslIpHandler -WslInstanceName Ubuntu -GatewayIpAddress 172.16.0.1
       ```
 
       To assign WSL Instance IP address manually:
 
       ```powershell
-      Install-Wsl-IpHandler -WslInstanceName Ubuntu -GatewayIpAddress 172.16.0.1 -WslInstanceIpAddress 172.16.0.2
+      Install-WslIpHandler -WslInstanceName Ubuntu -GatewayIpAddress 172.16.0.1 -WslInstanceIpAddress 172.16.0.2
       ```
 
 1. Use WSL Instance.
