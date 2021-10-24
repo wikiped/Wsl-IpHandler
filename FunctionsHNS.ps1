@@ -299,7 +299,7 @@ function ConvertResponseFromJsonEx {
             Write-Error $_.Exception.Message
             return ''
         }
-        if ($output.Error) {
+        if ($null -ne $output -and $null -ne $output.Error) {
             Write-Error $output;
         }
     }
