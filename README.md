@@ -147,7 +147,7 @@ In Dynamic mode WSL IP Handler does not interfere with how Windows manages WSL n
 1. Import Module.
 
     ```powershell
-    Import-Module ./Wsl-IpHandler/Wsl-IpHandler.psd1
+    Import-Module Wsl-IpHandler
     ```
 
 1. Activate Module.
