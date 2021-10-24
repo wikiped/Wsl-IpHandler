@@ -186,7 +186,7 @@ In Dynamic mode WSL IP Handler does not interfere with how Windows manages WSL n
 
    Execute from Powershell prompt:
 
-   (Feel free to reboot the computer or execute `Remove-WslNetworkAdapter` beforehand to see that the changes are percistant after system reboot)
+   (Feel free to reboot the computer or execute `Remove-WslNetworkAdapter` beforehand to see that the changes are persistent after system reboot)
 
    ```powershell
    wsl -d Ubuntu
