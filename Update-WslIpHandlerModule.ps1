@@ -37,10 +37,10 @@ else {
     Remove-Item -Path $outputDir -Recurse -Force
 }
 
-if ($Error[0]) {
+if ($Error) {
     Write-Error "There was an error while updating WSL-IpHandler Module: $($Error[0])"
 }
 else {
     Import-Module $ModuleName -Force
-    Write-Host 'WSL-IpHandler Module was successfully updated and Imported!'
+    Write-Host 'WSL-IpHandler Module was successfully updated and imported!'
 }
