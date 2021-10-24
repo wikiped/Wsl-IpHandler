@@ -55,6 +55,14 @@ Remove-Item -Path 'Wsl-IpHandler.zip'
 Rename-Item -Path 'Wsl-IpHandler-master' -NewName 'Wsl-IpHandler'
 ```
 
+## Where the module is installed?
+
+After executing above commands in [How to get this module](#how-to-get-this-module) the module is installed in a Powershell profile directory for the current user.
+
+Run `Split-Path $Profile` to see location of this profile directory.
+
+When `Import-Module SomeModule` command is executed, Powershell looks for `SomeModule` in this directory (among others).
+
 ## How does it work?
 
 WSL IP Handler operates by keeping user configuration and running powershell scripts on Windows host and bash script on WSL Instance where it has been activated.
@@ -150,6 +158,8 @@ In Dynamic mode WSL IP Handler does not interfere with how Windows manages WSL n
     Import-Module Wsl-IpHandler
     ```
 
+   > All commands that follow below require that the module has been imported with above command!
+
 1. Activate Module.
 
    1. Activate in Dynamic Mode:
@@ -217,6 +227,14 @@ Uninstall-WslIpHandler -WslInstanceName Ubuntu
 ```
 
 If WSL Instance being removed had Static IP address and it is the only one remaining WSL Network Adapter will also be removed along with Powershell profile modifications.
+
+## How to update this module
+
+To update this module to the latest version in github repository run in Powershell prompt:
+
+```powershell
+Update-WslIpHandlerModule
+```
 
 ## How to completely remove this module
 
