@@ -1,4 +1,6 @@
-﻿function Get-CommandOutputInUTF16AsUTF8 {
+﻿. (Join-Path $PSScriptRoot 'ArgumentsCompleters.ps1' -Resolve)
+
+function Get-CommandOutputInUTF16AsUTF8 {
     param(
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
         [string]$Command,
@@ -46,7 +48,6 @@ function Get-WslIsRunning {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'isRunning', Justification = 'False Positive')]
     param(
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
-        [ArgumentCompleter( { WslNameCompleter } )]
         [string]$WslInstanceName
     )
     $isRunning = $false
@@ -57,3 +58,5 @@ function Get-WslIsRunning {
         ForEach-Object { if ($_ -match $patternRunning) { $isRunning = $true } }
     $isRunning
 }
+
+Register-ArgumentCompleter -CommandName Get-WslIsRunning -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter

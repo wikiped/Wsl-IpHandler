@@ -2,28 +2,11 @@ $ErrorActionPreference = 'Stop'
 
 Set-StrictMode -Version latest
 
+. (Join-Path $PSScriptRoot 'ArgumentsCompleters.ps1' -Resolve)
 . (Join-Path $PSScriptRoot 'WindowsCommandsUTF16Converters.ps1' -Resolve)
 . (Join-Path $PSScriptRoot 'FunctionsWslConfig.ps1' -Resolve)
 . (Join-Path $PSScriptRoot 'FunctionsHostsFile.ps1' -Resolve)
 . (Join-Path $PSScriptRoot 'FunctionsPrivateData.ps1' -Resolve)
-
-function WslNameCompleter {
-    param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameter)
-    # Get-CommandOutputInUTF16AsUTF8 'wsl.exe' '-l' |
-    wsl.exe -l |
-        ConvertFrom-UTF16toUTF8 |
-        Select-Object -Skip 1 |
-        Where-Object { $_ -like "*${wordToComplete}*" } |
-        ForEach-Object {
-            $res = $_ -split ' ' | Select-Object -First 1
-            New-Object System.Management.Automation.CompletionResult (
-                $res,
-                $res,
-                'ParameterValue',
-                $res
-            )
-        }
-}
 
 function Install-WslIpHandler {
     <#
@@ -115,9 +98,26 @@ function Install-WslIpHandler {
     #>
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory)]
-        [ArgumentCompleter( { WslNameCompleter } )]
+        [Parameter(Mandatory, Position = 0)]
+        [Parameter(ParameterSetName = 'Dynamic')]
+        [Parameter(ParameterSetName = 'Static')]
         [Alias('Name')]
+        # [ArgumentCompleter({
+        #         param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameter)
+        #         wsl.exe -l |
+        #             ConvertFrom-UTF16toUTF8 |
+        #             Select-Object -Skip 1 |
+        #             Where-Object { $_ -like "*${wordToComplete}*" } |
+        #             ForEach-Object {
+        #                 $res = $_ -split ' ' | Select-Object -First 1
+        #                 New-Object System.Management.Automation.CompletionResult (
+        #                     $res,
+        #                     $res,
+        #                     'ParameterValue',
+        #                     $res
+        #                 )
+        #             }
+        #     })]
         [string]$WslInstanceName,
 
         [Parameter(Mandatory, ParameterSetName = 'Static')][Alias('Gateway')]
@@ -260,7 +260,6 @@ function Uninstall-WslIpHandler {
     [CmdletBinding()]
     param (
         [AllowNull()][AllowEmptyString()]
-        [ArgumentCompleter( { WslNameCompleter } )]
         [Alias('Name')]
         [string]$WslInstanceName,
 
@@ -436,7 +435,6 @@ function Set-WslInstanceStaticIpAddress {
     #>
     param (
         [Parameter(Mandatory)]
-        [ArgumentCompleter( { WslNameCompleter } )]
         [Alias('Name')]
         [string]$WslInstanceName,
 
@@ -512,7 +510,6 @@ function Remove-WslInstanceStaticIpAddress {
     #>
     param (
         [Parameter(Mandatory)]
-        [ArgumentCompleter( { WslNameCompleter } )]
         [Alias('Name')]
         [string]$WslInstanceName,
 
@@ -814,7 +811,6 @@ function Test-WslInstallation {
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
-        [ArgumentCompleter( { WslNameCompleter } )]
         [Alias('Name')]
         [string]$WslInstanceName,
 
@@ -953,7 +949,6 @@ function Invoke-WslStatic {
     & wsl.exe @args_copy
 }
 
-
 function Update-WslIpHandlerModule {
     <#
     .SYNOPSIS
@@ -974,3 +969,13 @@ function Update-WslIpHandlerModule {
     $script = Join-Path $PSScriptRoot 'Update-WslIpHandlerModule.ps1' -Resolve
     & $script
 }
+
+Register-ArgumentCompleter -CommandName Uninstall-WslIpHandler -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
+
+Register-ArgumentCompleter -CommandName Install-WslIpHandler -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
+
+Register-ArgumentCompleter -CommandName Set-WslInstanceStaticIpAddress -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
+
+Register-ArgumentCompleter -CommandName Remove-WslInstanceStaticIpAddress -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
+
+Register-ArgumentCompleter -CommandName Test-WslInstallation -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
