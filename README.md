@@ -119,6 +119,8 @@ Created alias work ONLY from within Powershell sessions.
 
 See [Execution of command alias](#execution-of-command-alias) for details on what happens when it is executed.
 
+  > NOTE: Profile modification takes effect after Powershell session restarts!
+
 ## How to use this module
 
 ### Modes of operation

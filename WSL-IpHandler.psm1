@@ -367,6 +367,14 @@ function Set-ProfileContent {
     Write-Debug "${fn}: ProfilePath: $ProfilePath"
 
     $handlerContent = Get-ProfileContent
+
+    $modulePath = $MyInvocation.MyCommand.Module.Path
+    $moduleFolder = Split-Path $modulePath
+
+    if (-not $Env:PSModulePath.contains($moduleFolder, 'OrdinalIgnoreCase')) {
+        $handlerContent = $handlerContent -replace 'Import-Module WSL-IpHandler', "Import-Module '$modulePath'"
+    }
+
     $content = (Get-Content -Path $ProfilePath -ErrorAction SilentlyContinue) ?? @()
     $content += $handlerContent
     Set-Content -Path $ProfilePath -Value $content -Force
@@ -391,6 +399,14 @@ function Remove-ProfileContent {
     Write-Debug "${fn}: ProfilePath: $ProfilePath"
 
     $handlerContent = Get-ProfileContent
+
+    $modulePath = $MyInvocation.MyCommand.Module.Path
+    $moduleFolder = Split-Path $modulePath
+
+    if (-not $Env:PSModulePath.contains($moduleFolder, 'OrdinalIgnoreCase')) {
+        $handlerContent = $handlerContent -replace 'Import-Module WSL-IpHandler', "Import-Module '$modulePath'"
+    }
+
     $content = (Get-Content -Path $ProfilePath -ErrorAction SilentlyContinue) ?? @()
     if ($content) {
         $content = $content | Where-Object { $handlerContent -notcontains $_ }
@@ -947,6 +963,10 @@ function Invoke-WslStatic {
     Write-Debug "${fn}: Invoking wsl.exe $args_copy"
     $DebugPreference = $DebugPreferenceOriginal
     & wsl.exe @args_copy
+}
+
+function Get-ModulePath {
+    Write-Host "Module's Path: $($MyInvocation.MyCommand.Module.Path)"
 }
 
 function Update-WslIpHandlerModule {
