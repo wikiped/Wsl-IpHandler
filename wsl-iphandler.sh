@@ -113,7 +113,7 @@ get_ip_with_prefix() {
 ip_exists() {
 	set +o pipefail
 	local ip_addr=$1
-	if ip addr show dev $dev | grep -Po "inet \K[\d\./]+" 2>/dev/null | grep -qF "$ip_addr"
+	if ip addr show dev $dev | grep -Po "inet \K[\d\./]+" 2>/dev/null | grep -qF "$ip_addr/"
 	then
 		set -o pipefail
 		true
