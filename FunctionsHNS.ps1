@@ -157,7 +157,7 @@ function Remove-HnsNetworkEx {
     [CmdletBinding()]
     param
     (
-        [parameter(Mandatory = $true, ValueFromPipeline = $True, ValueFromPipelinebyPropertyName = $True)]
+        [parameter(Mandatory = $true, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
         [Object[]] $InputObjects
     )
     begin { $objects = @() }
@@ -228,7 +228,7 @@ function Get-HnsGenericEx {
 function Remove-HnsGenericEx {
     param
     (
-        [parameter(Mandatory = $false, ValueFromPipeline = $True, ValueFromPipelinebyPropertyName = $True)]
+        [parameter(Mandatory = $false, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
         [Object[]] $InputObjects,
         [parameter(Mandatory = $false)] [Hashtable] $NativeMethods
     )
@@ -299,7 +299,7 @@ function ConvertResponseFromJsonEx {
             Write-Error $_.Exception.Message
             return ''
         }
-        if ($null -ne $output -and $null -ne $output.Error) {
+        if ([bool](Get-Member -InputObject $output -name Error -MemberType Properties -ErrorAction SilentlyContinue)) {
             Write-Error $output;
         }
     }

@@ -78,8 +78,8 @@ Get-HnsNetworkEx | Where-Object { $_.Name -Eq 'WSL' } | Remove-HnsNetworkEx | Ou
 
 New-HnsNetworkEx -Id B95D0C5E-57D4-412B-B571-18A81A16E005 -JsonString $network | Out-Null
 
-$msgCreated = "Created New WSL Hyper-V VM Adapter with parameters:`n"
-$msgCreated += "$($networkParameters.GetEnumerator() |
-    ForEach-Object { "$($_.Name) = $($_.Value); "})"
+$msgCreated = 'Created New WSL Hyper-V VM Adapter with: '
+$msgCreated += ($networkParameters.GetEnumerator() |
+        ForEach-Object { "$($_.Name)=$($_.Value)" }) -join '; '
 Write-Debug "${name}: $msgCreated"
-Write-Host $msgCreated
+Write-Verbose $msgCreated

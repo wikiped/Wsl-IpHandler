@@ -147,7 +147,7 @@ function Install-WslIpHandler {
     $debug_var = if ($DebugPreference -eq 'Continue') { 'DEBUG=1' } else { '' }
     $verbose_var = if ($VerbosePreference -eq 'Continue') { 'VERBOSE=1' } else { '' }
 
-    Write-Host "PowerShell Installing WSL-IpHandler to $WslInstanceName..."
+    Write-Host "PowerShell installing WSL-IpHandler to $WslInstanceName..."
     #region PS Autorun
     # Get Path to PS Script that injects (if needed) IP-host to windows hosts on every WSL launch
     $WinHostsEditScript = Get-SourcePath 'WinHostsEdit'
@@ -234,7 +234,7 @@ function Install-WslIpHandler {
 
     #endregion Test IP and host Assignments
 
-    Write-Host "PowerShell Successfully Installed WSL-IpHandler to $WslInstanceName."
+    Write-Host "PowerShell successfully installed WSL-IpHandler to $WslInstanceName."
 }
 
 function Uninstall-WslIpHandler {
@@ -334,7 +334,7 @@ function Uninstall-WslIpHandler {
     }
     #endregion Remove Content from Powershell Profile
 
-    Write-Host "PowerShell Successfully Uninstalled WSL-IpHandler from $WslInstanceName."
+    Write-Host "PowerShell successfully uninstalled WSL-IpHandler from $WslInstanceName!"
 }
 
 function Set-ProfileContent {
