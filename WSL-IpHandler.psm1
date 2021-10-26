@@ -180,7 +180,6 @@ function Install-WslIpHandler {
 
         $WslHostIpOrOffset = $WslInstanceIpAddress.IPAddressToString
     }
-
     else {
         $WslIpOffset = Get-WslIpOffset $WslInstanceName
         Write-Verbose "Setting Automatic IP Offset: $WslIpOffset for $WslInstanceName."
@@ -223,7 +222,8 @@ function Install-WslIpHandler {
         Test-WslInstallation -WslInstanceName $WslInstanceName -WslHostName $WslHostName -WindowsHostName $WindowsHostName
     }
     catch {
-        Write-Debug "${fn} Error: $_"
+        Write-Host "PowerShell finished installation of WSL-IpHandler to $WslInstanceName with Errors:"
+        Write-Debug "${fn} ScriptStackTrace: $($_.ScriptStackTrace)"
         Write-Host "$_" -ForegroundColor Red
         return
     }
@@ -369,16 +369,27 @@ function Set-ProfileContent {
     $handlerContent = Get-ProfileContent
 
     $modulePath = $MyInvocation.MyCommand.Module.Path
-    $moduleFolder = Split-Path $modulePath
+    $modulePrefix = Split-Path $modulePath
 
-    if (-not $Env:PSModulePath.contains($moduleFolder, 'OrdinalIgnoreCase')) {
+    if (-not $Env:PSModulePath.contains($modulePrefix, 'OrdinalIgnoreCase')) {
         $handlerContent = $handlerContent -replace 'Import-Module WSL-IpHandler', "Import-Module '$modulePath'"
     }
 
     $content = (Get-Content -Path $ProfilePath -ErrorAction SilentlyContinue) ?? @()
-    $content += $handlerContent
-    Set-Content -Path $ProfilePath -Value $content -Force
-    # . $ProfilePath  # !!! DONT DO THAT -> IT Removes ALL Sourced functions (i.e. '. File.ps1')
+
+    $anyHandlerContentMissing = $false
+    foreach ($line in $handlerContent) {
+        if ($line -notin $content) { $anyHandlerContentMissing = $true; break }
+    }
+
+    if ($anyHandlerContentMissing) {
+        # Safeguard to avoid duplication in case user manually edits profile file
+        $content = $content | Where-Object { $handlerContent -notcontains $_ }
+        $content += $handlerContent
+        Set-Content -Path $ProfilePath -Value $content -Force
+        Write-Warning "Powershell profile was modified: $ProfilePath.`nThe changes will take effect after Powershell session is restarted!"
+        # . $ProfilePath  # !!! DONT DO THAT -> IT Removes ALL Sourced functions (i.e. '. File.ps1')
+    }
 }
 
 function Remove-ProfileContent {
@@ -836,6 +847,7 @@ function Test-WslInstallation {
         [ValidateNotNullOrEmpty()]
         [string]$WindowsHostName
     )
+
     $fn = $MyInvocation.MyCommand.Name
     $networkSectionName = (Get-NetworkSectionName)
     $failed = $false
@@ -844,36 +856,39 @@ function Test-WslInstallation {
         $WindowsHostName = Get-WslConfigValue -SectionName $networkSectionName -KeyName (Get-WindowsHostNameKeyName) -DefaultValue 'windows'
     }
 
-    $error_message = @(
-        "PowerShell finished installation of WSL-IpHandler to $WslInstanceName with errors:"
-    )
+    $error_message = @()
 
-    $bashTestCommand = "ping -c1 $WindowsHostName"
-    Write-Debug "${fn}: Testing Ping from WSL instance ${WslInstanceName}: `"$bashTestCommand`""
-    $wslTest = (wsl.exe -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$bashTestCommand`")
+    $bashTestCommand = "ping -c1 $WindowsHostName 2>&1"
+    Write-Verbose "Testing Ping from WSL instance ${WslInstanceName}: `"$bashTestCommand`" ..."
+    $wslTest = (wsl.exe -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$bashTestCommand`") -join "`n"
 
-    if (-not $wslTest -match ', 0% packet loss') {
-        Write-Debug "${fn}: Failed Ping from WSL Result:`n$wslTest"
-        Write-Debug "${fn}:`$wslTest: $($wslTest.Gettype())"
+    Write-Debug "${fn}: `$wslTest: $wslTest"
+
+    if ($wslTest -notmatch ', 0% packet loss') {
+        Write-Verbose "Ping from WSL Instance $WslInstanceName failed:`n$wslTest"
+        Write-Debug "${fn}: TypeOf `$wslTest: $($wslTest.Gettype())"
 
         $failed = $true
-        $error_message += "Pinging $WindowsHostName from $WslInstanceName Failed with error:`n$wslTest"
+        $error_message += "Pinging $WindowsHostName from $WslInstanceName failed:`n$wslTest"
     }
 
     # Before testing WSL IP address - make sure WSL Instance is up and running
     if (-not (Get-WslIsRunning $WslInstanceName)) {
-        $runCommand = 'exit'  # Even after 'exit' wsl instance should be running in background
+        $runCommand = 'sleep 1; exit'  # Even after 'exit' wsl instance should be running in background
         Write-Debug "${fn}: Running WSL instance $WslInstanceName for testing ping from Windows."
-        $null = (wsl.exe -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$runCommand`")
+        $null = (& wsl.exe -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$runCommand`")
     }
 
     if (Get-WslIsRunning $WslInstanceName) {
-        $windowsTest = $(ping -n 1 $WslHostName)
+        Write-Verbose "Testing Ping from Windows to WSL instance ${WslInstanceName} ..."
+        $windowsTest = $(ping -n 1 $WslHostName) -join "`n"
 
-        if (-not $windowsTest -match 'Lost = 0 \(0% loss\)') {
-            Write-Debug "${fn}: Failed Ping from Windows Result:`n$windowsTest"
+        Write-Debug "${fn}: `$windowsTest: $windowsTest"
+
+        if ($windowsTest -notmatch 'Lost = 0 \(0% loss\)') {
+            Write-Verbose "Ping from Windows to WSL instance ${WslInstanceName} failed:`n$windowsTest"
             $failed = $true
-            $error_message += "Pinging $WslHostName from Windows Failed with error:`n$windowsTest"
+            $error_message += "`nPinging $WslHostName from Windows failed:`n$windowsTest"
         }
     }
     else {
@@ -882,10 +897,12 @@ function Test-WslInstallation {
     }
 
     if ($failed) {
-        Write-Verbose "${fn}: Test Failed!"
-        Throw ($error_message -join "`n")
+        Write-Verbose "${fn}: on $WslInstanceName Failed!"
+        Write-Error ($error_message -join "`n") -ErrorAction Stop
     }
-    Write-Verbose "${fn}: Test Succeeded!"
+    else {
+        Write-Host "Test of WSL-IpHandler Installation on $WslInstanceName Succeeded!" -ForegroundColor Green
+    }
 }
 
 function Invoke-WslStatic {
@@ -963,10 +980,6 @@ function Invoke-WslStatic {
     Write-Debug "${fn}: Invoking wsl.exe $args_copy"
     $DebugPreference = $DebugPreferenceOriginal
     & wsl.exe @args_copy
-}
-
-function Get-ModulePath {
-    Write-Host "Module's Path: $($MyInvocation.MyCommand.Module.Path)"
 }
 
 function Update-WslIpHandlerModule {

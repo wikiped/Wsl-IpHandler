@@ -26,7 +26,7 @@ function Get-WslConfig {
             try {
                 $ConfigPath = (Get-WslConfigPath -Resolve)
                 Write-Debug "${fn}: Loading config from: $ConfigPath"
-                $script:WslConfig = Get-IniContent $ConfigPath
+                $script:WslConfig = Get-IniContent $ConfigPath -Verbose:$false -Debug:$false
             }
             catch {
                 Write-Debug "${fn}: No ConfigPath specified. Return empty hashtable."
@@ -35,7 +35,7 @@ function Get-WslConfig {
         }
         else {
             Write-Debug "${fn}: Loading config from: $ConfigPath"
-            $script:WslConfig = Get-IniContent $ConfigPath
+            $script:WslConfig = Get-IniContent $ConfigPath -Verbose:$false -Debug:$false
         }
     }
     Write-Debug "${fn}: Returning Cached Config..."

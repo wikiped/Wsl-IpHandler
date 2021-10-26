@@ -10,7 +10,7 @@
     RootModule        = 'WSL-IpHandler'
 
     # Version number of this module.
-    ModuleVersion     = '0.6.1'
+    ModuleVersion     = '0.6.2'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -129,6 +129,7 @@
             GatewayIpAddressKeyName      = 'gateway_ip'
             PrefixLengthKeyName          = 'prefix_length'
             DnsServersKeyName            = 'dns_servers'
+            WindowsHostNameKeyName       = 'windows_host_name'
         }
 
         ProfileContent  = @(

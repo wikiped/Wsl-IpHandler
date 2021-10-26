@@ -108,6 +108,12 @@ function Get-DnsServersKeyName {
     (Get-PrivateData $ModuleInfo).WslConfig.DnsServersKeyName
 }
 
+function Get-WindowsHostNameKeyName {
+    [CmdletBinding()]
+    param($ModuleInfo)
+    (Get-PrivateData $ModuleInfo).WslConfig.WindowsHostNameKeyName
+}
+
 function Get-ProfileContent {
     [CmdletBinding()]
     param($ModuleInfo)
