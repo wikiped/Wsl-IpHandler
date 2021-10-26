@@ -242,13 +242,19 @@ Update-WslIpHandlerModule
 
 > Before doing that make sure you have [deactivated](#how-to-deactivate-this-module) the module on all WSL instances.
 
-If the module was installed as outlined in [How to get this module](#how-to-get-this-module) then it will be sufficient to run this from Powershell prompt:
+Simply delete the module's folder. It's location can be checked with:
 
 ```powershell
-Uninstall-Module Wsl-IpHandler
+(Import-Module Wsl-IpHandler -PassThru | Get-Module).ModuleBase
 ```
 
-If the module was installed in a custom location, then module's folder should be deleted manually.
+Or execute from Powershell prompt outside of module's directory:
+
+```powershell
+$ModulePath = (Import-Module Wsl-IpHandler -PassThru | Get-Module).ModuleBase
+Remove-Module Wsl-IpHandler
+Remove-Item $ModulePath -Recurse -Force
+```
 
 ## Credits
 
