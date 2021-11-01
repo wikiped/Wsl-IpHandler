@@ -33,7 +33,7 @@ import "functions.sh"
 
 trap 'error ${LINENO}' ERR
 
-echo "Bash Installing WSL-IpHandler..."
+echo_verbose "Bash Installing WSL-IpHandler..."
 
 # Prcess Incoming Arguments
 echo_verbose "Processing Incoming Arguments..."
@@ -123,4 +123,4 @@ echo_verbose "Validating that sudoers.d folder is included in /etc/sudoers..."
 grep -P '#includedir\s+/etc/sudoers.d' /etc/sudoers &>/dev/null || sudo bash -c "printf \"#includedir /etc/sudoers.d\n\" >> /etc/sudoers"
 echo_verbose "Successfully validated that sudoers.d folder is included in /etc/sudoers"
 
-echo "Bash Installed WSL-IpHandler!"
+echo_verbose "Bash Installed WSL-IpHandler!"

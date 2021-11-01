@@ -32,7 +32,7 @@ import "functions.sh"
 
 trap 'error ${LINENO}' ERR
 
-echo "Bash Uninstalling WSL-IpHandler..."
+echo_verbose "Bash Uninstalling WSL-IpHandler..."
 
 # Prcess Incoming Arguments
 script_name="$1"
@@ -79,4 +79,4 @@ else
 	echo_verbose "File was not found: $sudoers_file"
 fi
 
-echo "Bash Uninstalled WSL-IpHandler."
+echo_verbose "Bash Uninstalled WSL-IpHandler."

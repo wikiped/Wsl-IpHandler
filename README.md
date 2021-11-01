@@ -157,7 +157,7 @@ In Dynamic mode WSL IP Handler does not interfere with how Windows manages WSL n
 1. Import Module.
 
     ```powershell
-    Import-Module Wsl-IpHandler
+    Import-Module WSL-IpHandler
     ```
 
    > All commands that follow below require that the module has been imported with above command!
@@ -228,7 +228,9 @@ From Powershell prompt execute:
 Uninstall-WslIpHandler -WslInstanceName Ubuntu
 ```
 
-If WSL Instance being removed had Static IP address and it is the only one remaining WSL Network Adapter will also be removed along with Powershell profile modifications.
+If WSL Instance being removed had Static IP address and it is the only one remaining all network configuration settings (Windows Host Name and Gataway IP Address) will also be removed along with Powershell profile modifications.
+
+Even after WSL-IpHandler was deactivated on all WSL instances WSL Hyper-V Network Adapter will remain active until next reboot or manual removal with `Remove-WslNetworkAdapter` command.
 
 ## How to update this module
 
@@ -240,20 +242,19 @@ Update-WslIpHandlerModule
 
 ## How to completely remove this module
 
-> Before doing that make sure you have [deactivated](#how-to-deactivate-this-module) the module on all WSL instances.
+> Before completely removing the module it is recommended to make sure the module has been [deactivated](#how-to-deactivate-this-module) on all WSL instances.
 
-Simply delete the module's folder. It's location can be checked with:
+To remove the module - delete the module's folder. It's location can be checked with:
 
 ```powershell
-(Import-Module Wsl-IpHandler -PassThru | Get-Module).ModuleBase
+(Import-Module WSL-IpHandler -PassThru | Get-Module).ModuleBase
 ```
 
-Or execute from Powershell prompt outside of module's directory:
+Or execute from Powershell prompt:
 
 ```powershell
-$ModulePath = (Import-Module Wsl-IpHandler -PassThru | Get-Module).ModuleBase
-Remove-Module Wsl-IpHandler
-Remove-Item $ModulePath -Recurse -Force
+Import-Module WSL-IpHandler
+Uninstall-WslIpHandlerModule
 ```
 
 ## Credits

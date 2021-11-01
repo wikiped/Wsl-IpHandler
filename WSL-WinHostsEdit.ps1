@@ -12,14 +12,14 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-. (Join-Path $PSScriptRoot 'FunctionsHostsFile.ps1' -Resolve)
+. (Join-Path $PSScriptRoot 'FunctionsHostsFile.ps1' -Resolve) | Out-Null
 
 $errorMessage = ''
 if ($null -eq $HostIpAddress) { $errorMessage += 'Host IP Address must be provided. ' }
 if ($null -eq $HostName) { $errorMessage += 'Host Name(s) must be provided.' }
 if ($errorMessage) { Write-Error $errorMessage -ErrorAction Stop }
 
-$originalHostsContent = (Get-HostsFileContent)
+$originalHostsContent = Get-HostsFileContent
 Write-Debug "Lines in Hosts File Before Processing: $($originalHostsContent.Count)"
 
 $contentModified = $false

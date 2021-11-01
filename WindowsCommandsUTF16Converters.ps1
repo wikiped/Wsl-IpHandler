@@ -1,4 +1,4 @@
-﻿. (Join-Path $PSScriptRoot 'ArgumentsCompleters.ps1' -Resolve)
+﻿. (Join-Path $PSScriptRoot 'ArgumentsCompleters.ps1' -Resolve) | Out-Null
 
 function Get-CommandOutputInUTF16AsUTF8 {
     param(

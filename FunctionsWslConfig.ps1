@@ -1,10 +1,10 @@
 ﻿$WslConfig = $null
 
 Set-Variable NoSection '_'  # Variable Required by Get-IniContent.ps1 and Out-IniFile.ps1
-. (Join-Path $PSScriptRoot 'Get-IniContent.ps1' -Resolve)
-. (Join-Path $PSScriptRoot 'Out-IniFile.ps1' -Resolve)
-. (Join-Path $PSScriptRoot 'FunctionsPrivateData.ps1' -Resolve)
-. (Join-Path $PSScriptRoot 'FunctionsHostsFile.ps1' -Resolve)
+. (Join-Path $PSScriptRoot 'Get-IniContent.ps1' -Resolve) | Out-Null
+. (Join-Path $PSScriptRoot 'Out-IniFile.ps1' -Resolve) | Out-Null
+. (Join-Path $PSScriptRoot 'FunctionsPrivateData.ps1' -Resolve) | Out-Null
+. (Join-Path $PSScriptRoot 'FunctionsHostsFile.ps1' -Resolve) | Out-Null
 
 function Get-WslConfigPath {
     [CmdletBinding()]param([switch]$Resolve)
@@ -106,8 +106,8 @@ function Get-WslConfigSection {
 function Remove-WslConfigSection {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
-        [string]$SectionName,
+        [Parameter(Mandatory, ValueFromPipeline)][AllowEmptyCollection()][AllowNull()]
+        [string[]]$SectionName,
 
         [Parameter(Mandatory)]
         [ref]$Modified,
@@ -117,25 +117,31 @@ function Remove-WslConfigSection {
         [switch]$ForceReadFileFromDisk
     )
     $fn = $MyInvocation.MyCommand.Name
+    $array = @($input)
+    if ($array.Count) { $SectionName = $array }
+    if (!(Test-Path Variable:SectionName)) { $SectionName = @() }
+    if ($null -eq $SectionName) { $SectionName = @() }
     $config = Get-WslConfig -ForceReadFileFromDisk:$ForceReadFileFromDisk
     Write-Debug "${fn}: `$SectionName = '$SectionName'"
     Write-Debug "${fn}: `$OnlyIfEmpty = $OnlyIfEmpty"
     Write-Debug "${fn}: `$Modified = $($Modified.Value)"
     Write-Debug "${fn}: `$ForceReadFileFromDisk = $ForceReadFileFromDisk"
 
-    if ($config.Contains($SectionName)) {
-        if ($OnlyIfEmpty.IsPresent) {
-            Write-Debug "${fn}: Only Remove Empty Section is specified."
-            if ($config[$SectionName].Count -eq 0) {
-                $config.Remove($SectionName)
-                $Modified.Value = $true
-                Write-Debug "${fn}: Conditionally Removed Empty Section '$SectionName'."
+    $SectionName | ForEach-Object {
+        if ($config.Contains($_)) {
+            if ($OnlyIfEmpty.IsPresent) {
+                Write-Debug "${fn}: Only Remove Empty Section is specified."
+                if ($config[$_].Count -eq 0) {
+                    $config.Remove($_)
+                    $Modified.Value = $true
+                    Write-Debug "${fn}: Conditionally Removed Empty Section '$_'."
+                }
             }
-        }
-        else {
-            $config.Remove($SectionName)
-            $Modified.Value = $true
-            Write-Debug "${fn}: Unconditionally Removed Section '$SectionName'."
+            else {
+                $config.Remove($_)
+                $Modified.Value = $true
+                Write-Debug "${fn}: Unconditionally Removed Section '$_'."
+            }
         }
     }
 }
@@ -302,7 +308,7 @@ function Get-AvailableStaticIpAddress {
     Write-Debug "${fn}: `$GatewayIpAddress=$GatewayIpAddress"
     Write-Debug "${fn}: `$PrefixLength=$PrefixLength"
 
-    $ipcalc = Join-Path $PSScriptRoot 'IP-Calc.ps1' -Resolve
+    Import-Module (Join-Path $PSScriptRoot 'IP-Calc.psm1' -Resolve) -Function Get-IpCalcResult
 
     $SectionName = (Get-StaticIpAddressesSectionName)
 
@@ -315,13 +321,13 @@ function Get-AvailableStaticIpAddress {
                 Sort-Object { $_.IPAddressToString -as [Version] } -Bottom 1
 
             Write-Debug "${fn}: Max IP address: $maxIP"
-            $maxIPobj = & $ipcalc -IpAddress $maxIP -PrefixLength $PrefixLength
+            $maxIPobj = Get-IpCalcResult -IpAddress $maxIP -PrefixLength $PrefixLength
             $newIP = $maxIPobj.Add(1).IpAddress
         }
         else {
             Write-Debug "${fn}: Selecting available IP address for WSL GatewayIpAddress: $GatewayIpAddress."
 
-            $ipObj = & $ipcalc -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
+            $ipObj = Get-IpCalcResult -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
             foreach ($i in 1..$ipObj.IPcount) {
                 $_ip = $ipObj.Add($i).IpAddress
                 if ($_ip -notin $section.Values) {
@@ -343,10 +349,10 @@ function Get-AvailableStaticIpAddress {
     else {
         if ($null -eq $GatewayIpAddress) {
             Write-Warning 'Cannot Find available IP address without Gateway IP address for WSL SubNet and without any Static IP addresses in .wslconfig.'
-            Write-Error "GatewayIpAddress in ${fn} is `$null and not found in .wslconfig and no WSL Network Adapter!"
+            Write-Error "Parameter GatewayIpAddress in ${fn} is `$null and .wslconfig has not $(Get-GatewayIpAddressKeyName) key and there is no active WSL Hyper-V Network Adapter to take Gateway IP Address from!"
         }
         else {
-            $ipObj = & $ipcalc -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
+            $ipObj = Get-IpCalcResult -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
             $newIP = $ipObj.Add(1).IpAddress
         }
     }
@@ -393,8 +399,9 @@ function Test-ValidStaticIpAddress {
         [int]$PrefixLength = 24
     )
     $fn = $MyInvocation.MyCommand.Name
-    $ipcalc = Join-Path $PSScriptRoot 'IP-Calc.ps1' -Resolve
     Write-Debug "${fn}: `$IpAddress=$IpAddress of type: $($IpAddress.Gettype())"
+
+    Import-Module (Join-Path $PSScriptRoot 'IP-Calc.psm1' -Resolve) -Function Get-IpCalcResult | Out-Null
 
     if ($PSCmdlet.ParameterSetName -eq 'Automatic') {
         $warnMsg = "You are setting Static IP Address: $IpAddress "
@@ -419,7 +426,7 @@ function Test-ValidStaticIpAddress {
             $warnMsg += 'within currently Unknown WSL SubNet that will be set by Windows OS and might have different SubNet!'
         }
         else {
-            $GatewayIpObject = (& $ipcalc -IpAddress $GatewayIpAddress.IPAddressToString -PrefixLength $PrefixLength)
+            $GatewayIpObject = (Get-IpCalcResult -IpAddress $GatewayIpAddress.IPAddressToString -PrefixLength $PrefixLength)
             if ($GatewayIpObject.Compare($IpAddress)) {
                 Write-Debug "${fn}: $IpAddress is within $($GatewayIpObject.CIDR) when `$usingWslConfig=$usingWslConfig"
                 if ($usingWslConfig) {
@@ -445,7 +452,7 @@ function Test-ValidStaticIpAddress {
     else {
         Write-Debug "${fn}: `$GatewayIpAddress=$GatewayIpAddress of type: $($GatewayIpAddress.Gettype())"
         Write-Debug "${fn}: `$PrefixLength=$PrefixLength"
-        $GatewayIPObject = (& $ipcalc -IpAddress $GatewayIpAddress.IPAddressToString -PrefixLength $PrefixLength)
+        $GatewayIPObject = (Get-IpCalcResult -IpAddress $GatewayIpAddress.IPAddressToString -PrefixLength $PrefixLength)
         Write-Debug "${fn}: `$GatewayIPObject: $($GatewayIPObject | Out-String)"
         if ($GatewayIPObject.Compare($IpAddress)) {
             Write-Debug "${fn}: $IpAddress is VALID and is within $($GatewayIPObject.CIDR) SubNet."
@@ -555,11 +562,20 @@ function Write-WslConfig {
         $newPath = Join-Path $folder ($newName + $oldName)
         Copy-Item -Path $configPath -Destination $newPath -Force
     }
-    Write-Debug "${fn}: current config to write: $(Get-WslConfig | ConvertTo-Json)"
+
+    $config = Get-WslConfig
+    Write-Debug "${fn}: current config to write: $($config | ConvertTo-Json)"
     Write-Debug "${fn}: target path: $configPath"
+
+    $emptySections = $config.Keys | Where-Object { $config.$_.Count -eq 0 }
+    Write-Debug "${fn}: Empty Sections: $emptySections"
+
+    $__ = $false
+    $emptySections | Remove-WslConfigSection -Modified ([ref]$__) -OnlyIfEmpty:$true
+
     $outIniParams = @{
         FilePath    = $configPath
-        InputObject = (Get-WslConfig)
+        InputObject = $config
         Force       = $true
         Loose       = $true
         Pretty      = $true

@@ -25,17 +25,15 @@ function Get-HostsFileContent {
         [string]$FilePath
     )
     if (-not $PSBoundParameters.ContainsKey('FilePath')) {
-        $FilePath = $Env:WinDir + '\system32\Drivers\etc\hosts'
+        $FilePath = Join-Path $Env:WinDir '\system32\Drivers\etc\hosts' -Resolve
     }
     Get-Content $FilePath
 }
 
 function Write-HostsFileContent {
     param (
-        [Parameter(Mandatory, ValueFromPipeline)]
-        [AllowEmptyString()]
-        [ValidateNotNull()]
-        [string[]]$Records,
+        [Parameter(Mandatory, ValueFromPipeline)][AllowEmptyString()][AllowNull()]
+        [array]$Records,
 
         [Parameter()]
         [string]$FilePath
@@ -49,8 +47,9 @@ function Write-HostsFileContent {
     $array = @($input)
     if ($array.Count) { $Records = $array }
     if (!(Test-Path variable:Records)) { $Records = @() }
+    if ($null -eq $Records) { $Records = @() }
 
-    . (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve)
+    . (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve) | Out-Null
 
     Write-Debug "${fn}: Setting $FilePath with $($Records.Count) records."
 
@@ -82,8 +81,15 @@ function Test-RecordContainsIpAddress {
 
 function Test-RecordContainsHost {
     [CmdLetBinding()]
-    param ([string]$Record, [string]$regexHostName)
-    $Record -match ".*$regexHostName.*"
+    param (
+        [parameter(Mandatory)][AllowNull()][AllowEmptyString()]
+        [string]$Record,
+
+        [parameter(Mandatory)][ValidateNotNullOrEmpty()]
+        [string]$regexHostName
+    )
+    if ([string]::IsNullOrWhiteSpace($Record)) { return $false }
+    ($Record -replace '#.*' -replace '\s{2,}', ' ' -split ' ' | Where-Object { $_.Trim() -match "^${regexHostName}$" } | Measure-Object).Count -gt 0
 }
 
 function Test-IsHostAssignedToIpAddress {
@@ -96,7 +102,7 @@ function Test-IsHostAssignedToIpAddress {
 function Get-IpAddressHostsCommentTuple {
     [CmdLetBinding()]
     param($Record)
-    if (Test-RecordIsComment $Record) { return $null }
+    if (Test-RecordIsComment $Record) { return }
     $Ip, $rest = $Record.Trim() -split ' ', 2
     $Hosts, $Comment = $rest.Trim() -split '#', 2
     $Ip.Trim(), $Hosts.Trim(), ('#' + $Comment)
@@ -110,7 +116,10 @@ function Get-HostsCount {
 
 function Get-HostsCountFromRecord {
     [CmdLetBinding()]
-    param([Parameter(Mandatory)][ValidateNotNull()][string]$Record)
+    param(
+        [Parameter(Mandatory)][ValidateNotNull()][AllowEmptyString()]
+        [string]$Record
+    )
     $_, $hosts, $_ = Get-IpAddressHostsCommentTuple $Record
     if ($null -eq $hosts) {
         0
@@ -181,11 +190,10 @@ function Add-HostToRecord {
 
 function Remove-HostFromRecords {
     param (
-        [Parameter(Mandatory, ValueFromPipeline)]
+        [Parameter(Mandatory, ValueFromPipeline)][AllowNull()][AllowEmptyString()]
         [array]$Records,
 
-        [Parameter()]
-        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
         [string]$HostName,
 
         [Parameter(Mandatory)]
@@ -198,6 +206,8 @@ function Remove-HostFromRecords {
     $array = @($input)
     if ($array.Count) { $Records = $array }
     if (!(Test-Path variable:Records)) { $Records = @() }
+    if ($null -eq $Records) { $Records = @() }
+
     Write-Debug "${fn}: Before processing: `$Records.Count=$($Records.Count)"
 
     $Records = $Records | ForEach-Object {
@@ -206,16 +216,16 @@ function Remove-HostFromRecords {
         }
         else {
             $regexHostName = [regex]::Escape($HostName)
+            $existingIp, $existingHosts, $comment = Get-IpAddressHostsCommentTuple $_
 
-            if (Test-RecordContainsHost $_ $regexHostName) {
+            if (Test-RecordContainsHost $existingHosts $regexHostName) {
                 # Host is used for another IP - Remove host from this record
-                $existingIp, $existingHosts, $comment = Get-IpAddressHostsCommentTuple $_
                 $hostsArray = $existingHosts -split ' '
                 $Modified.Value = $true  # host in use - we need to remove this host / record
 
                 if ($hostsArray.Count -gt 1) {
                     # It is NOT the only host -> modify record
-                    $newHosts = $hostsArray -notmatch $regexHostName
+                    $newHosts = $hostsArray | Where-Object { -not (Test-RecordContainsHost $_ $regexHostName) }
                     New-IpAddressHostRecord $existingIp ($newHosts -join ' ') $comment
                 } # else It is the only host -> Don't return anythin -> Drop this record
             }
@@ -232,13 +242,13 @@ function Remove-HostFromRecords {
 
 function Add-IpAddressHostToRecords {
     param (
-        [Parameter(Mandatory, ValueFromPipeline)]
+        [Parameter(Mandatory, ValueFromPipeline)][AllowEmptyString()][AllowNull()]
         [array]$Records,
 
-        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
         [string]$HostIpAddress,
 
-        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
         [string]$HostName,
 
         [Parameter(Mandatory)]
@@ -246,10 +256,10 @@ function Add-IpAddressHostToRecords {
 
         [switch]$ReplaceExistingHosts
     )
-
     $array = @($input)
     if ($array.Count) { $Records = $array }
     if (!(Test-Path variable:Records)) { $Records = @() }
+    if ($null -eq $Records) { $Records = @() }
 
     $regexIpAddress = [Regex]::Escape($HostIpAddress)
     $RecordFound = $false

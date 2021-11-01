@@ -10,7 +10,7 @@
     RootModule        = 'WSL-IpHandler'
 
     # Version number of this module.
-    ModuleVersion     = '0.6.2'
+    ModuleVersion     = '0.7.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -79,6 +79,7 @@
         'Test-WslInstallation'
         'Invoke-WslStatic'
         'Update-WslIpHandlerModule'
+        'Uninstall-WslIpHandlerModule'
     )
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.

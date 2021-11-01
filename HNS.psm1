@@ -69,6 +69,11 @@ function Get-HnsClientNativeMethods() {
     Add-Type -MemberDefinition $signature -Namespace ComputeNetwork.HNS.PrivatePInvoke -Name NativeMethods -PassThru
 }
 
+$OriginalDebugPreference = $DebugPreference
+$OriginalVerbosePreference = $VerbosePreference
+$DebugPreference = 'SilentlyContinue'
+$VerbosePreference = 'SilentlyContinue'
+
 Add-Type -TypeDefinition @'
     public enum ModifyRequestType
     {
@@ -97,9 +102,12 @@ Add-Type -TypeDefinition @'
     Container,
     Endpoint,
     };
-'@
+'@ -Verbose:$false -Debug:$false
 
 $ClientNativeMethods = Get-HnsClientNativeMethods
+
+$DebugPreference = $OriginalDebugPreference
+$VerbosePreference = $OriginalVerbosePreference
 
 $NetworkNativeMethods = @{
     Open      = $ClientNativeMethods::HcnOpenNetwork;
@@ -127,7 +135,7 @@ function New-HnsNetworkEx {
     $hr = $hnsClientApi::HcnCreateNetwork($id, $settings, [ref] $handle, [ref] $result);
     ReportErrorsEx -FunctionName HcnCreateNetwork -Hr $hr -Result $result -ThrowOnFail
 
-    $query = '{"SchemaVersion": { "Major": 1, "Minor": 0 }}'
+    $query = Get-HnsSchemaVersion -Json
     $properties = '';
     $result = ''
     $hr = $hnsClientApi::HcnQueryNetworkProperties($handle, $query, [ref] $properties, [ref] $result);
@@ -135,7 +143,9 @@ function New-HnsNetworkEx {
     $hr = $hnsClientApi::HcnCloseNetwork($handle);
     ReportErrorsEx -FunctionName HcnCloseNetwork -Hr $hr
 
-    return ConvertResponseFromJsonEx -JsonInput $properties
+    if ($properties) {
+        return ConvertResponseFromJsonEx -JsonInput $properties
+    }
 }
 
 function Get-HnsNetworkEx {
@@ -145,12 +155,17 @@ function Get-HnsNetworkEx {
         [parameter(Mandatory = $false)] [switch] $Detailed,
         [parameter(Mandatory = $false)] [int] $Version
     )
+    $params = @{
+        Id            = $Id
+        NativeMethods = $NetworkNativeMethods
+        Version       = $Version
+    }
+
     if ($Detailed.IsPresent) {
-        return Get-HnsGenericEx -Id $Id -NativeMethods $NetworkNativeMethods -Version $Version -Detailed
+        $params += @{Detailed = $true }
     }
-    else {
-        return Get-HnsGenericEx -Id $Id -NativeMethods $NetworkNativeMethods -Version $Version
-    }
+
+    return Get-HnsGenericEx @params
 }
 
 function Remove-HnsNetworkEx {
@@ -169,42 +184,62 @@ function Remove-HnsNetworkEx {
 #endregion Network
 
 #region Generic
+function Get-HnsNetworkIdEx {
+    param
+    (
+        [parameter(Mandatory = $false)] [string] $Name = '',
+        [parameter(Mandatory = $false)] [Hashtable] $Filter = @{},
+        [parameter(Mandatory = $false)] [Hashtable] $NativeMethods = $NetworkNativeMethods,
+        [parameter(Mandatory = $false)] [int]       $Version
+    )
+    $ids = ''
+
+    if ($Name) {
+        $Filter['Name'] = $Name
+    }
+
+    $FilterString = ConvertTo-Json $Filter -Depth 32
+    $query = @{ Filter = $FilterString }
+    $query += Get-HnsSchemaVersion -Version $Version
+
+    $query = ConvertTo-Json $query -Depth 32
+
+    $result = ''
+    $hr = $NativeMethods['Enumerate'].Invoke($query, [ref] $ids, [ref] $result);
+    ReportErrorsEx -FunctionName $NativeMethods['Enumerate'].Name -Hr $hr -Result $result -ThrowOnFail
+
+    if ($null -eq $ids) {
+        return
+    }
+
+    $ids | ConvertFrom-Json
+}
+
 function Get-HnsGenericEx {
     param
     (
         [parameter(Mandatory = $false)] [Guid] $Id = [Guid]::Empty,
         [parameter(Mandatory = $false)] [Hashtable] $Filter = @{},
-        [parameter(Mandatory = $false)] [Hashtable] $NativeMethods,
+        [parameter(Mandatory = $false)] [Hashtable] $NativeMethods = $NetworkNativeMethods,
         [parameter(Mandatory = $false)] [switch]    $Detailed,
         [parameter(Mandatory = $false)] [int]       $Version
     )
 
-    $ids = ''
+    $ids = Get-HnsNetworkIdEx -Filter $Filter -NativeMethods $NativeMethods -Version $Version
     $FilterString = ConvertTo-Json $Filter -Depth 32
-    $query = @{Filter = $FilterString }
-    if ($Version -eq 2) {
-        $query += @{SchemaVersion = @{ Major = 2; Minor = 0 } }
-    }
-    else {
-        $query += @{SchemaVersion = @{ Major = 1; Minor = 0 } }
-    }
+    $query = @{ Filter = $FilterString }
+    $query += Get-HnsSchemaVersion -Version $Version
+
     if ($Detailed.IsPresent) {
         $query += @{Flags = 1 }
     }
     $query = ConvertTo-Json $query -Depth 32
+
     if ($Id -ne [Guid]::Empty) {
         $ids = $Id
     }
     else {
-        $result = ''
-        $hr = $NativeMethods['Enumerate'].Invoke($query, [ref] $ids, [ref] $result);
-        ReportErrorsEx -FunctionName $NativeMethods['Enumerate'].Name -Hr $hr -Result $result -ThrowOnFail
-
-        if ($null -eq $ids) {
-            return
-        }
-
-        $ids = ($ids | ConvertFrom-Json)
+        $ids = Get-HnsNetworkIdEx -Filter $Filter -NativeMethods $NativeMethods -Version $Version
     }
 
     $output = @()
@@ -222,7 +257,7 @@ function Get-HnsGenericEx {
         ReportErrorsEx -FunctionName $NativeMethods['Close'].Name -Hr $hr
     }
 
-    return $output
+    if ($output) { return $output }
 }
 
 function Remove-HnsGenericEx {
@@ -230,7 +265,7 @@ function Remove-HnsGenericEx {
     (
         [parameter(Mandatory = $false, ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True)]
         [Object[]] $InputObjects,
-        [parameter(Mandatory = $false)] [Hashtable] $NativeMethods
+        [parameter(Mandatory = $false)] [Hashtable] $NativeMethods = $NetworkNativeMethods
     )
 
     begin { $objects = @() }
@@ -264,16 +299,27 @@ function ReportErrorsEx {
 
     $errorOutput = ''
 
-    if ($Hr -ne 0) {
-        $errorOutput += "HRESULT: $($Hr). "
+    if (-NOT [string]::IsNullOrWhiteSpace($Result)) {
+        $parsedResult = ConvertFrom-Json $Result -ErrorAction SilentlyContinue
+        if ($null -ne $parsedResult) {
+            if ([bool]($parsedResult | Get-Member Error -ErrorAction SilentlyContinue)) {
+                $errorOutput += $parsedResult.Error
+            }
+            else {
+                $errorOutput += "Result: $Result"
+            }
+        }
+        else {
+            $errorOutput += "Result: $Result"
+        }
     }
 
-    if (-NOT [string]::IsNullOrWhiteSpace($Result)) {
-        $errorOutput += "Result: $($Result)"
+    if ($Hr -ne 0) {
+        $errorOutput += " HRESULT=$Hr"
     }
 
     if (-NOT [string]::IsNullOrWhiteSpace($errorOutput)) {
-        $errString = "$($FunctionName) -- $($errorOutput)"
+        $errString = "$($FunctionName) [ERROR]: $($errorOutput)"
         if ($ThrowOnFail.IsPresent) {
             throw $errString
         }
@@ -293,13 +339,13 @@ function ConvertResponseFromJsonEx {
     $output = '';
     if ($JsonInput) {
         try {
-            $output = ($JsonInput | ConvertFrom-Json);
+            $output = ($JsonInput | ConvertFrom-Json -Depth 32);
         }
         catch {
             Write-Error $_.Exception.Message
             return ''
         }
-        if ([bool](Get-Member -InputObject $output -name Error -MemberType Properties -ErrorAction SilentlyContinue)) {
+        if ([bool]($output | Get-Member Error -MemberType Properties -ErrorAction SilentlyContinue)) {
             Write-Error $output;
         }
     }
@@ -307,3 +353,115 @@ function ConvertResponseFromJsonEx {
     return $output;
 }
 #endregion Helpers
+
+#region Json Settings Helpers
+function Get-HnsNetworkId {
+    param (
+        [Parameter()]
+        # [ValidateSet('WSL', 'Default Switch', 'External Switch')]
+        [string]$HnsNetworkName
+    )
+    switch ($HnsNetworkName) {
+        'WSL' { return 'b95d0c5e-57d4-412b-b571-18a81a16e005' }
+        'Default Switch' { return 'c08cb7b8-9b3c-408e-8e30-5e16a3aeb444' }
+        'External Switch' { return '03c876a3-4c5b-40a6-98f4-a4c9a1855fd1' }
+        Default {
+            # $fn = $MyInvocation.MyCommand.Name
+            # ThrowTerminatingError "Parameter 'HnsNetworkName' for $fn can be one of { 'WSL' | 'Default Switch' | 'External Switch' }, not '$HnsNetworkName'."
+            Get-HnsNetworkIdEx -Name $HnsNetworkName
+        }
+    }
+}
+
+function Get-HnsNetworkSubnets {
+    param (
+        [Parameter()]
+        [string]$HnsNetworkName
+    )
+    $params = @{}
+    if ($HnsNetworkName) {
+        $params.Id = Get-HnsNetworkId -HnsNetworkName $HnsNetworkName
+    }
+    Get-HnsNetworkEx @params |
+        Select-Object -Property Name, Subnets |
+        ForEach-Object {
+            $Name = $_.Name;
+            $_.Subnets | ForEach-Object {
+                [PSCustomObject]@{Name = $Name; AddressPrefix = $_.AddressPrefix }
+            }
+        }
+}
+
+function Get-HnsSchemaVersion {
+    param ([int]$Version, [switch]$Json)
+    # $buildVersion = [environment]::OSVersion.Version.Build -as [int]
+    # switch ($buildVersion) {
+    # Schema Version Map Source:
+    # https://docs.microsoft.com/en-us/virtualization/api/hcn/hns_schema#schema-version-map
+    #     { $_ -gt 22000 } { $major = 2; $minor = 14; break }
+    #     { $_ -gt 20348 } { $major = 2; $minor = 11; break }
+    #     { $_ -gt 19041 } { $major = 2; $minor = 6; break }
+    #     Default { $major = 1; $minor = 0 }
+    # }
+    if ($Version -eq 2) { $major = 2; $Minor = 0 }
+    else { $major = 1; $minor = 0 }
+    $schema = @{SchemaVersion = @{ Major = $major; Minor = $minor } }
+
+    if ($Json) { ConvertTo-Json $schema -Depth 2 } else { $schema }
+}
+
+function New-HnsNetworkSettings {
+    param(
+        [ValidateSet('WSL', 'Default Switch')]
+        [string]$Name = 'WSL',
+        [Parameter(Mandatory)]
+        [string]$GatewayIpAddress,
+        [Parameter(Mandatory)]
+        [string]$AddressPrefix,
+        [Parameter(Mandatory)]
+        [string]$DNSServerList,
+        [Parameter(Mandatory)]
+        [int]$Flags,
+        [switch]$Json
+    )
+    $settings = @{
+        Name          = $Name
+        Type          = 'ICS'
+        Flags         = $Flags
+        DNSServerList = @(
+            $($DNSServerList -split ',' | ForEach-Object { $_.Trim() } )
+        )
+        Subnets       = @(
+            @{
+                AddressPrefix = $AddressPrefix
+                IpSubnets     = @(
+                    @{
+                        IpAddressPrefix = $AddressPrefix
+                        Flags           = 3
+                    }
+                )
+            }
+        )
+    }
+
+    $settings += Get-HnsSchemaVersion
+    if ($Json) { ConvertTo-Json $settings -Depth 64 } else { $settings }
+}
+
+#endregion Json Settings Helpers
+
+$OriginalDebugPreference = $DebugPreference
+$DebugPreference = 'SilentlyContinue'
+$OriginalVerbosePreference = $VerbosePreference
+$VerbosePreference = 'SilentlyContinue'
+
+Export-ModuleMember -Function New-HnsNetworkEx
+Export-ModuleMember -Function Get-HnsNetworkEx
+Export-ModuleMember -Function Remove-HnsNetworkEx
+Export-ModuleMember -Function Get-HnsNetworkId
+Export-ModuleMember -Function Get-HnsNetworkIdEx
+Export-ModuleMember -Function New-HnsNetworkSettings
+Export-ModuleMember -Function Get-HnsNetworkSubnets
+
+$DebugPreference = $OriginalDebugPreference
+$VerbosePreference = $OriginalVerbosePreference

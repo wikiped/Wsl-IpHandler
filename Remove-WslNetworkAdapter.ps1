@@ -1,14 +1,45 @@
 ﻿[CmdletBinding()]
-param()
+param(
+    [Parameter()]
+    [Alias('Name')]
+    [string]$VirtualAdapterName = 'WSL'
+)
 
-. (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve)
+. (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve) | Out-Null
 
-if (-not (IsElevated)) { Invoke-ScriptElevated $MyInvocation.MyCommand.Path }
+if (-not (IsElevated)) {
+    Invoke-ScriptElevated $MyInvocation.MyCommand.Path -ScriptCommonParameters $MyInvocation.BoundParameters
+}
 
-. (Join-Path $PSScriptRoot 'FunctionsHNS.ps1' -Resolve)
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 
-Get-HnsNetworkEx | Where-Object { $_.Name -Eq 'WSL' } | Remove-HnsNetworkEx
+$fn = $MyInvocation.MyCommand.Name
 
-$msgRemoved = 'Removed Hyper-V Network Adpater: WSL.'
-Write-Debug "$($MyInvocation.MyCommand.Name): $msgRemoved"
-Write-Host $msgRemoved
+$hnsModule = Join-Path $PSScriptRoot 'HNS.psm1' -Resolve
+Import-Module $hnsModule -Function 'Get-HnsNetworkId', 'Get-HnsNetworkEx', 'Remove-HnsNetworkEx' -Verbose:$false -Debug:$false | Out-Null
+
+$networkId = [guid](Get-HnsNetworkId $VirtualAdapterName)
+
+Write-Debug "${fn}: HNS Network '$VirtualAdapterName' with Id: $networkId"
+
+$existingAdapter = Get-HnsNetworkEx -Id $networkId -ErrorAction SilentlyContinue
+
+if ($null -ne $existingAdapter) {
+    Write-Verbose "Removing existing Hyper-V Network Adapter '$VirtualAdapterName'..."
+    $existingAdapter | Remove-HnsNetworkEx -ErrorAction SilentlyContinue | Out-Null
+
+    Write-Debug "${fn}: Checking if Hyper-V Network Adapter '$VirtualAdapterName' with Id: $networkId has been removed..."
+    $remainingAdapter = Get-HnsNetworkEx -Id $networkId -ErrorAction SilentlyContinue
+
+    if ($remainingAdapter) {
+        Write-Debug "${fn}: Failed to remove existing adapter: '$VirtualAdapterName' with ID: $networkId"
+        Write-Error "Cannot remove existing Hyper-V VM Adapter: '$VirtualAdapterName'. Try restarting Windows."
+    }
+    else {
+        Write-Verbose "Removed Existing Hyper-V Network Adapter: '$VirtualAdapterName'!"
+    }
+}
+else {
+    Write-Verbose "Hyper-V Network Adapter: '$VirtualAdapterName' not found. Nothing to remove."
+}

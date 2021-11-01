@@ -12,10 +12,22 @@ error() {
 	local parent_lineno="$1"
 	local message="$2"
 	local code="${3:-1}"
+	local -a callers
+	local -i n_callers=$((${#FUNCNAME[@]} - 1))
+
+	local RED
+	local LG
+	local NC
+	RED='\e[91m'  # Light Red
+	LG='\e[37m'   # Light Gray
+	NC='\e[0m'    # No Color
+
+	# shellcheck disable=SC2001
+	callers="$(echo "${FUNCNAME[@]:1:$n_callers}" | sed 's/,\s*/->/g')"
 	if [[ -n "$message" ]] ; then
-		echo "[Error] ${code} on or near line ${parent_lineno}: ${message}" 1>&2
+		echo -e "[${RED}Error ${LG}${code} in $callers on #${parent_lineno}${NC}]: ${RED}${message}${NC}" 1>&2
 	else
-		echo "[Error] ${code} on or near line ${parent_lineno}" 1>&2
+		echo -e "[${RED}Error${NC}] ${code} in $callers on #${parent_lineno}${NC}" 1>&2
 	fi
 	exit "${code}"
 }
@@ -24,7 +36,7 @@ echo_log() {
 	local level="${1:-'INFO'}"
 	local message="$2"
 	local parent_lineno="${3:+"${3}: "}"
-	printf '[%s] %s%s\n' "$level" "$parent_lineno" "$message"
+	printf '[%s]:%s %s\n' "$level" "$parent_lineno" "$message"
 }
 
 echo_verbose() {

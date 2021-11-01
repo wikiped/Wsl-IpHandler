@@ -50,18 +50,25 @@ echo_debug() {
 }
 
 error() {
-	local message="$1"
-	local parent_lineno="$2"
+	local parent_lineno="$1"
+	local message="$2"
 	local code="${3:-1}"
 	local -a callers
 	local -i n_callers=$((${#FUNCNAME[@]} - 1))
 
-	# shellcheck disable=SC2001
-	callers="$(echo "${FUNCNAME[@]:1:$n_callers}" | sed 's/, / -> /g')"
+	local RED
+	local LG
+	local NC
+	RED='\e[91m' # Light Red
+	LG='\e[37m'  # Light Gray
+	NC='\e[0m'   # No Color
+
+	# shellcheck disable=SC2001,SC2059
+	callers="$(echo "${FUNCNAME[@]:1:$n_callers}" | sed 's/,\s*/->/g')"
 	if [[ -n "$message" ]] ; then
-		echo "[Error in $callers] ${code} on or near line ${parent_lineno}: ${message}" 1>&2
+		echo -e "[${RED}Error ${LG}${code} in $callers on #${parent_lineno}${NC}]: ${RED}${message}${NC}" 1>&2
 	else
-		echo "[Error in $callers] ${code} on or near line ${parent_lineno}" 1>&2
+		echo -e "[${RED}Error${NC}] ${code} in $callers on #${parent_lineno}${NC}" 1>&2
 	fi
 	exit "${code}"
 }
@@ -98,7 +105,34 @@ get_config() {
 		echo "$value"
 	else
 		if [[ "$#" -eq 1 ]]; then
-			error ${LINENO} "${caller}: Could not find Key '$key' in /etc/wsl.conf/" 11
+			error "${LINENO}" "${caller}: Could not find Key '$key' in /etc/wsl.conf" 11
+		else
+			echo "$default"
+		fi
+	fi
+}
+
+get_config_in_section() {
+	local section
+	local key
+	local default
+	local value
+	local caller
+	if [[ ${#FUNCNAME[@]} = 1 ]]; then
+		caller="${FUNCNAME[0]}"
+	else
+		caller="${FUNCNAME[1]}"
+	fi
+	section="${1:?"Section cannot be empty in get_config_in_section"}"
+	key="${2:?"Key cannot be empty in get_config_in_section"}"
+	default="${3}"
+	value=$(sed -nr "/^\[""$section""\]/ { :l /^""$key""[ ]*=/ { s/.*=[ ]*//; p; q;}; n; b l;}" /etc/wsl.conf 2>/dev/null)
+
+	if [[ -n "$value" ]]; then
+		echo "$value"
+	else
+		if [[ "$#" -eq 2 ]]; then
+			error "${LINENO}" "${caller}: Could not find Key '$key' in /etc/wsl.conf" 11
 		else
 			echo "$default"
 		fi
@@ -113,7 +147,7 @@ get_ip_with_prefix() {
 ip_exists() {
 	set +o pipefail
 	local ip_addr=$1
-	if ip addr show dev $dev | grep -Po "inet \K[\d\./]+" 2>/dev/null | grep -qF "$ip_addr"
+	if ip addr show dev $dev | grep -Po "inet \K[\d\.]+" 2>/dev/null | grep -qwF "$ip_addr"
 	then
 		set -o pipefail
 		true
@@ -135,8 +169,8 @@ get_new_ip_with_prefix_from_offset() {
 	last_octet=$(echo "$start_ip" | cut -d. -f4)
 	local offset
 	offset="$2"
-	test "$offset" -ge 0 || error ${LINENO} "get_new_ip_with_prefix_from_offset: offset must be 0+ -> not: $offset" 1
-	test "$offset" -lt 255 || error ${LINENO} "get_new_ip_with_prefix_from_offset: offset must be < 255 -> not: $offset" 2
+	test "$offset" -ge 0 || error "${LINENO}" "get_new_ip_with_prefix_from_offset: offset must be 0+ -> not: $offset" 1
+	test "$offset" -lt 255 || error "${LINENO}" "get_new_ip_with_prefix_from_offset: offset must be < 255 -> not: $offset" 2
 
 	if [[ "$offset" -eq 0 ]]
 	then
@@ -161,7 +195,7 @@ ip_addr_add() {
 			ip_prefix="${1}/${2}"
 			;;
 		*)
-			error ${LINENO} "ip_addr_add needs either 1: 'id_address/suffix' or 2: 'id_address' 'suffix' paramenter(s)." 3
+			error "${LINENO}" "ip_addr_add needs either 1: 'id_address/suffix' or 2: 'id_address' 'suffix' paramenter(s)." 3
 			;;
 	esac
 
@@ -180,7 +214,7 @@ ip_addr_del() {
 			ip_prefix="${1}/${2}"
 			;;
 		* )
-			error ${LINENO} "ip_addr_add needs either 1: 'id_address/suffix' or 2: 'id_address' 'suffix' paramenter(s)." 4
+			error "${LINENO}" "ip_addr_add needs either 1: 'id_address/suffix' or 2: 'id_address' 'suffix' paramenter(s)." 4
 			;;
 	esac
 
@@ -188,7 +222,7 @@ ip_addr_del() {
 }
 
 get_nameserver_ip() {
-	tail -1 /etc/resolv.conf | cut -d' ' -f2 2>/dev/null || error ${LINENO} "Error parsing IP" 5
+	tail -1 /etc/resolv.conf | cut -d' ' -f2 2>/dev/null || error "${LINENO}" "Error parsing IP" 5
 }
 
 get_default_gateway_ip() {
@@ -227,10 +261,10 @@ add_wsl_ip_address() {
 	then
 		echo_verbose "IP address $new_ip_address already exists!"
 	else
-		ip_addr_del "$current_ip_addr" || error ${LINENO} "(ip_addr_del $current_ip_addr) failed." 14
+		ip_addr_del "$current_ip_addr" || error "${LINENO}" "(ip_addr_del $current_ip_addr) failed." 14
 		echo_verbose "Deleted existing IP address: $current_ip_addr"
 
-		ip_addr_add "$new_ip_address" || error ${LINENO} "(ip_addr_add $new_ip_address) failed." 15
+		ip_addr_add "$new_ip_address" || error "${LINENO}" "(ip_addr_add $new_ip_address) failed." 15
 		echo_verbose "Added new IP address: $new_ip_address"
 	fi
 }
@@ -251,9 +285,9 @@ process_windows_host_and_ip() {
 	if [[ $(get_default_gateway_ip) != "$windows_ip" ]]
 	then
 		ip route add "$windows_ip" dev $dev
-		test $? = 0 || error ${LINENO} "(ip route add default via $windows_ip dev $dev) failed." 16
+		test $? = 0 || error "${LINENO}" "(ip route add default via $windows_ip dev $dev) failed." 16
 		ip route add default via "$windows_ip" dev $dev
-		test $? = 0 || error ${LINENO} "(ip route add default via $windows_ip dev $dev) failed." 17
+		test $? = 0 || error "${LINENO}" "(ip route add default via $windows_ip dev $dev) failed." 17
 	fi
 }
 
@@ -265,22 +299,45 @@ run_powershell_script_to_edit_windows_hosts() {
 	ip_address="${ip_address%/*}"  # Remove suffix
 	local wsl_host
 	wsl_host="${3:?'wsl_host is required for run_powershell_script_to_edit_windows_hosts'}"
-	test -f "$(wslpath "$ps_script")" || error ${LINENO} "PowerShell script to edit windows hosts file not found: '$ps_script'"
+	test -f "$(wslpath "$ps_script")" || error "${LINENO}" "PowerShell script to edit windows hosts file not found: '$ps_script'"
 
 	# Use PowerShellCore if installed, otherwise fallback to Windows Powershell
 	local psexe
 	psexe="$(type -p pwsh.exe || type -p powershell.exe)"
 	# psexe="/mnt/c/Program Files/PowerShell/7/pwsh.exe"
-	test $? = 0 -o -z "$psexe" || error ${LINENO} 'Could not locate PowerShell executable.' 18
+	test $? = 0 -o -z "$psexe" || error 'Could not locate PowerShell executable.' 18
 
 	#echo "${psexe}" "${ps_script}" "${ip_address%/*}" "${wsl_host}"
 	"${psexe}" "${ps_script}" "${ip_address}" "${wsl_host}"
-	test $? = 0 || error ${LINENO} "Error executing ${ps_script} ${ip_address} ${wsl_host}" 19
+	test $? = 0 || error "${LINENO}" "Error executing ${ps_script} ${ip_address} ${wsl_host}" 19
 
 	echo_verbose "Added ${ip_address} ${wsl_host} to windows hosts file!"
 }
 
+check_wsl_conf_settings() {
+	local section
+	local key
+	local expected_value
+
+	section="${1:?"Arg #1: 'Section' cannot be empty in check_wsl_conf_settings"}"
+	key="${2:?"Arg #2: 'Key' cannot be empty in check_wsl_conf_settings"}"
+	expected_value="${3:?"Arg #3: 'Expected_Value' cannot be empty in check_wsl_conf_settings"}"
+
+	echo_verbose "Checking if /etc/wsl.conf has '$key = $expected_value' in section: [$section]..."
+	local value
+	value="$(get_config_in_section "$section" "$key" '')"
+	echo_debug "actual value of $key in $section: '$value'"
+	if [[ "$value" != "$expected_value" ]]
+	then
+		error "${LINENO}" "For WSL IpHandler to operate correctly /etc/wsl.conf must have '$key=$expected_value' in section: [$section]!"
+	fi
+}
+
 main() {
+	# Check that wsl.conf has right settings for correct operation of WSL IP Handler
+	check_wsl_conf_settings 'network' 'generateResolvConf' 'true'
+	check_wsl_conf_settings 'automount' 'enabled' 'true'
+
 	# Process Local IP and Host
 	local ip_address
 	ip_address=$(get_config 'static_ip' '')
@@ -295,17 +352,17 @@ main() {
 	else
 		local gateway_ip
 		gateway_ip=$(get_default_gateway_ip)
-		test $? = 0 || error ${LINENO} "'get_default_gateway_ip' failed." 10
+		test $? = 0 || error "${LINENO}" "'get_default_gateway_ip' failed." 10
 		echo_debug "gateway_ip=$gateway_ip"
 
 		local gateway_prefix
 		gateway_prefix=$(get_gateway_prefix_length)
-		test $? = 0 || error ${LINENO} "'get_gateway_prefix_length' failed." 11
+		test $? = 0 || error "${LINENO}" "'get_gateway_prefix_length' failed." 11
 		echo_debug "gateway_prefix=$gateway_prefix"
 
 		local gateway_ip_with_prefix
 		gateway_ip_with_prefix="$gateway_ip/$gateway_prefix"
-		test -n "$gateway_ip_with_prefix" || error ${LINENO} "No gateway IP found!" 12
+		test -n "$gateway_ip_with_prefix" || error "${LINENO}" "No gateway IP found!" 12
 		echo_debug "gateway_ip_with_prefix=$gateway_ip_with_prefix"
 
 		local offset
@@ -326,7 +383,7 @@ main() {
 	# Process locally Windows Host and IP
 	local windows_ip
 	windows_ip="$(get_nameserver_ip)"
-	test $? || error ${LINENO} "get_nameserver_ip failed" 7
+	test $? || error "${LINENO}" "get_nameserver_ip failed" 7
 	echo_debug "windows_ip=$windows_ip"
 
 	local windows_host
