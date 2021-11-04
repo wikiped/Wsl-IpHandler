@@ -10,7 +10,7 @@
     RootModule        = 'WSL-IpHandler'
 
     # Version number of this module.
-    ModuleVersion     = '0.8.0'
+    ModuleVersion     = '0.7.1'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -19,13 +19,13 @@
     GUID              = '63f4f045-5cf0-4252-9c79-328dc0e3b6a8'
 
     # Author of this module
-    Author            = 'wikiped'
+    Author            = 'wikiped@ya.ru'
 
     # Company or vendor of this module
     CompanyName       = 'Unknown'
 
     # Copyright statement for this module
-    Copyright         = '(c) wikiped@ya.ru. All rights reserved.'
+    Copyright         = '(c) wikiped. All rights reserved.'
 
     # Description of the functionality provided by this module
     Description       = 'Assigns IP addresses to WSL instances and adds those IPs to hosts file.'
@@ -143,13 +143,13 @@
         PSData          = @{
 
             # Tags applied to this module. These help with module discovery in online galleries.
-            Tags       = @('WSL', 'IP', 'IPAddress', 'Network', 'Subnet')
+            # Tags = @()
 
             # A URL to the license for this module.
-            LicenseUri = 'https://github.com/wikiped/WSL-IpHandler/blob/master/LICENSE.txt'
+            # LicenseUri = ''
 
             # A URL to the main website for this project.
-            ProjectUri = 'https://github.com/wikiped/WSL-IpHandler'
+            # ProjectUri = ''
 
             # A URL to an icon representing this module.
             # IconUri = ''
@@ -171,7 +171,7 @@
     } # End of PrivateData hashtable
 
     # HelpInfo URI of this module
-    HelpInfoURI       = 'https://github.com/wikiped/WSL-IpHandler'
+    # HelpInfoURI = ''
 
     # Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
     # DefaultCommandPrefix = ''
