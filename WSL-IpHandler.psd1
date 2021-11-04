@@ -25,7 +25,7 @@
     CompanyName       = 'Unknown'
 
     # Copyright statement for this module
-    Copyright         = '(c) wikiped@ya.ru@ya.ru. All rights reserved.'
+    Copyright         = '(c) wikiped@ya.ru. All rights reserved.'
 
     # Description of the functionality provided by this module
     Description       = 'Assigns IP addresses to WSL instances and adds those IPs to hosts file.'
