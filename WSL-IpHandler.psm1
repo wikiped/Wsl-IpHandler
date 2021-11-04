@@ -202,7 +202,7 @@ function Install-WslIpHandler {
     #endregion Run Bash Installation Script
 
     #region Set Content to Powershell Profile
-    if ($PSCmdlet.ParameterSetName -eq 'Static' -and -not $DontModifyPsProfile.IsPresent) {
+    if ($PSCmdlet.ParameterSetName -eq 'Static' -and -not $DontModifyPsProfile) {
         Write-Verbose "Modifying Powershell Profile: $($profile.CurrentUserAllHosts) ..."
         Set-ProfileContent
     }
@@ -679,7 +679,7 @@ function Remove-WslNetworkConfig {
     $networkSectionName = (Get-NetworkSectionName)
     $staticIpSectionName = (Get-StaticIpAddressesSectionName)
 
-    if ( $Force.IsPresent -or (Get-WslConfigSectionCount $staticIpSectionName) -le 0) {
+    if ( $Force -or (Get-WslConfigSectionCount $staticIpSectionName) -le 0) {
         Remove-WslConfigValue $networkSectionName (Get-GatewayIpAddressKeyName) -Modified $Modified
 
         Remove-WslConfigValue $networkSectionName (Get-PrefixLengthKeyName) -Modified $Modified
@@ -923,85 +923,7 @@ function Test-WslInstallation {
     }
 }
 
-function Invoke-WslStatic {
-    <#
-    .SYNOPSIS
-    Takes any parameters and passes them transparently to wsl.exe. If parameter(s) requires actually starting up WSL Instance - will set up WSL Network Adapter using settings in .wslconfig. Requires administrator privileges if required adapter is not active.
-
-    .DESCRIPTION
-    This command acts a wrapper around `wsl.exe` taking all it's parameters and passing them along.
-    Before actually executing `wsl.exe` this command checks if WSL Network Adapter with required parameters is active (i.e. checks if network parameters in .wslconfig are in effect). If active adapter parameters are different from those in .wslconfig - active adapter is removed and new one with required parameters is activated. Requires administrator privileges if required adapter is not active.
-
-    .PARAMETER arguments
-    All arguments accepted by wsl.exe
-
-    .EXAMPLE
-    wsl -l -v
-
-    Will list all installed WSL instances with their detailed status.
-
-    wsl -d Ubuntu
-
-    Will check if WSL Network Adapter is active and if not initialize it. Then it will execute `wsl.exe -d Ubuntu`. Thus allowing to use WSL instances with static ip addressed without manual interaction with network settings, etc.
-
-    .NOTES
-    During execution of Install-WslHandler, when a static mode of operation is specified, there will be an alias created: `wsl` for Invoke-WslStatic. When working in Powershell this alias shadows actual windows `wsl` command to enable effortless operation in Static IP Mode. When there is a need to execute actual windows `wsl` command from withing Powershell use `wsl.exe` (i.e. with extension) to execute native Windows command.
-    #>
-    function ArgsAreExec {
-        param($arguments)
-        $nonExecArgs = @(
-            '-l', '--list',
-            '--shutdown',
-            '--terminate', '-t',
-            '--status',
-            '--update',
-            '--set-default', '-s'
-            '--help',
-            '--install',
-            '--set-default-version',
-            '--export',
-            '--import',
-            '--set-version',
-            '--unregister'
-        )
-        $allArgsAreExec = $true
-        foreach ($a in $arguments) {
-            if ($a -in $nonExecArgs) {
-                $allArgsAreExec = $false
-                break
-            }
-        }
-        $allArgsAreExec
-    }
-    $fn = $MyInvocation.MyCommand.Name
-    $argsCopy = $args.Clone()
-
-    $DebugPreferenceOriginal = $DebugPreference
-    if ('-debug' -in $argsCopy) {
-        $DebugPreference = 'Continue'
-        $argsCopy = $argsCopy | Where-Object { $_ -notlike '-debug' }
-    }
-
-    if ($argsCopy.Count -eq 0 -or (ArgsAreExec $argsCopy)) {
-        Write-Debug "${fn}: `$args: $argsCopy"
-        Write-Debug "${fn}: Passed arguments require Setting WSL Network Adapter."
-
-        $networkSectionName = (Get-NetworkSectionName)
-
-        $GatewayIpAddress = Get-WslConfigValue -SectionName $networkSectionName -KeyName (Get-GatewayIpAddressKeyName) -DefaultValue $null
-
-        if ($null -ne $GatewayIpAddress) {
-            Set-WslNetworkAdapter
-        }
-    }
-
-    Write-Debug "${fn}: Invoking wsl.exe $argsCopy"
-    $DebugPreference = $DebugPreferenceOriginal
-    & wsl.exe @argsCopy
-}
-
-function Update-WslIpHandlerModule {
-    <#
+<#
     .SYNOPSIS
     Downloads latest master.zip from this Modules repository at github.com and updates local Module's files
 
@@ -1009,31 +931,61 @@ function Update-WslIpHandlerModule {
     Updates local Module's files to the latest available at Module's repository at github.com.
     If `git` is available uses `git pull origin master`, otherwise Invoke-WebRequest will be used to download master.zip and expand it to Module's directory replacing all files with downloaded ones.
 
+    .PARAMETER GitExePath
+    Path to git.exe if it can not be located with environment's PATH variable.
+
+    .PARAMETER DoNotUseGit
+    If given will update module using Invoke-WebRequest command (built-in in Powershell) even if git.exe is on PATH.
+
+    .PARAMETER Force
+    If given will update module even if there is version mismatch between installed version and version in repository.
+
     .EXAMPLE
-    An example
+    Update-WslIpHandlerModule
+
+    Will update this module using git.exe if it can be located, otherwise will use Invoke-WebRequest to download latest master.zip from repository and overwrite all existing file in WSL-IpHandler module's folder.
 
     .NOTES
-    All file in this Module's folder will be removed before update!
-    #>
+    The default update mode is to use git.exe if it can be located with PATH.
+    Adding -GitExePath parameter will allow to use git.exe that is not on PATH.
+    All files in this Module's folder will be removed before update!
+#>
+function Update-WslIpHandlerModule {
     [CmdletBinding()]
-    param ()
-    $script = Join-Path $PSScriptRoot 'Update-WslIpHandlerModule.ps1' -Resolve
-    & $script
+    param(
+        [Parameter(ParameterSetName = 'Name+Git')]
+        [Parameter(ParameterSetName = 'Path+Git')]
+        [ValidateScript({ Test-Path $_ -PathType Leaf -Include 'git.exe' })]
+        [Alias('Git')]
+        [string]$GitExePath,
+
+        [Parameter(ParameterSetName = 'Name+Http')]
+        [Parameter(ParameterSetName = 'Path+Http')]
+        [switch]$Force
+    )
+    $params = @{
+        ModuleNameOrPath     = $MyInvocation.MyCommand.Module.ModuleBase
+        GithubUserName = $MyInvocation.MyCommand.Module.Author
+        Branch         = 'master'
+    }
+    $updateScript = Join-Path $PSScriptRoot 'Update-WslIpHandlerModule.ps1' -Resolve
+
+    & $updateScript @params @PSBoundParameters
 }
 
 function Uninstall-WslIpHandlerModule {
     [CmdletBinding()]
     param()
     $moduleLocation = Split-Path $MyInvocation.MyCommand.Module.Path
-    $prompt = 'Please confirm that the following directory should be irreversible DELETED:'
+    $prompt = 'Please confirm that the following directory should be irreversibly DELETED:'
     if ($PSCmdlet.ShouldContinue($moduleLocation, $prompt)) {
         $moduleName = $MyInvocation.MyCommand.ModuleName
         Remove-Module $moduleName -Force
         if ((Get-Location).Path.Contains($moduleLocation)) {
             Set-Location (Split-Path $moduleLocation)
         }
-        Write-Host "Removing $moduleLocation..."
-        # Remove-Item -path $moduleLocation -recurse -force
+        Write-Verbose "Removing $moduleLocation..."
+        Remove-Item -Path $moduleLocation -Recurse -Force
     }
     else {
         Write-Verbose 'Uninstall operation was canceled!'

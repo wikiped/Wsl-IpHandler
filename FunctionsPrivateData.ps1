@@ -7,7 +7,7 @@ function Get-PrivateData {
     param($ModuleInfo, [switch]$Force)
     $fn = $MyInvocation.MyCommand.Name
 
-    if ($null -eq $script:WslPrivateData -or $Force.IsPresent) {
+    if ($null -eq $script:WslPrivateData -or $Force) {
         Write-Debug "${fn}: PrivateData is null or -Force parameter has been set!"
 
         if ($PSBoundParameters.ContainsKey('ModuleInfo') -and $null -ne $ModuleInfo) {

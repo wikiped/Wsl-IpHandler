@@ -170,7 +170,7 @@ function Add-HostToRecord {
     $existingIp, $existingHosts, $comment = Get-IpAddressHostsCommentTuple $Record
 
     if (Test-RecordContainsHost $_ $regexHostName) {
-        if ((Get-HostsCount $existingHosts) -gt 1 -and $ReplaceExistingHosts.IsPresent) {
+        if ((Get-HostsCount $existingHosts) -gt 1 -and $ReplaceExistingHosts) {
             $Modified.Value = $true
             New-IpAddressHostRecord $existingIp $HostName $comment
         }
@@ -180,7 +180,7 @@ function Add-HostToRecord {
     }
     else {
         $Modified.Value = $true
-        if (-not $ReplaceExistingHosts.IsPresent) {
+        if (-not $ReplaceExistingHosts) {
             # Record has Correct Ip but does not have Correct Host -> Add host name
             $HostName = $existingHosts + " $HostName"
         }

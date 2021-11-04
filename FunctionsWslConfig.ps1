@@ -129,7 +129,7 @@ function Remove-WslConfigSection {
 
     $SectionName | ForEach-Object {
         if ($config.Contains($_)) {
-            if ($OnlyIfEmpty.IsPresent) {
+            if ($OnlyIfEmpty) {
                 Write-Debug "${fn}: Only Remove Empty Section is specified."
                 if ($config[$_].Count -eq 0) {
                     $config.Remove($_)
@@ -299,7 +299,7 @@ function Get-AvailableStaticIpAddress {
             $PrefixLength = $wslIpObj.PrefixLength
         }
         else {
-            if ($RequireGatewayIpAddress.IsPresent) {
+            if ($RequireGatewayIpAddress) {
                 Throw "${fn}: Cannot proceed when GatewayIpAddress parameter is neither specified, nor found in .wslconfig and no existing WSL adapter to take it from."
             }
         }

@@ -39,7 +39,7 @@ function ConvertFrom-UTF16toUTF8 {
     $utf16 = [System.Text.Encoding]::GetEncoding('utf-16')
 
     $output = $utf8.GetString([System.Text.Encoding]::Convert($utf16, $utf8, $utf8.GetBytes($CommandOutput -join "`n"))) -split "`n"
-    if ($IncludeEmptyLines.IsPresent) { $output }
+    if ($IncludeEmptyLines) { $output }
     else { $output | Where-Object { $_.Length -gt 0 } }
 }
 

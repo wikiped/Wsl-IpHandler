@@ -161,7 +161,7 @@ function Get-HnsNetworkEx {
         Version       = $Version
     }
 
-    if ($Detailed.IsPresent) {
+    if ($Detailed) {
         $params += @{Detailed = $true }
     }
 
@@ -230,7 +230,7 @@ function Get-HnsGenericEx {
     $query = @{ Filter = $FilterString }
     $query += Get-HnsSchemaVersion -Version $Version
 
-    if ($Detailed.IsPresent) {
+    if ($Detailed) {
         $query += @{Flags = 1 }
     }
     $query = ConvertTo-Json $query -Depth 32
@@ -320,7 +320,7 @@ function ReportErrorsEx {
 
     if (-NOT [string]::IsNullOrWhiteSpace($errorOutput)) {
         $errString = "$($FunctionName) [ERROR]: $($errorOutput)"
-        if ($ThrowOnFail.IsPresent) {
+        if ($ThrowOnFail) {
             throw $errString
         }
         else {
