@@ -261,9 +261,11 @@ Uninstall-WslIpHandlerModule
 
 This module is using the code (sometimes partially or with modifications) from the following projects (in no particular order):
 
-[wsl2ip2hosts](https://github.com/hndcrftd/wsl2ip2hosts) by Jakob Wildrain
+[Create a known IP address for WSL2 VM](https://github.com/microsoft/WSL/discussions/7395) by Biswa96
 
 [wsl2-custom-network](https://github.com/skorhone/wsl2-custom-network) by Sami Korhonen
+
+[wsl2ip2hosts](https://github.com/hndcrftd/wsl2ip2hosts) by Jakob Wildrain
 
 [PsIni](https://github.com/lipkau/PsIni) by Oliver Lipkau
 
