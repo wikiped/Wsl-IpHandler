@@ -920,7 +920,8 @@ function Test-WslInstallation {
     }
 }
 
-<#
+function Update-WslIpHandlerModule {
+    <#
     .SYNOPSIS
     Downloads latest master.zip from this Modules repository at github.com and updates local Module's files
 
@@ -946,9 +947,8 @@ function Test-WslInstallation {
     The default update mode is to use git.exe if it can be located with PATH.
     Adding -GitExePath parameter will allow to use git.exe that is not on PATH.
     All files in this Module's folder will be removed before update!
-#>
-function Update-WslIpHandlerModule {
-    [CmdletBinding()]
+    #>
+[CmdletBinding()]
     param(
         [Parameter(ParameterSetName = 'Name+Git')]
         [Parameter(ParameterSetName = 'Path+Git')]
@@ -987,6 +987,83 @@ function Uninstall-WslIpHandlerModule {
     else {
         Write-Verbose 'Uninstall operation was canceled!'
     }
+}
+
+function Invoke-WslStatic {
+    <#
+    .SYNOPSIS
+    Takes any parameters and passes them transparently to wsl.exe. If parameter(s) requires actually starting up WSL Instance - will set up WSL Network Adapter using settings in .wslconfig. Requires administrator privileges if required adapter is not active.
+
+    .DESCRIPTION
+    This command acts a wrapper around `wsl.exe` taking all it's parameters and passing them along.
+    Before actually executing `wsl.exe` this command checks if WSL Network Adapter with required parameters is active (i.e. checks if network parameters in .wslconfig are in effect). If active adapter parameters are different from those in .wslconfig - active adapter is removed and new one with required parameters is activated. Requires administrator privileges if required adapter is not active.
+
+    .PARAMETER arguments
+    All arguments accepted by wsl.exe
+
+    .EXAMPLE
+    wsl -l -v
+
+    Will list all installed WSL instances with their detailed status.
+
+    wsl -d Ubuntu
+
+    Will check if WSL Network Adapter is active and if not initialize it. Then it will execute `wsl.exe -d Ubuntu`. Thus allowing to use WSL instances with static ip addressed without manual interaction with network settings, etc.
+
+    .NOTES
+    During execution of Install-WslHandler, when a static mode of operation is specified, there will be an alias created: `wsl` for Invoke-WslStatic. When working in Powershell this alias shadows actual windows `wsl` command to enable effortless operation in Static IP Mode. When there is a need to execute actual windows `wsl` command from withing Powershell use `wsl.exe` (i.e. with extension) to execute native Windows command.
+    #>
+    function ArgsAreExec {
+        param($arguments)
+        $nonExecArgs = @(
+            '-l', '--list',
+            '--shutdown',
+            '--terminate', '-t',
+            '--status',
+            '--update',
+            '--set-default', '-s'
+            '--help',
+            '--install',
+            '--set-default-version',
+            '--export',
+            '--import',
+            '--set-version',
+            '--unregister'
+        )
+        $allArgsAreExec = $true
+        foreach ($a in $arguments) {
+            if ($a -in $nonExecArgs) {
+                $allArgsAreExec = $false
+                break
+            }
+        }
+        $allArgsAreExec
+    }
+    $fn = $MyInvocation.MyCommand.Name
+    $argsCopy = $args.Clone()
+
+    $DebugPreferenceOriginal = $DebugPreference
+    if ('-debug' -in $argsCopy) {
+        $DebugPreference = 'Continue'
+        $argsCopy = $argsCopy | Where-Object { $_ -notlike '-debug' }
+    }
+
+    if ($argsCopy.Count -eq 0 -or (ArgsAreExec $argsCopy)) {
+        Write-Debug "${fn}: `$args: $argsCopy"
+        Write-Debug "${fn}: Passed arguments require Setting WSL Network Adapter."
+
+        $networkSectionName = (Get-NetworkSectionName)
+
+        $GatewayIpAddress = Get-WslConfigValue -SectionName $networkSectionName -KeyName (Get-GatewayIpAddressKeyName) -DefaultValue $null
+
+        if ($null -ne $GatewayIpAddress) {
+            Set-WslNetworkAdapter
+        }
+    }
+
+    Write-Debug "${fn}: Invoking wsl.exe $argsCopy"
+    $DebugPreference = $DebugPreferenceOriginal
+    & wsl.exe @argsCopy
 }
 
 Register-ArgumentCompleter -CommandName Install-WslIpHandler -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
