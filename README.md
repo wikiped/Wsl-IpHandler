@@ -1,5 +1,29 @@
 # WSL IP Handler
 
+Quick Links:
+
+[Overview](#overview)
+
+[How to get this module?](#how-to-get-this-module)
+
+[Where the module is installed?](#where-the-module-is-installed)
+
+[How does it work?](#how-does-it-work)
+
+[How to use this module?](#how-to-use-this-module)
+
+[How to deactivate this module?](#how-to-deactivate-this-module)
+
+[How to update this module?](#how-to-update-this-module)
+
+[How to completely remove this module?](#how-to-completely-remove-this-module)
+
+[Credits](#credits)
+
+[What's new\?](./RELEASES.md)
+
+## Overview
+
 This project is an attempt to address WSL networking issues that can be viewed in details in numerous posts over several long standing issues at [WSL project](https://github.com/microsoft/WSL/issues). Here are a couple of them:
 
 - [WSL2 Set static ip?](https://github.com/microsoft/WSL/issues/4210)
@@ -23,8 +47,6 @@ WSL IP Handler is a Powershell Module which puts together several of the "fixes"
 1. DNS resolution for Windows host and WSL instances within WSL SubNet.
 
 In other words what WSL should have been doing out-of-the-box.
-
-## [What's new?](.\RELEASES.md)
 
 ## How to get this module
 
@@ -123,7 +145,7 @@ See [Execution of command alias](#execution-of-command-alias) for details on wha
 
   > NOTE: Profile modification takes effect after Powershell session restarts!
 
-## How to use this module
+## How to use this module?
 
 ### Modes of operation
 
@@ -222,7 +244,7 @@ In Dynamic mode WSL IP Handler does not interfere with how Windows manages WSL n
        Minimum = 0ms, Maximum = 0ms, Average = 0ms
    ```
 
-## How to deactivate this module
+## How to deactivate this module?
 
 From Powershell prompt execute:
 
