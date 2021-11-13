@@ -1,7 +1,7 @@
 ﻿Describe 'Editing Static IP addresses in wslconfig' {
     BeforeAll {
         Set-Variable ConfigPath 'TestDrive:\test.wslconfig'
-        Import-Module (Join-Path $PSScriptRoot 'IP-Calc.psm1' -Resolve) -Function Get-IpCalcResult
+        Import-Module (Join-Path $PSScriptRoot 'IPNetwork.psm1' -Resolve) -Function Get-IpNet
     }
     BeforeEach {
         Import-Module WSL-IpHandler -Force
@@ -89,7 +89,7 @@
         }
         Context ' With config file having IP address different from required' {
             BeforeEach {
-                $ipObj = Get-IpCalcResult -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
+                $ipObj = Get-IpNet -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
                 $badIp = $ipObj.Add($ipObj.IPcount)
                 $badRecord = "[static_ips]`r`n$WslInstanceName = $($badIp.IP)"
                 Set-Content $ConfigPath -Value $badRecord
@@ -196,7 +196,7 @@
         }
         Context ' With config file having some IP address not within required SubNet' {
             BeforeAll {
-                $ipObj = Get-IpCalcResult -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
+                $ipObj = Get-IpNet -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
                 $badIp = $ipObj.Add($ipObj.IPcount)
                 Set-Variable BadRecord "[static_ips]`r`n$WslInstanceName = $($badIp.IP)"
             }

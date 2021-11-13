@@ -308,7 +308,7 @@ function Get-AvailableStaticIpAddress {
     Write-Debug "${fn}: `$GatewayIpAddress=$GatewayIpAddress"
     Write-Debug "${fn}: `$PrefixLength=$PrefixLength"
 
-    Import-Module (Join-Path $PSScriptRoot 'IP-Calc.psm1' -Resolve) -Function Get-IpCalcResult
+    Import-Module (Join-Path $PSScriptRoot 'IPNetwork.psm1' -Resolve) -Function Get-IpNet
 
     $SectionName = (Get-StaticIpAddressesSectionName)
 
@@ -321,13 +321,13 @@ function Get-AvailableStaticIpAddress {
                 Sort-Object { $_.IPAddressToString -as [Version] } -Bottom 1
 
             Write-Debug "${fn}: Max IP address: $maxIP"
-            $maxIPobj = Get-IpCalcResult -IpAddress $maxIP -PrefixLength $PrefixLength
+            $maxIPobj = Get-IpNet -IpAddress $maxIP -PrefixLength $PrefixLength
             $newIP = $maxIPobj.Add(1).IpAddress
         }
         else {
             Write-Debug "${fn}: Selecting available IP address for WSL GatewayIpAddress: $GatewayIpAddress."
 
-            $ipObj = Get-IpCalcResult -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
+            $ipObj = Get-IpNet -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
             foreach ($i in 1..$ipObj.IPcount) {
                 $_ip = $ipObj.Add($i).IpAddress
                 if ($_ip -notin $section.Values) {
@@ -352,7 +352,7 @@ function Get-AvailableStaticIpAddress {
             Write-Error "Parameter GatewayIpAddress in ${fn} is `$null and .wslconfig has not $(Get-GatewayIpAddressKeyName) key and there is no active WSL Hyper-V Network Adapter to take Gateway IP Address from!"
         }
         else {
-            $ipObj = Get-IpCalcResult -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
+            $ipObj = Get-IpNet -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
             $newIP = $ipObj.Add(1).IpAddress
         }
     }
@@ -401,7 +401,7 @@ function Test-ValidStaticIpAddress {
     $fn = $MyInvocation.MyCommand.Name
     Write-Debug "${fn}: `$IpAddress=$IpAddress of type: $($IpAddress.Gettype())"
 
-    Import-Module (Join-Path $PSScriptRoot 'IP-Calc.psm1' -Resolve) -Function Get-IpCalcResult | Out-Null
+    Import-Module (Join-Path $PSScriptRoot 'IPNetwork.psm1' -Resolve) -Function Get-IpNet | Out-Null
 
     if ($PSCmdlet.ParameterSetName -eq 'Automatic') {
         $warnMsg = "You are setting Static IP Address: $IpAddress "
@@ -426,8 +426,8 @@ function Test-ValidStaticIpAddress {
             $warnMsg += 'within currently Unknown WSL SubNet that will be set by Windows OS and might have different SubNet!'
         }
         else {
-            $GatewayIpObject = (Get-IpCalcResult -IpAddress $GatewayIpAddress.IPAddressToString -PrefixLength $PrefixLength)
-            if ($GatewayIpObject.Compare($IpAddress)) {
+            $GatewayIpObject = (Get-IpNet -IpAddress $GatewayIpAddress.IPAddressToString -PrefixLength $PrefixLength)
+            if ($GatewayIpObject.Contains($IpAddress)) {
                 Write-Debug "${fn}: $IpAddress is within $($GatewayIpObject.CIDR) when `$usingWslConfig=$usingWslConfig"
                 if ($usingWslConfig) {
                     $true
@@ -452,9 +452,9 @@ function Test-ValidStaticIpAddress {
     else {
         Write-Debug "${fn}: `$GatewayIpAddress=$GatewayIpAddress of type: $($GatewayIpAddress.Gettype())"
         Write-Debug "${fn}: `$PrefixLength=$PrefixLength"
-        $GatewayIPObject = (Get-IpCalcResult -IpAddress $GatewayIpAddress.IPAddressToString -PrefixLength $PrefixLength)
+        $GatewayIPObject = (Get-IpNet -IpAddress $GatewayIpAddress.IPAddressToString -PrefixLength $PrefixLength)
         Write-Debug "${fn}: `$GatewayIPObject: $($GatewayIPObject | Out-String)"
-        if ($GatewayIPObject.Compare($IpAddress)) {
+        if ($GatewayIPObject.Contains($IpAddress)) {
             Write-Debug "${fn}: $IpAddress is VALID and is within $($GatewayIPObject.CIDR) SubNet."
             $true
         }

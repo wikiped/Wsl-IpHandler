@@ -125,7 +125,10 @@ function Install-WslIpHandler {
         [Parameter(ParameterSetName = 'Static')]
         [switch]$DontModifyPsProfile,
 
-        [switch]$BackupWslConfig
+        [switch]$BackupWslConfig,
+
+        [Parameter()]
+        [string[]]$DynamicAdapters = @('Ethernet', 'Default Switch')
     )
     $fn = $MyInvocation.MyCommand.Name
 
@@ -157,7 +160,13 @@ function Install-WslIpHandler {
     if ($null -ne $GatewayIpAddress) {
         Set-WslNetworkConfig -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $DNSServerList -Modified ([ref]$configModified)
 
-        Set-WslNetworkAdapter
+        $setParams = @{
+            GatewayIpAddress = $GatewayIpAddress
+            PrefixLength = $PrefixLength
+            DNSServerList = $DNSServerList
+            DynamicAdapters = $DynamicAdapters
+        }
+        Set-WslNetworkAdapter @setParams
 
         Write-Verbose "Setting Static IP Address: $($WslInstanceIpAddress.IPAddressToString) for $WslInstanceName."
         Set-WslInstanceStaticIpAddress -WslInstanceName $WslInstanceName -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -WslInstanceIpAddress $WslInstanceIpAddress.IPAddressToString -Modified ([ref]$configModified)
@@ -171,7 +180,6 @@ function Install-WslIpHandler {
 
         $WslHostIpOrOffset = $WslIpOffset
     }
-
 
     if ($configModified) {
         Write-Verbose "Saving Configuration in .wslconfig $($BackupWslConfig ? 'with Backup ' : '')..."
@@ -735,7 +743,10 @@ function Set-WslNetworkAdapter {
         [int]$PrefixLength,
 
         [Parameter()][Alias('DNS')]
-        [string]$DNSServerList  # Comma separated ipaddresses/hosts
+        [string]$DNSServerList, # Comma separated ipaddresses/hosts
+
+        [Parameter()]
+        [string[]]$DynamicAdapters = @('Ethernet', 'Default Switch')
     )
     $fn = $MyInvocation.MyCommand.Name
     $networkSectionName = (Get-NetworkSectionName)
@@ -769,32 +780,18 @@ function Set-WslNetworkAdapter {
         }
     }
 
-    # Check if any of existing adapters overlap with required subnet
-    Import-Module (Join-Path $PSScriptRoot 'IP-Calc.psm1' -Resolve) -Function Get-IpCalcResult -Verbose:$false -Debug:$false | Out-Null
-
-    $otherAdapters = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-        Select-Object -Property InterfaceAlias, IPAddress, PrefixLength
-
-    if ($otherAdapters) {
-        $wslIpCalc = Get-IpCalcResult -IPAddress $GatewayIpAddress -PrefixLength $PrefixLength
-
-        foreach ($adapter in $otherAdapters) {
-            if ($adapter.InterfaceAlias -ne $wslAlias) {
-                $otherIpCalc = Get-IpCalcResult -IPAddress $adapter.IPAddress -PrefixLength $adapter.PrefixLength
-                if ($wslIpCalc.Overlaps($otherIpCalc)) {
-                    Throw "Cannot create Hyper-V VM Adapter 'WSL' with GatewayAddress: $GatewayIpAddress and PrefixLength: $PrefixLength, because it's subnet: $($wslIpCalc.CIDR) overlaps with existing subnet of '$($adapter.InterfaceAlias)': $($otherIpCalc.CIDR)"
-                }
-            }
-        }
-    }
-
     # Setup required WSL adapter
     Write-Debug "${fn}: Shutting down all WSL instances..."
     wsl.exe --shutdown
 
     . (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve) | Out-Null
     $setAdapterScript = Join-Path $PSScriptRoot 'Set-WslNetworkAdapter.ps1' -Resolve
-    $scriptArguments = @($GatewayIpAddress, $PrefixLength, $DNSServerList)
+    $scriptArguments = @{
+        GatewayIpAddress = $GatewayIpAddress
+        PrefixLength     = $PrefixLength
+        DNSServerList    = $DNSServerList
+        DynamicAdapters  = $DynamicAdapters
+    }
 
     if (IsElevated) {
         & $setAdapterScript @scriptArguments

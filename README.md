@@ -24,15 +24,17 @@ WSL IP Handler is a Powershell Module which puts together several of the "fixes"
 
 In other words what WSL should have been doing out-of-the-box.
 
+## [What's new?](.\RELEASES.md)
+
 ## How to get this module
 
 ### Prerequisites
 
-1. PowerShell 7.1+ (recommended).
+1. PowerShell 7.1+.
 
     [How to install Powershell Core.](https://docs.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.1)
 
-1. [WSL](https://github.com/microsoft/WSL)
+1. [WSL 2](https://github.com/microsoft/WSL) (has not been tested with WSL 1)
 
 To download and copy the module to Modules folder of Powershell profile for Current User run the following commands from Powershell prompt:
 

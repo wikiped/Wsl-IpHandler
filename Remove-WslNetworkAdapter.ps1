@@ -25,9 +25,11 @@ Write-Debug "${fn}: HNS Network '$VirtualAdapterName' with Id: $networkId"
 
 $existingAdapter = Get-HnsNetworkEx -Id $networkId -ErrorAction SilentlyContinue
 
-if ($null -ne $existingAdapter) {
-    Write-Verbose "Removing existing Hyper-V Network Adapter '$VirtualAdapterName'..."
-    $existingAdapter | Remove-HnsNetworkEx -ErrorAction SilentlyContinue | Out-Null
+if ($existingAdapter) {
+    Write-Debug "${fn}: Existing Adapter`n$($existingAdapter | Out-String)"
+
+    Write-Verbose "Removing existing Hyper-V Network Adapter '$VirtualAdapterName' ..."
+    $existingAdapter.ID | Remove-HnsNetworkEx -ErrorAction SilentlyContinue | Out-Null
 
     Write-Debug "${fn}: Checking if Hyper-V Network Adapter '$VirtualAdapterName' with Id: $networkId has been removed..."
     $remainingAdapter = Get-HnsNetworkEx -Id $networkId -ErrorAction SilentlyContinue

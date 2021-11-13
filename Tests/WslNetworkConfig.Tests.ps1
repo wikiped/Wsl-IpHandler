@@ -94,10 +94,10 @@
         }
         Context ' With config file having IP address different from required' {
             BeforeAll {
-                Import-Module (Join-Path $PSScriptRoot 'IP-Calc.psm1' -Resolve) -Function Get-IpCalcResult | Out-Null
+                Import-Module (Join-Path $PSScriptRoot 'IPNetwork.psm1' -Resolve) -Function Get-IpNet | Out-Null
             }
             BeforeEach {
-                $ipObj = Get-IpCalcResult -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
+                $ipObj = Get-IpNet -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
                 $badIp = $ipObj.Add($ipObj.IPcount)
                 $badRecord = "[network]`r`ngateway_ip = $($badIp.IP)"
                 $badRecord += "`r`nprefix_length = $PrefixLength"
