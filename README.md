@@ -1,14 +1,6 @@
 # WSL IP Handler
 
-<details>
-<summary>
-<style>
-  .inline { display: inline-block; }
-</style>
-<h2 class="inline">
-Content:
-</h2>
-</summary>
+## Content
 
 [Overview](#overview)
 
@@ -16,28 +8,17 @@ Content:
 
 [Where the module is installed?](#where-the-module-is-installed)
 
-<details>
-<summary>
-<p class="inline">
-<a href="#how-does-it-work">How does it work?</a>
-</p>
-</summary>
+[How does it work?]("#how-does-it-work")
 
----
+&emsp;[How On-Demand mode works?](#how-on-demand-mode-works)
 
-[How On-Demand mode works?](#how-on-demand-mode-works)
+&emsp;[How On-Logon mode works?](#how-on-logon-mode-works)
 
-[How On-Logon mode works?](#how-on-logon-mode-works)
+&emsp;[What happens during WSL Instance startup?](#what-happens-during-wsl-instance-startup)
 
-[What happens during WSL Instance startup?](#what-happens-during-wsl-instance-startup)
+&emsp;[What happens when WSL Hyper-V Network Adapter is being setup?](#what-happens-when-wsl-hyper-v-network-adapter-is-being-setup)
 
-[What happens when WSL Hyper-V Network Adapter is being setup?](#what-happens-when-wsl-hyper-v-network-adapter-is-being-setup)
-
-[Powershell Profile Modification](#powershell-profile-modification)
-
----
-
-</details>
+&emsp;[Powershell Profile Modification](#powershell-profile-modification)
 
 [How to use this module?](#how-to-use-this-module)
 
@@ -52,8 +33,6 @@ Content:
 [Credits](#credits)
 
 [What's new\?](./RELEASES.md)
-
-</details>
 
 ---
 
