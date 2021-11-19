@@ -3,9 +3,9 @@
 <details>
 <summary>
 <style>
-  .collapsable {display:inline-block;}
+  .inline { display: inline-block; }
 </style>
-<h2 class="collapsable">
+<h2 class="inline">
 Content:
 </h2>
 </summary>
@@ -17,11 +17,11 @@ Content:
 [Where the module is installed?](#where-the-module-is-installed)
 
 <details>
-    <summary>
-    <p class="collapsable">
-    <a href="#how-does-it-work">How does it work?</a>
-    </p>
-    </summary>
+<summary>
+<p class="inline">
+<a href="#how-does-it-work">How does it work?</a>
+</p>
+</summary>
 
 ---
 
