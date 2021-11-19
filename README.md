@@ -2,7 +2,10 @@
 
 <details>
 <summary>
-<h2 style="display: inline-block;">
+<style>
+  .collapsable {display:inline-block;}
+</style>
+<h2 class="collapsable">
 Content:
 </h2>
 </summary>
@@ -15,7 +18,7 @@ Content:
 
 <details>
     <summary>
-    <p style="display: inline-block;">
+    <p class="collapsable">
     <a href="#how-does-it-work">How does it work?</a>
     </p>
     </summary>
