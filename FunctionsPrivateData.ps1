@@ -5,18 +5,18 @@ $WslPrivateData = $null
 function Get-PrivateData {
     [CmdletBinding()]
     param($ModuleInfo, [switch]$Force)
-    $fn = $MyInvocation.MyCommand.Name
+
 
     if ($null -eq $script:WslPrivateData -or $Force) {
-        Write-Debug "${fn}: PrivateData is null or -Force parameter has been set!"
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: PrivateData is null or -Force parameter has been set!"
 
         if ($PSBoundParameters.ContainsKey('ModuleInfo') -and $null -ne $ModuleInfo) {
             $ModuleInfo = [System.Management.Automation.PSModuleInfo]$ModuleInfo
-            Write-Debug "${fn}: Using passed in ModuleInfo: $($ModuleInfo.Name)"
+            Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Using passed in ModuleInfo: $($ModuleInfo.Name)"
         }
         else {
             $ModuleInfo = $MyInvocation.MyCommand.Module
-            Write-Debug "${fn}: Using `$MyInvocation.MyCommand.Module: $($ModuleInfo.Name)"
+            Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Using `$MyInvocation.MyCommand.Module: $($ModuleInfo.Name)"
         }
 
         if ($null -eq $ModuleInfo.PrivateData) {
@@ -31,14 +31,14 @@ function Get-PrivateData {
         }
         else {
             $script:WslPrivateData = $ModuleInfo.PrivateData.Clone()
-            Write-Debug "${fn}: Cloned PrivateData - Count: $($script:WslPrivateData.Count)"
+            Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Cloned PrivateData - Count: $($script:WslPrivateData.Count)"
             $script:WslPrivateData.Remove('PSData')
-            Write-Debug "${fn}: PsData removed from PrivateData"
+            Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: PsData removed from PrivateData"
             $script:WslPrivateData
         }
     }
     else {
-        Write-Debug "${fn}: Returning Cached PrivateData: $($script:WslPrivateData | Out-String)"
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Returning Cached PrivateData: $($script:WslPrivateData | Out-String)"
         $script:WslPrivateData
     }
 }
@@ -118,6 +118,30 @@ function Get-ProfileContent {
     [CmdletBinding()]
     param($ModuleInfo)
     (Get-PrivateData $ModuleInfo).ProfileContent
+}
+
+function Get-ScheduledTaskName {
+    [CmdletBinding()]
+    param($ModuleInfo)
+    (Get-PrivateData $ModuleInfo).ScheduledTask.TaskName
+}
+
+function Get-ScheduledTaskName {
+    [CmdletBinding()]
+    param($ModuleInfo)
+    (Get-PrivateData $ModuleInfo).ScheduledTask.Name
+}
+
+function Get-ScheduledTaskPath {
+    [CmdletBinding()]
+    param($ModuleInfo)
+    (Get-PrivateData $ModuleInfo).ScheduledTask.Path
+}
+
+function Get-ScheduledTaskDescription {
+    [CmdletBinding()]
+    param($ModuleInfo)
+    (Get-PrivateData $ModuleInfo).ScheduledTask.Description
 }
 
 #endregion Helper Functions

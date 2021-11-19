@@ -10,7 +10,7 @@
     RootModule        = 'WSL-IpHandler'
 
     # Version number of this module.
-    ModuleVersion     = '0.9.2'
+    ModuleVersion     = '0.10.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -76,8 +76,10 @@
         'Remove-WslInstanceStaticIpAddress'
         'Set-WslNetworkAdapter'
         'Remove-WslNetworkAdapter'
+        'Set-WslScheduledTask'
+        'Remove-WslScheduledTask'
         'Test-WslInstallation'
-        'Invoke-WslStatic'
+        'Invoke-WslExe'
         'Update-WslIpHandlerModule'
         'Uninstall-WslIpHandlerModule'
     )
@@ -92,7 +94,7 @@
 
     # Aliases to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no aliases to export.
     # AliasesToExport   = '*'
-    AliasesToExport   = @()
+    AliasesToExport   = @('wsl')
 
     # DSC resources to export from this module
     # DscResourcesToExport = @()
@@ -107,6 +109,7 @@
         'uninstall-wsl-iphandler.sh'
         'wsl-iphandler.sh'
         'README.md'
+        'RELEASES.md'
         'LICENSE.txt'
     )
 
@@ -133,15 +136,19 @@
             WindowsHostNameKeyName       = 'windows_host_name'
         }
 
+        ScheduledTask   = @{
+            Name        = 'WSL-IpHandlerTask'
+            Path        = '\WSL-IpHandler\'
+            Description = 'Task created by WSL-IpHandler Powershell module to set Hyper-V Network Adapter WSL to predefined IP Address.'
+        }
+
         ProfileContent  = @(
             '# Start of WSL-IpHandler Section'
-            'Import-Module WSL-IpHandler -Force'
-            'Set-Alias wsl Invoke-WslStatic'
+            'Import-Module WSL-IpHandler'
             '# End of WSL-IpHandler Section'
         )
 
         PSData          = @{
-
             # Tags applied to this module. These help with module discovery in online galleries.
             Tags       = @('WSL', 'IP', 'IPAddress', 'Network', 'Subnet')
 

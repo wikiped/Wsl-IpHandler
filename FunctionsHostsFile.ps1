@@ -38,7 +38,7 @@ function Write-HostsFileContent {
         [Parameter()]
         [string]$FilePath
     )
-    $fn = $MyInvocation.MyCommand.Name
+
 
     if (-not $PSBoundParameters.ContainsKey('FilePath')) {
         $FilePath = $Env:WinDir + '\system32\Drivers\etc\hosts'
@@ -51,16 +51,16 @@ function Write-HostsFileContent {
 
     . (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve) | Out-Null
 
-    Write-Debug "${fn}: Setting $FilePath with $($Records.Count) records."
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Setting $FilePath with $($Records.Count) records."
 
     if (-not (IsElevated)) {
-        Write-Debug "${fn}: Invoking Elevated Permissions ..."
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Invoking Elevated Permissions ..."
         $Records = $Records -join "`n"
-        $command = "Set-Content -Path `"$FilePath`" -Value `"$Records`" -Encoding ASCII"
-        Invoke-CommandEncodedElevated $command
+        $command = "Set-Content -Path `"$FilePath`" -Value `"$Records`" -Encoding ASCII -Confirm:`$False"
+        Invoke-CommandElevated $command -Encode
     }
     else {
-        Set-Content -Path $FilePath -Value $Records -Encoding ASCII
+        Set-Content -Path $FilePath -Value $Records -Encoding ASCII -Confirm:$false
     }
 }
 
@@ -202,13 +202,13 @@ function Remove-HostFromRecords {
         [Parameter()]
         [switch]$RemoveAllOtherHosts
     )
-    $fn = $MyInvocation.MyCommand.Name
+
     $array = @($input)
     if ($array.Count) { $Records = $array }
     if (!(Test-Path variable:Records)) { $Records = @() }
     if ($null -eq $Records) { $Records = @() }
 
-    Write-Debug "${fn}: Before processing: `$Records.Count=$($Records.Count)"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Before processing: `$Records.Count=$($Records.Count)"
 
     $Records = $Records | ForEach-Object {
         if (Test-RecordIsComment $_) {
@@ -235,8 +235,8 @@ function Remove-HostFromRecords {
             }
         }
     }
-    Write-Debug "${fn}: After processing: `$Records.Count=$($Records.Count)"
-    Write-Debug "${fn}: After processing: `$Modified=$($Modified.Value)"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: After processing: `$Records.Count=$($Records.Count)"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: After processing: `$Modified=$($Modified.Value)"
     $Records
 }
 

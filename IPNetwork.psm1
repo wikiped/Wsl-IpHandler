@@ -362,10 +362,10 @@ $FindFreeSubnetMethod = {
         [string[]]$CIDRs = @()
     )
     $DebugPreference = 'Continue'
-    $fn = 'FindFreeSubnet'
+
 
     $subnets = $CIDRs | Where-Object { Test-IsValidCidr $_ }
-    Write-Debug "${fn}: Incoming subnets: $($CIDRs -join '; ')"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Incoming subnets: $($CIDRs -join '; ')"
 
     $privateCidr = $This.PrivateNetwork
 
@@ -375,16 +375,16 @@ $FindFreeSubnetMethod = {
 
     $privateCidrNet = Get-IpNet -CIDR $privateCidr
     $gapSize = $This.IPCount
-    Write-Debug "${fn}: Gap Size: $gapSize"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Gap Size: $gapSize"
 
     $sortedSubnets = $subnets | Sort-Object { ($_ | Get-IpNet).IPAddress.Decimal }
-    Write-Debug "${fn}: Sorted subnets: $($sortedSubnets -join '; ')"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Sorted subnets: $($sortedSubnets -join '; ')"
 
     $edgedSubnets = @()
     $edgedSubnets += "$($privateCidrNet.Subnet)/32"
     if ($sortedSubnets) { $edgedSubnets += $sortedSubnets }
     $edgedSubnets += "$($privateCidrNet.Broadcast)/32"
-    Write-Debug "${fn}: Edged subnets: $($edgedSubnets -join '; ')"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Edged subnets: $($edgedSubnets -join '; ')"
 
     $result = (1..($edgedSubnets.Count - 1)).ForEach({
             $ip, $pref = Get-CidrParts $edgedSubnets[$_]
@@ -395,13 +395,13 @@ $FindFreeSubnetMethod = {
                 $prevPref = if ($prevPref -eq 32) { $prevPref } else { [Math]::Min($This.PrefixLength, $prevPref) }
                 $prevNet = Get-IpNet -CIDR "$prevIp/$prevPref"
                 $distance = $net.DistanceFrom($prevNet.Cidr)
-                Write-Debug "${fn}: Distance = $distance between $prevNet and $net"
+                Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Distance = $distance between $prevNet and $net"
                 if ($distance -ge $gapSize) {
-                    Write-Debug "${fn}: Free subnet space: $distance is enough to fit target size: $gapSize"
+                    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Free subnet space: $distance is enough to fit target size: $gapSize"
                     $newSubnetStart = $prevNet.Broadcast.Add()
-                    Write-Debug "${fn}: New subnet can start from: $newSubnetStart"
+                    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: New subnet can start from: $newSubnetStart"
                     $out = (Get-IpNet -CIDR "$newSubnetStart/$($This.PrefixLength)").CIDR
-                    Write-Debug "${fn}: Subnet: $This can be reallocated to: $out."
+                    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Subnet: $This can be reallocated to: $out."
                     $out
                 }
             }

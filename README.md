@@ -1,6 +1,11 @@
 # WSL IP Handler
 
-Quick Links:
+<details>
+<summary>
+<h2 style="display: inline-block;">
+Content:
+</h2>
+</summary>
 
 [Overview](#overview)
 
@@ -8,7 +13,28 @@ Quick Links:
 
 [Where the module is installed?](#where-the-module-is-installed)
 
-[How does it work?](#how-does-it-work)
+<details>
+    <summary>
+    <p style="display: inline-block;">
+    <a href="#how-does-it-work">How does it work?</a>
+    </p>
+    </summary>
+
+---
+
+[How On-Demand mode works?](#how-on-demand-mode-works)
+
+[How On-Logon mode works?](#how-on-logon-mode-works)
+
+[What happens during WSL Instance startup?](#what-happens-during-wsl-instance-startup)
+
+[What happens when WSL Hyper-V Network Adapter is being setup?](#what-happens-when-wsl-hyper-v-network-adapter-is-being-setup)
+
+[Powershell Profile Modification](#powershell-profile-modification)
+
+---
+
+</details>
 
 [How to use this module?](#how-to-use-this-module)
 
@@ -18,9 +44,15 @@ Quick Links:
 
 [How to completely remove this module?](#how-to-completely-remove-this-module)
 
+[Getting help](#getting-help)
+
 [Credits](#credits)
 
 [What's new\?](./RELEASES.md)
+
+</details>
+
+---
 
 ## Overview
 
@@ -47,6 +79,8 @@ WSL IP Handler is a Powershell Module which puts together several of the "fixes"
 1. DNS resolution for Windows host and WSL instances within WSL SubNet.
 
 In other words what WSL should have been doing out-of-the-box.
+
+---
 
 ## How to get this module
 
@@ -79,6 +113,8 @@ Remove-Item -Path 'Wsl-IpHandler.zip'
 Rename-Item -Path 'Wsl-IpHandler-master' -NewName 'Wsl-IpHandler'
 ```
 
+---
+
 ## Where the module is installed?
 
 After executing above commands in [How to get this module](#how-to-get-this-module) the module is installed in a Powershell profile directory for the current user.
@@ -87,63 +123,132 @@ Run `Split-Path $Profile` to see location of this profile directory.
 
 When `Import-Module SomeModule` command is executed, Powershell looks for `SomeModule` in this directory (among others).
 
+---
+
 ## How does it work?
 
-WSL IP Handler operates by keeping user configuration and running powershell scripts on Windows host and bash script on WSL Instance where it has been activated.
+When WSL IP Handler is activated (with `Install-WslIpHandler` command) it stores required network configuration in `.wslconfig` file. This configuration is then used by Powershell scripts on Windows host and Bash scripts on WSL Instance where it has been activated to ensure IP Addresses determinism.
 
-### On Windows Host (outside of modules directory)
+There are two ways how IP Address persistance of WSL Hyper-V Network Adapter can be achieved with this module:
 
-- File modified during activation: `~\.wslconfig`
-- File modified (optionally) during activation: `$Profile.CurrentUserAllHosts` (Powershell Profile file)
+- On-Demand: The adapter is created (if it is not present) or modified (if was created beforehand by Windows) to match the required network configuration when the user runs `wsl` command through Powershell session.
+
+- On-Logon: The adapter is created by a Scheduled Task that runs on user logon. This way the user does no have to use Powershell to ensure WSL adapter's network configuration matches required.
+
+The following sections describe which files are modified (outside of module's directory) on Windows host and WSL instance(s).
+
+---
+
+### Files created or modified on Windows Host (outside of modules directory)
+
+- File modified during module activation: `~\.wslconfig`
+- File modified (optionally) during module activation: `$Profile.CurrentUserAllHosts` (Powershell Profile file)
 - File modified (if necessary) during startup of WSL Instance: `%WINDOWS%\System32\Drivers\etc\hosts`
 
-### On WSL Instance system
+---
 
-- New file created during activation: `/usr/local/bin/wsl-iphandler.sh`
-- New file created during activation: `/etc/profile.d/run-wsl-iphandler.sh`
-- New file created during activation: `/etc/sudoers.d/wsl-iphandler`
-- File modified during activation: `/etc/wsl.conf`
+### Files created or modified on WSL Instance system
+
+- New file created during module activation: `/usr/local/bin/wsl-iphandler.sh`
+- New file created during module activation: `/etc/profile.d/run-wsl-iphandler.sh`
+- New file created during module activation: `/etc/sudoers.d/wsl-iphandler`
+- File modified during module activation: `/etc/wsl.conf`
 - File modified (if necessary) during startup of WSL Instance: `/etc/hosts`
 
-### During [Module Activation](#module-activation)
+---
+
+### Files modified during [Module Activation](#module-activation)
 
 - Bash scripts are copied to the specified WSL Instance and `wsl.conf` file is modified to save Windows host name.
 - Network configuration parameters are saved to `.wslconfig` on Windows host:
   - In [Static Mode](#how-to-use-this-module) if WSL Instance IP address is not specified - the first available IP address will be selected automatically;
-  - In [Dynamic Mode](#how-to-use-this-module) IP address offset (1-254) will be selected automatically based on those already used (if any) or 1.
+  - In [Dynamic Mode](#how-to-use-this-module) IP address offset (1-254) will be selected automatically based on those already used (if any) or 1;
+- Powershell profile file is modified (if not opted out) to ensure on demand availability of WSL Hyper-V Network Adapter with required configuration.
+- New Scheduled Task created (optionally) to ensure WSL Hyper-V Network Adapter is configured at logon.
 
-### Execution of command alias
+---
+
+### How On-Demand mode works?
 
 When `wsl` [alias](#powershell-profile-modification) is executed from Powershell prompt:
 
-- All arguments of the call are checked for presence of "informational" parameters (i.e. those parameters that do not require launch of WSL Instance).
+- All arguments of the call are checked for presence of "informational" parameters (i.e. those parameters that do not require launch (initialization) of WSL Instance).
   - If present:
     - `wsl.exe` is executed with all arguments passed 'as is'.
   - Otherwise:
-    - Configuration is checked for Gateway IP address:
+    - ~/.wslconfig is checked for Gateway IP Address:
       - If found - Static Mode detected:
         - If WSL Hyper-V Adapter is present - it is checked to have network properties matching those saved during activation. If there is a mismatch - adapter is removed and new one created.
         - If adapter is not present - it is created.
     - `wsl.exe` is executed with all arguments passed 'as is'.
+  - Before starting `wsl.exe` and after WSL Network Adapter had to be created the module will poll for `vEthernet (WSL)` Network Connection availability every 3 seconds and when network connection becomes available then actually invoke `wsl.exe`. There is a timeout of 30 seconds to wait for the connection to become available.
+  - If `vEthernet (WSL)` Network Connection is not available after specified Timeout (30 seconds by default) Exception will be thrown.
+  - Timeout can be changed by setting `-Timeout` parameter: `wsl -Timeout 60`.
 
-### During WSL Instance startup process
+> Note that `wsl` command (not the same as `wsl.exe`) in this section refers to Powershell Alias that is created by this module and which is available only when this module is imported into current Powershell session, either manually or automatically through [modified Powershell profile](#powershell-profile-modification).
 
-- Bash script `wsl-iphandler.sh` is executed to:
+---
+
+### How On-Logon mode works?
+
+When `Install-WslIpHandler` is executed with parameter `-UseScheduledTaskOnUserLogOn` the module creates a new Scheduled Task named `WSL-IpHandlerTask` is created under `WSL-IpHandler` folder. The task has a trigger to run at user logon.
+
+If there was parameter `-AnyUserLogOn` given to `Install-WslIpHandler` (along with `-UseScheduledTaskOnUserLogOn`) then the task will run at logon of ANY user. Otherwise the task will run only at logon of specific user - the one who executed `Install-WslIpHandler` command.
+
+> Note that it takes some time for Windows to execute its startup process (including logon tasks among other things). So it will take some time before WSL Hyper-V Network Adapter will become available.
+
+---
+
+### What happens during WSL Instance startup?
+
+IP Address handling at WSL instance's side is done with user's profile file modification. Therefore it will not work when WSL instance has been launched after `wsl.exe --shutdown` with a command like this: `wsl ping windows.host` (which is an example of non-interactive session). The reason for this is that Bash does not execute user's profile script in non-interactive sessions.
+
+In all other cases when `wsl` is executed to open a terminal (i.e. interactive session) profile script will run:
+
+- Bash script `wsl-iphandler.sh` will be executed to:
   - Add WSL Instance IP address to eth0 interface. In Dynamic Mode IP address is obtained first from IP offset and Windows Host gateway IP address.
   - Add Windows host gateway IP address to `/etc/hosts` if not already added.
-  - Run Powershell script to add WSL Instance IP address with its name to Windows `hosts` if not already added.
+  - Run Powershell script on Windows host to add WSL Instance IP address with its name to Windows `hosts` if not already added.
+
+> A workaround to ensure execution of profile script in non-interactive Bash session is to run command like this (from Powershell):
+
+```powershell
+wsl.exe env BASH_ENV=/etc/profile bash -c `"ping windows.host`"
+```
+
+---
+
+### What happens when WSL Hyper-V Network Adapter is being setup?
+
+Regardless of whether the module operates in On-Demand or On-Logon mode there a several steps taken to ensure the adapter is properly configured:
+
+1. Check if the adapter exists and is already configured as required. If yes - nothing is done.
+
+1. If the adapter is does not exist yes or mis-configured - it is removed (and `wsl --shutdown` is executed beforehand).
+
+1. Check if there are any other network connections having IP network configuration that overlaps (conflicts) with the required for WSL adater.
+
+1. If there are conflicts and overlapping network is from one of Hyper-V adapters (`Ethernet` or `Default Switch`) - conflicting adapter will be recreated to take IP network subnet that does not conflict with WSL Adapter.
+
+1. Any other conflicting network will cause the module to throw an error and it is user's responsibility to either choose a different IP Subnet for WSL adapter of reconfigure conflicting network.
+
+1. When no conflicts are found (or they have been resolved) WSL adapter is created.
+
+---
 
 ### Powershell Profile Modification
 
-By default, if Static mode of operation has been specified, activation script will modify Powershell profile file (by default $Profile.CurrentUserAllHosts). The only thing that is being added is `wsl` command alias. Actual command that will be executed is `Invoke-WslStatic`. If modification of the profile is not desirable there is a parameter `-DontModifyPsProfile` to `Install-WslIpHandler` command to suppress this behavior.
+By default, if Static mode of operation has been specified, activation script will modify Powershell profile file (by default $Profile.CurrentUserAllHosts). The only thing that is being added is `wsl` command alias. Actual command that will be executed is `Invoke-WslExe`. If modification of the profile is not desirable there is a parameter `-DontModifyPsProfile` to `Install-WslIpHandler` command to disable this feature.
 
-To modify profile manually at any time there is `Set-ProfileContent` and `Remove-ProfileContent` commands to add or remove modifications.
+To modify / restore profile manually at any time there is `Set-ProfileContent` and `Remove-ProfileContent` commands to add or remove modifications.
 
-Created alias work ONLY from within Powershell sessions.
+Created alias works ONLY from within Powershell sessions with user profile loading enabled (which is the default behavior).
 
-See [Execution of command alias](#execution-of-command-alias) for details on what happens when it is executed.
+See [Execution of command alias](#what-happens-during-wsl-instance-startup) for details on what happens when it is executed.
 
-  > NOTE: Profile modification takes effect after Powershell session restarts!
+  > Profile modification takes effect after Powershell session restarts!
+
+---
 
 ## How to use this module?
 
@@ -176,6 +281,8 @@ In Static mode WSL IP Handler creates or replaces (if necessary) WSL Hyper-V Net
 
 In Dynamic mode WSL IP Handler does not interfere with how Windows manages WSL network properties.
 
+---
+
 ### Module Activation
 
 1. Import Module.
@@ -184,17 +291,17 @@ In Dynamic mode WSL IP Handler does not interfere with how Windows manages WSL n
     Import-Module WSL-IpHandler
     ```
 
-   > All commands that follow below require that the module has been imported with above command!
+   > All commands that follow below require that the module has been imported with above command.
 
 1. Activate Module.
 
-   1. Activate in Dynamic Mode:
+    - Activate in Dynamic Mode:
 
       ```powershell
       Install-WslIpHandler Ubuntu
       ```
 
-   1. Activate in Static Mode:
+    - Activate in Static Mode:
 
       To get WSL Instance IP address assigned automatically:
 
@@ -202,10 +309,22 @@ In Dynamic mode WSL IP Handler does not interfere with how Windows manages WSL n
       Install-WslIpHandler -WslInstanceName Ubuntu -GatewayIpAddress 172.16.0.1
       ```
 
-      To assign WSL Instance IP address manually:
+      To assign static IP address to WSL Instance manually:
 
       ```powershell
       Install-WslIpHandler -WslInstanceName Ubuntu -GatewayIpAddress 172.16.0.1 -WslInstanceIpAddress 172.16.0.2
+      ```
+
+    - Activate in Static Mode without modifying Powershell profile
+
+      ```powershell
+      Install-WslIpHandler -WslInstanceName Ubuntu -GatewayIpAddress 172.16.0.1 -WslInstanceIpAddress 172.16.0.2 -DontModifyPsProfile
+      ```
+
+    - Activate in Static Mode without modifying Powershell profile and enabling WSL adapter setup during logon
+
+      ```powershell
+      Install-WslIpHandler -WslInstanceName Ubuntu -GatewayIpAddress 172.16.0.1 -WslInstanceIpAddress 172.16.0.2 -UseScheduledTaskOnUserLogOn -DontModifyPsProfile
       ```
 
 1. Use WSL Instance.
@@ -244,6 +363,22 @@ In Dynamic mode WSL IP Handler does not interfere with how Windows manages WSL n
        Minimum = 0ms, Maximum = 0ms, Average = 0ms
    ```
 
+1. Do I have to use Powershell to benefit from this module?
+
+If Powershell is not part of day-to-day use it is still possible to benefit from this module's features.
+
+Powershell is need to 1) install (i.e. download) and 2) activate the module for all WSL instances where IP address control is required.
+
+For this to work the module has to activated with two switch parameters to `Install-WslIpHandler`:
+
+```powershell
+Install-WslIpHandler <...other parameters...> -DontModifyPsProfile -UseScheduledTaskOnUserLogOn
+```
+
+This will setup WSL Hyper-V Network Adapter configuration during user logon, without any need to use Powershell to start any WSL instance.
+
+---
+
 ## How to deactivate this module?
 
 From Powershell prompt execute:
@@ -252,9 +387,11 @@ From Powershell prompt execute:
 Uninstall-WslIpHandler -WslInstanceName Ubuntu
 ```
 
-If WSL Instance being removed had Static IP address and it is the only one remaining all network configuration settings (Windows Host Name and Gataway IP Address) will also be removed along with Powershell profile modifications.
+If WSL Instance being removed had Static IP address and it is the only one remaining all network configuration settings (Windows Host Name and Gataway IP Address) will also be removed along with Scheduled Task and Powershell profile modifications.
 
 Even after WSL-IpHandler was deactivated on all WSL instances WSL Hyper-V Network Adapter will remain active until next reboot or manual removal with `Remove-WslNetworkAdapter` command.
+
+---
 
 ## How to update this module
 
@@ -263,6 +400,8 @@ To update this module to the latest version in github repository run in Powershe
 ```powershell
 Update-WslIpHandlerModule
 ```
+
+---
 
 ## How to completely remove this module
 
@@ -280,6 +419,30 @@ Or execute from Powershell prompt:
 Import-Module WSL-IpHandler
 Uninstall-WslIpHandlerModule
 ```
+
+---
+
+## Getting Help
+
+To see list of all available commands from this module, execute in Powershell::
+
+```powershell
+Get-Command -Module WSL-IpHandler
+```
+
+To get help on any of the commands, execute `Get-Help <Command-Name>`, i.e.:
+
+```powershell
+Get-Help Install-WslIpHandler
+```
+
+To get help on a particular parameter of a command add `-Parameter <ParameterName>`, i.e.:
+
+```powershell
+Get-Help Install-WslIpHandler -Parameter UseScheduledTaskOnUserLogOn
+```
+
+---
 
 ## Credits
 

@@ -40,7 +40,7 @@ function Install-WslIpHandler {
     @ Windows host file system:
         a) New [static_ips] section in ~/.wslconfig will be created to store ip address for a specified WSL Instance. This ip address will be used by bash startup script to bind this IP Address at start time to eth0 interface.
         b) The same as for Static Mode.
-        c) Powershell profile file (CurrentUserAllHosts) will be modified: This module will be imported and an alias `wsl` to Invoke-WslStatic will be created).
+        c) Powershell profile file (CurrentUserAllHosts) will be modified: This module will be imported and an alias `wsl` to Invoke-WslExe will be created).
 
     .PARAMETER WslInstanceName
     Required. Name of the WSL Instance as listed by `wsl.exe -l` command
@@ -65,6 +65,12 @@ function Install-WslIpHandler {
 
     .PARAMETER DontModifyPsProfile
     Optional. If specifies will not modify Powershell Profile (default profile: CurrentUserAllHosts). Otherwise profile will be modified to Import this module and create an Alias `wsl` which will transparently pass through any and all paramaters to `wsl.exe` and, if necessary, initialize beforehand WSL Hyper-V network adapter to allow usage of Static IP Addresses. Will be ignored in Dynamic Mode.
+
+    .PARAMETER UseScheduledTaskOnUserLogOn
+    When present - a new Scheduled Task will be created: WSL-IpHandlerTask. It will be triggered at user LogOn. This task execution is equivalent to running Set-WslNetworkAdapter command. It will create WSL Hyper-V Network Adapter when user Logs On.
+
+    .PARAMETER AnyUserLogOn
+    When this parameter is present - The Scheduled Task will be set to run when any user logs on. Otherwise (default behavior) - the task will run only when current user (who executed Install-WslIpHandler command) logs on.
 
     .PARAMETER BackupWslConfig
     Optional. If specified will create backup of ~/.wslconfig before modifications.
@@ -102,7 +108,6 @@ function Install-WslIpHandler {
         [Parameter(ParameterSetName = 'Dynamic')]
         [Parameter(ParameterSetName = 'Static')]
         [Alias('Name')]
-        # [ArgumentCompleter({ WslNameCompleter $commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameter })]
         [string]$WslInstanceName,
 
         [Parameter(Mandatory, ParameterSetName = 'Static')][Alias('Gateway')]
@@ -125,31 +130,37 @@ function Install-WslIpHandler {
         [Parameter(ParameterSetName = 'Static')]
         [switch]$DontModifyPsProfile,
 
+        [Parameter(ParameterSetName = 'Static')]
+        [switch]$UseScheduledTaskOnUserLogOn,
+
+        [Parameter(ParameterSetName = 'Static')]
+        [switch]$AnyUserLogOn,
+
         [switch]$BackupWslConfig,
 
         [Parameter()]
         [string[]]$DynamicAdapters = @('Ethernet', 'Default Switch')
     )
-    $fn = $MyInvocation.MyCommand.Name
+
 
     Write-Host "PowerShell installing WSL-IpHandler to $WslInstanceName..."
     #region PS Autorun
     # Get Path to PS Script that injects (if needed) IP-host to windows hosts on every WSL launch
     $WinHostsEditScript = Get-SourcePath 'WinHostsEdit'
-    Write-Debug "${fn}: `$WinHostsEditScript='$WinHostsEditScript'"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$WinHostsEditScript='$WinHostsEditScript'"
     #endregion PS Autorun
 
     #region Bash Installation Script Path
     $BashInstallScript = Get-SourcePath 'BashInstall'
-    Write-Debug "${fn}: `$BashInstallScript='$BashInstallScript'"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$BashInstallScript='$BashInstallScript'"
     #endregion Bash Installation Script Path
 
     #region WSL Autorun Script Path
     # Get Path to bash script that assigns IP to wsl instance and launches PS autorun script
     $BashAutorunScriptSource = Get-SourcePath 'BashAutorun'
-    Write-Debug "${fn}: `$BashAutorunScriptSource='$BashAutorunScriptSource'"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$BashAutorunScriptSource='$BashAutorunScriptSource'"
     $BashAutorunScriptTarget = Get-ScriptLocation 'BashAutorun'
-    Write-Debug "${fn}: `$BashAutorunScriptTarget='$BashAutorunScriptTarget'"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$BashAutorunScriptTarget='$BashAutorunScriptTarget'"
     #endregion WSL Autorun Script Path
 
     #region Save Network Parameters to .wslconfig and Setup Network Adapters
@@ -162,9 +173,9 @@ function Install-WslIpHandler {
 
         $setParams = @{
             GatewayIpAddress = $GatewayIpAddress
-            PrefixLength = $PrefixLength
-            DNSServerList = $DNSServerList
-            DynamicAdapters = $DynamicAdapters
+            PrefixLength     = $PrefixLength
+            DNSServerList    = $DNSServerList
+            DynamicAdapters  = $DynamicAdapters
         }
         Set-WslNetworkAdapter @setParams
 
@@ -172,6 +183,11 @@ function Install-WslIpHandler {
         Set-WslInstanceStaticIpAddress -WslInstanceName $WslInstanceName -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -WslInstanceIpAddress $WslInstanceIpAddress.IPAddressToString -Modified ([ref]$configModified)
 
         $WslHostIpOrOffset = $WslInstanceIpAddress.IPAddressToString
+
+        if ($UseScheduledTaskOnUserLogOn) {
+            Write-Verbose 'Registering WSL-IpHandler scheduled task...'
+            Set-WslScheduledTask @setParams
+        }
     }
     else {
         $WslIpOffset = Get-WslIpOffset $WslInstanceName
@@ -185,7 +201,7 @@ function Install-WslIpHandler {
         Write-Verbose "Saving Configuration in .wslconfig $($BackupWslConfig ? 'with Backup ' : '')..."
         Write-WslConfig -Backup:$BackupWslConfig
     }
-    #endregion  Save Network Parameters to .wslconfig and Setup Network Adapters
+    #endregion Save Network Parameters to .wslconfig and Setup Network Adapters
 
     #region Run Bash Installation Script
     $BashInstallScriptWslPath = '$(wslpath "' + "$BashInstallScript" + '")'
@@ -199,7 +215,7 @@ function Install-WslIpHandler {
 
     $bashInstallScriptOutput = wsl.exe -d $WslInstanceName sudo -E env '"PATH=$PATH"' $debug_var $verbose_var bash $BashInstallScriptWslPath @BashInstallParams
 
-    Write-Debug "${fn}: Head and tail from Bash Installation Script Output:"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Head and tail from Bash Installation Script Output:"
     Write-Debug "$($bashInstallScriptOutput | Select-Object -First 5)"
     Write-Debug "$($bashInstallScriptOutput | Select-Object -Last 5)"
 
@@ -270,7 +286,7 @@ function Uninstall-WslIpHandler {
 
         [switch]$BackupWslConfig
     )
-    $fn = $MyInvocation.MyCommand.Name
+
 
     Write-Host "PowerShell Uninstalling WSL-IpHandler from $WslInstanceName..."
     #region Bash UnInstallation Script Path
@@ -288,8 +304,8 @@ function Uninstall-WslIpHandler {
     $BashUninstallParams = "$BashAutorunScriptName", "$BashAutorunScriptTarget"
 
     Write-Verbose "Running Bash WSL Uninstall script $BashUninstallScript"
-    Write-Debug "${fn}: `$DebugPreference=$DebugPreference"
-    Write-Debug "${fn}: `$VerbosePreference=$VerbosePreference"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$DebugPreference=$DebugPreference"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$VerbosePreference=$VerbosePreference"
 
     $debug_var = if ($DebugPreference -gt 0) { 'DEBUG=1' } else { '' }
     $verbose_var = if ($VerbosePreference -gt 0) { 'VERBOSE=1' } else { '' }
@@ -300,12 +316,12 @@ function Uninstall-WslIpHandler {
         Write-Debug "Bash Uninstall Script returned:`n$bashUninstallScriptOutput"
     }
 
-    Write-Debug "${fn}: Removed Bash Autorun scripts."
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Removed Bash Autorun scripts."
     #endregion Remove Bash Autorun
 
     #region Restart WSL Instance
     wsl.exe -t $WslInstanceName
-    Write-Debug "${fn}: Restarted $WslInstanceName"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Restarted $WslInstanceName"
     #endregion Restart WSL Instance
 
     #region Remove WSL Instance Static IP from .wslconfig
@@ -314,22 +330,22 @@ function Uninstall-WslIpHandler {
     #endregion Remove WSL Instance Static IP from .wslconfig
 
     #region Remove WSL Instance IP Offset from .wslconfig
-    Write-Debug "${fn}: Removing IP address offset for $WslInstanceName from .wslconfig..."
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Removing IP address offset for $WslInstanceName from .wslconfig..."
     Remove-WslConfigValue (Get-WslIpOffsetSectionName) $WslInstanceName -Modified ([ref]$wslconfigModified)
     #endregion Remove WSL Instance IP Offset from .wslconfig
 
     #region Remove WSL Network Configuration from .wslconfig
-    Write-Debug "${fn}: Removing WSL Network Configuration for $WslInstanceName ..."
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Removing WSL Network Configuration for $WslInstanceName ..."
     Remove-WslNetworkConfig -Modified ([ref]$wslconfigModified)
     #endregion Remove WSL Network Configuration from .wslconfig
 
     #region Remove WSL Instance IP from windows hosts file
     $hostsModified = $false
-    Write-Debug "${fn}: Removing record for $WslInstanceName from Windows Hosts ..."
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Removing record for $WslInstanceName from Windows Hosts ..."
     $content = (Get-HostsFileContent)
-    Write-Debug "${fn}: Removing Host: $WslInstanceName from $($content.Count) Windows Hosts records ..."
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Removing Host: $WslInstanceName from $($content.Count) Windows Hosts records ..."
     $content = Remove-HostFromRecords -Records $content -HostName $WslInstanceName -Modified ([ref]$hostsModified)
-    Write-Debug "${fn}: Setting Windows Hosts file with $($content.Count) records ..."
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Setting Windows Hosts file with $($content.Count) records ..."
     #endregion Remove WSL Instance IP from windows hosts file
 
     #region Save Modified .wslconfig and hosts Files
@@ -337,13 +353,15 @@ function Uninstall-WslIpHandler {
     if ($hostsModified) { Write-HostsFileContent -Records $content }
     #endregion Save Modified .wslconfig and hosts Files
 
-    #region Remove Content from Powershell Profile
+    #region Remove Content from Powershell Profile and ScheduledTask
     # Remove Profile Content if there are no more Static IP assignments
     if ((Get-WslConfigSectionCount (Get-StaticIpAddressesSectionName)) -le 0) {
-        Write-Debug "${fn}: Removing Powershell Profile Modifications ..."
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Removing Powershell Profile Modifications ..."
         Remove-ProfileContent
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Removing Scheduled Task ..."
+        Remove-WslScheduledTask
     }
-    #endregion Remove Content from Powershell Profile
+    #endregion Remove Content from Powershell Profile and ScheduledTask
 
     Write-Host "PowerShell successfully uninstalled WSL-IpHandler from $WslInstanceName!"
 }
@@ -351,10 +369,10 @@ function Uninstall-WslIpHandler {
 function Set-ProfileContent {
     <#
     .SYNOPSIS
-    Modifies Powershell profile to set alias `wsl` -> Invoke-WslStatic
+    Modifies Powershell profile to set alias `wsl` -> Invoke-WslExe
 
     .DESCRIPTION
-    Modifies Powershell profile file (by default CurrentUserAllHosts) to set alias `wsl` -> Invoke-WslStatic.
+    Modifies Powershell profile file (by default CurrentUserAllHosts) to set alias `wsl` -> Invoke-WslExe.
 
     .PARAMETER ProfilePath
     Optional. Path to Powershell profile. Defaults to value of $Profile.CurrentUserAllhosts.
@@ -374,15 +392,16 @@ function Set-ProfileContent {
     #>
     [CmdletBinding()]
     param($ProfilePath = $profile.CurrentUserAllHosts)
-    $fn = $MyInvocation.MyCommand.Name
-    Write-Debug "${fn}: ProfilePath: $ProfilePath"
+
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: ProfilePath: $ProfilePath"
 
     $handlerContent = Get-ProfileContent
 
     $modulePath = Split-Path $MyInvocation.MyCommand.Module.Path
-    $modulePrefix = Split-Path $modulePath
+    $modulesFolder = Split-Path (Split-Path $modulePath)
 
-    if (-not $Env:PSModulePath.contains($modulePrefix, 'OrdinalIgnoreCase')) {
+    # If module was not installed in a standard location replace module name with module's path
+    if (-not $Env:PSModulePath.contains($modulesFolder, 'OrdinalIgnoreCase')) {
         $handlerContent = $handlerContent -replace 'Import-Module WSL-IpHandler', "Import-Module '$modulePath'"
     }
 
@@ -415,17 +434,19 @@ function Remove-ProfileContent {
     Optional. Path to Powershell profile. Defaults to value of $Profile.CurrentUserAllhosts.
     #>
     [CmdletBinding()]
-    param($ProfilePath = $profile.CurrentUserAllHosts)
-    $fn = $MyInvocation.MyCommand.Name
+    param($ProfilePath = $Profile.CurrentUserAllHosts)
 
-    Write-Debug "${fn}: ProfilePath: $ProfilePath"
+
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: ProfilePath: $ProfilePath"
 
     $handlerContent = Get-ProfileContent
 
     $modulePath = $MyInvocation.MyCommand.Module.Path
-    $moduleFolder = Split-Path $modulePath
+    $modulesFolder = Split-Path (Split-Path $modulePath)
 
-    if (-not $Env:PSModulePath.contains($moduleFolder, 'OrdinalIgnoreCase')) {
+    # If module was not installed in a standard location replace module name with module's path
+    if (-not $Env:PSModulePath.contains($modulesFolder, 'OrdinalIgnoreCase')) {
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$moduleFolder: $moduleFolder not in `$Env:PSModulePath"
         $handlerContent = $handlerContent -replace 'Import-Module WSL-IpHandler', "Import-Module '$modulePath'"
     }
 
@@ -491,7 +512,7 @@ function Set-WslInstanceStaticIpAddress {
         [Parameter(ParameterSetName = 'SaveHere')]
         [switch]$BackupWslConfig
     )
-    $fn = $MyInvocation.MyCommand.Name
+
 
     if ($PSCmdlet.ParameterSetName -eq 'SaveHere') {
         $localModified = $false
@@ -503,16 +524,16 @@ function Set-WslInstanceStaticIpAddress {
     if ($null -eq $WslInstanceIpAddress) {
         $existingIp = Get-WslConfigValue -SectionName $sectionName -KeyName $WslInstanceName -DefaultValue $null -Modified $Modified
         if ($existingIp) {
-            Write-Debug "${fn}: `$WslInstanceIpAddress is `$null. Using existing assignment:  for $WslInstanceName = $existingIp"
+            Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$WslInstanceIpAddress is `$null. Using existing assignment:  for $WslInstanceName = $existingIp"
             $WslInstanceIpAddress = $existingIp
         }
         else {
-            Write-Debug "${fn}: `$WslInstanceIpAddress is `$null. Getting Available Static Ip Address."
+            Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$WslInstanceIpAddress is `$null. Getting Available Static Ip Address."
             $WslInstanceIpAddress = Get-AvailableStaticIpAddress $GatewayIpAddress
         }
     }
 
-    Write-Debug "${fn}: `$WslInstanceName=$WslInstanceName `$GatewayIpAddress=$GatewayIpAddress `$PrefixLength=$PrefixLength `$WslInstanceIpAddress=$($WslInstanceIpAddress ? $WslInstanceIpAddress.IPAddressToString : "`$null")"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$WslInstanceName=$WslInstanceName `$GatewayIpAddress=$GatewayIpAddress `$PrefixLength=$PrefixLength `$WslInstanceIpAddress=$($WslInstanceIpAddress ? $WslInstanceIpAddress.IPAddressToString : "`$null")"
 
     $null = Test-ValidStaticIpAddress -IpAddress $WslInstanceIpAddress -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength
 
@@ -557,20 +578,20 @@ function Remove-WslInstanceStaticIpAddress {
         [Parameter(ParameterSetName = 'SaveHere')]
         [switch]$BackupWslConfig
     )
-    $fn = $MyInvocation.MyCommand.Name
+
     if ($PSCmdlet.ParameterSetName -eq 'SaveHere') {
         $localModified = $false
         $Modified = [ref]$localModified
     }
 
-    Write-Debug "${fn}: `$WslInstanceName=$WslInstanceName"
-    Write-Debug "${fn}: Before Calling Remove-WslConfigValue `$Modified=$($Modified.Value)"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$WslInstanceName=$WslInstanceName"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Before Calling Remove-WslConfigValue `$Modified=$($Modified.Value)"
 
     Remove-WslConfigValue (Get-StaticIpAddressesSectionName) $WslInstanceName -Modified $Modified
-    Write-Debug "${fn}: After Calling Remove-WslConfigValue `$Modified=$($Modified.Value)"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: After Calling Remove-WslConfigValue `$Modified=$($Modified.Value)"
 
     if ($PSCmdlet.ParameterSetName -eq 'SaveHere' -and $localModified) {
-        Write-Debug "${fn}: Calling Write-WslConfig -Backup:$BackupWslConfig"
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Calling Write-WslConfig -Backup:$BackupWslConfig"
         Write-WslConfig -Backup:$BackupWslConfig
     }
 }
@@ -623,7 +644,7 @@ function Set-WslNetworkConfig {
         [Parameter(ParameterSetName = 'SaveHere')]
         [switch]$BackupWslConfig
     )
-    $fn = $MyInvocation.MyCommand.Name
+
 
     if ($PSCmdlet.ParameterSetName -eq 'SaveHere') {
         $localModified = $false
@@ -631,7 +652,7 @@ function Set-WslNetworkConfig {
     }
 
     $DNSServerList = $DNSServerList ? $DNSServerList : $GatewayIpAddress
-    Write-Debug "${fn}: Seting Wsl Network Parameters: GatewayIpAddress=$GatewayIpAddress PrefixLength=$PrefixLength DNSServerList=$DNSServerList"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Seting Wsl Network Parameters: GatewayIpAddress=$GatewayIpAddress PrefixLength=$PrefixLength DNSServerList=$DNSServerList"
 
     Set-WslConfigValue (Get-NetworkSectionName) (Get-GatewayIpAddressKeyName) $GatewayIpAddress.IPAddressToString -Modified $Modified
 
@@ -748,56 +769,62 @@ function Set-WslNetworkAdapter {
         [Parameter()]
         [string[]]$DynamicAdapters = @('Ethernet', 'Default Switch')
     )
-    $fn = $MyInvocation.MyCommand.Name
+
     $networkSectionName = (Get-NetworkSectionName)
 
     $GatewayIpAddress ??= Get-WslConfigValue -SectionName $networkSectionName -KeyName (Get-GatewayIpAddressKeyName) -DefaultValue $null
 
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$GatewayIpAddress: $GatewayIpAddress"
+
     if ($null -eq $GatewayIpAddress) {
         $msg = 'Gateway IP Address is not specified neither as parameter nor in .wslconfig. WSL Hyper-V Network Adapter will be managed by Windows!'
-        Write-Warning $msg
-        return
+        Throw $msg
     }
 
     $PrefixLength = $PSBoundParameters.ContainsKey('PrefixLength') ? $PrefixLength : (Get-WslConfigValue -SectionName $networkSectionName -KeyName (Get-PrefixLengthKeyName) -DefaultValue 24)
 
     $DNSServerList = [string]::IsNullOrWhiteSpace($DNSServerList) ? (Get-WslConfigValue -SectionName $networkSectionName -KeyName (Get-DnsServersKeyName) -DefaultValue $GatewayIpAddress) : $DNSServerList
 
-    Write-Debug "${fn}: `$GatewayIpAddress='$GatewayIpAddress'; `$PrefixLength=$PrefixLength; `$DNSServerList='$DNSServerList'"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$GatewayIpAddress='$GatewayIpAddress'; `$PrefixLength=$PrefixLength; `$DNSServerList='$DNSServerList'"
 
-    $wslAlias = 'vEthernet (WSL)'
-    $wslAdapter = Get-NetIPAddress -InterfaceAlias $wslAlias -AddressFamily IPv4 -ErrorAction SilentlyContinue
+    $wslNetworkAlias = 'vEthernet (WSL)'
+    $wslNetworkConnection = Get-NetIPAddress -InterfaceAlias $wslNetworkAlias -AddressFamily IPv4 -ErrorAction SilentlyContinue
 
     # Check if there is existing WSL Adapter
-    if ($null -ne $wslAdapter) {
-        Write-Verbose "${fn}: Hyper-V VM Adapter 'WSL' already exists."
-        Write-Debug "${fn}: `$wslAdapter`n$($wslAdapter | Out-String)"
+    if ($null -ne $wslNetworkConnection) {
+        Write-Verbose "$($MyInvocation.MyCommand.Name) Hyper-V VM Adapter 'WSL' already exists."
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$wslNetworkConnection`n$($wslNetworkConnection | Out-String)"
 
         # Check if existing WSL Adapter has required settings
-        if ($wslAdapter.IPAddress -eq $GatewayIpAddress -and $wslAdapter.PrefixLength -eq $PrefixLength) {
+        if ($wslNetworkConnection.IPAddress -eq $GatewayIpAddress -and $wslNetworkConnection.PrefixLength -eq $PrefixLength) {
             Write-Verbose "Hyper-V VM Adapter 'WSL' already has required GatewayAddress: '$GatewayIpAddress' and PrefixLength: '$PrefixLength'!"
             return
         }
     }
 
     # Setup required WSL adapter
-    Write-Debug "${fn}: Shutting down all WSL instances..."
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Shutting down all WSL instances before Setting up WSL Network Adapter..."
     wsl.exe --shutdown
 
     . (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve) | Out-Null
     $setAdapterScript = Join-Path $PSScriptRoot 'Set-WslNetworkAdapter.ps1' -Resolve
-    $scriptArguments = @{
+
+    $scriptParameters = @{
         GatewayIpAddress = $GatewayIpAddress
         PrefixLength     = $PrefixLength
         DNSServerList    = $DNSServerList
         DynamicAdapters  = $DynamicAdapters
     }
-
+    $commonParameters = FilterCommonParameters $PSBoundParameters
     if (IsElevated) {
-        & $setAdapterScript @scriptArguments
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: & $setAdapterScript -ScriptParameters $(& {$args} @scriptParameters) $(& { $args } @commonParameters)"
+
+        & $setAdapterScript @scriptParameters @commonParameters
     }
     else {
-        Invoke-ScriptElevated $setAdapterScript -ScriptArguments $scriptArguments -ScriptCommonParameters $PSBoundParameters
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Invoke-ScriptElevated $setAdapterScript -ScriptParameters $(& {$args} @scriptParameters) $(& { $args } @commonParameters)"
+
+        Invoke-ScriptElevated $setAdapterScript -ScriptParameters $scriptParameters -Encode @commonParameters
     }
 }
 
@@ -820,13 +847,199 @@ function Remove-WslNetworkAdapter {
     . (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve) | Out-Null
     $removeAdapterScript = Join-Path $PSScriptRoot 'Remove-WslNetworkAdapter.ps1' -Resolve
 
-    & $removeAdapterScript
-    # if (IsElevated) {
-    #     & $removeAdapterScript
-    # }
-    # else {
-    #     Invoke-ScriptElevated $removeAdapterScript -ScriptCommonParameters $PSBoundParameters
-    # }
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: & $removeAdapterScript $(& {$args} @PsBoundParameters)"
+    & $removeAdapterScript @PsBoundParameters
+}
+
+function Set-WslScheduledTask {
+    <#
+    .SYNOPSIS
+    Creates a new Scheduled Task: WSL-IpHandlerTask that will be triggered at user LogOn.
+    This task execution is equivalent to running Set-WslNetworkAdapter command. It will create WSL Hyper-V Network Adapter when user logs on.
+
+    .DESCRIPTION
+    Creates Scheduled Task named 'WSL-IpHandlerTask' under 'WSL-IpHandler' folder.
+    The task will be executed with Highest level of privileges under SYSTEM account.
+    It will run in background without any interaction with user.
+    After it is finished there will be WSL Hyper-V network adapter with network properties specified with this command.
+
+    .PARAMETER GatewayIpAddress
+    Mandatory. IP v4 Address of the gateway. This IP Address will appear in properties of Network Adapter (vEthernet (WSL)).
+
+    .PARAMETER PrefixLength
+    Optional. Defaults to 24. Length of WSL Subnet.
+
+    .PARAMETER DNSServerList
+    Optional. Defaults to GatewayIpAddress.
+
+    .PARAMETER DynamicAdapters
+    Array of strings - names of Hyper-V Network Adapters that can be moved to other IP network space to free space for WSL adapter. Defaults to: `'Ethernet', 'Default Switch'`
+
+    .PARAMETER AnyUserLogOn
+    When this parameter is present - The Scheduled Task will be set to run when any user logs on. Otherwise (default behavior) - the task will run only when current user (who executed Install-WslIpHandler command) logs on.
+
+    .EXAMPLE
+    Set-WslScheduledTask -GatewayIpAddress 172.16.0.1
+
+    Creates scheduled task that will be executed on current user logon.
+
+    .EXAMPLE
+    Set-WslScheduledTask -GatewayIpAddress 172.16.0.1 -AllUsers
+
+    Creates scheduled task that will be executed when any user logs on.
+
+    .NOTES
+    The task created can be found in Task Scheduler UI.
+    #>
+    param (
+        [Parameter(Mandatory)]
+        [Alias('Gateway')]
+        [ipaddress]$GatewayIpAddress,
+
+        [Parameter()]
+        [Alias('Prefix')]
+        [int]$PrefixLength = 24,
+
+        [Parameter()]
+        [Alias('DNS')]
+        [string]$DNSServerList = $GatewayIpAddress, # String with Comma separated ipaddresses/hosts
+
+        [Parameter()]
+        [string[]]$DynamicAdapters = @('Ethernet', 'Default Switch'),
+
+        [switch]$AnyUserLogOn
+    )
+
+
+    $elevationScript = Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve
+    . $elevationScript
+
+    $scriptPath = Join-Path $PSScriptRoot 'Set-WslNetworkAdapter.ps1' -Resolve
+    $taskName = Get-ScheduledTaskName
+    $taskPath = Get-ScheduledTaskPath
+    $taskDescription = Get-ScheduledTaskDescription
+    $psExe = GetPowerShellExecutablePath
+
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Task Name: $taskName"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Task Path: $taskPath"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Task Description: $taskDescription"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Powershell Executable Path: $psExe"
+
+    $DynamicAdaptersString = ($DynamicAdapters | ForEach-Object { "'$_'" }) -join ','
+    $scriptArguments = @(
+        '-Gateway'
+        $GatewayIpAddress
+        '-Prefix'
+        $PrefixLength
+        '-DNS'
+        "'$DNSServerList'"
+        '-DynamicAdapters'
+        $DynamicAdaptersString
+    )
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: scriptArguments: $scriptArguments"
+
+    $psExeArguments = @(
+        '-NoLogo'
+        '-NoProfile'
+        '-WindowStyle Hidden'
+        '-Command'
+        "`""  # Opening Double Quote of Command Parameter with optional single quotes inside
+        "& '$scriptPath'"
+    )
+    $psExeArguments += @($scriptArguments -join ' ')
+    $psExeArguments += "`""  # Closing Double Quote of Command Parameter
+
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: psExeArguments: $psExeArguments"
+
+    $actionParams = @{
+        Execute  = "`"$psExe`""
+        Argument = $psExeArguments -join ' '
+    }
+    $action = New-ScheduledTaskAction @actionParams
+
+    $triggerParams = @{
+        AtLogOn = $true
+    }
+    if (-not $AnyUserLogOn) {
+        $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $triggerParams.User = $currentUser
+    }
+    $trigger = New-ScheduledTaskTrigger @triggerParams
+
+    $settingsParams = @{
+        DisallowHardTerminate   = $false
+        AllowStartIfOnBatteries = $true
+        DontStopOnIdleEnd       = $true
+        ExecutionTimeLimit      = (New-TimeSpan -Minutes 5)
+        Compatibility           = 'Win8'
+    }
+    $settings = New-ScheduledTaskSettingsSet @settingsParams
+
+    $registrationParams = @{
+        TaskName    = $taskName
+        TaskPath    = $taskPath
+        Description = $taskDescription
+        Action      = $action
+        Settings    = $settings
+        Trigger     = $trigger
+        RunLevel    = 'Highest'
+        Force       = $true
+        User        = 'NT AUTHORITY\SYSTEM'
+    }
+    if (IsElevated) {
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Invoking Register-ScheduledTask $registrationParams"
+        Register-ScheduledTask @registrationParams | Out-Null
+    }
+    else {
+        $command = @(
+            'Import-Module WSL-IpHandler;'
+            'Set-WslScheduledTask'
+        )
+        $command += $scriptArguments
+        $commandString = $command -join ' '
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Invoking Invoke-CommandElevated $commandString"
+        Invoke-CommandElevated $commandString -Encode
+    }
+}
+
+function Remove-WslScheduledTask {
+    <#
+    .SYNOPSIS
+    Removes WSL-IpHandlerTask Scheduled Task created with Set-WslScheduledTask command.
+
+    .EXAMPLE
+    Remove-WslScheduledTask
+    #>
+    [CmdletBinding()]
+    param ()
+
+    $elevationScript = Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve
+    . $elevationScript
+
+    $taskName = Get-ScheduledTaskName
+    $taskPath = Get-ScheduledTaskPath
+
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Checking if $taskName exists..."
+
+    $existingTask = Get-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction SilentlyContinue
+
+    if (-not $existingTask) {
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: $taskName does not exist - nothing to remove."
+        return
+    }
+
+    Write-Verbose "Removing Scheduled Task: ${taskPath}${taskName}"
+    if (IsElevated) {
+        Unregister-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Confirm:$false -ErrorAction SilentlyContinue
+    }
+    else {
+        $arguments = "-TaskName '$taskName' -TaskPath '$taskPath' -Confirm:`$false -ErrorAction SilentlyContinue"
+        Invoke-CommandElevated "Unregister-ScheduledTask $arguments"
+    }
+
+    if ((Get-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction SilentlyContinue)) {
+        Write-Error "Failed to remove Scheduled Task: ${taskPath}${taskName}"
+    }
 }
 
 function Test-WslInstallation {
@@ -863,7 +1076,7 @@ function Test-WslInstallation {
         [string]$WindowsHostName
     )
 
-    $fn = $MyInvocation.MyCommand.Name
+
     $networkSectionName = (Get-NetworkSectionName)
     $failed = $false
 
@@ -877,42 +1090,62 @@ function Test-WslInstallation {
     Write-Verbose "Testing Ping from WSL instance ${WslInstanceName}: `"$bashTestCommand`" ..."
     $wslTest = (wsl.exe -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$bashTestCommand`") -join "`n"
 
-    Write-Debug "${fn}: `$wslTest: $wslTest"
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$wslTest: $wslTest"
 
     if ($wslTest -notmatch ', 0% packet loss') {
         Write-Verbose "Ping from WSL Instance $WslInstanceName failed:`n$wslTest"
-        Write-Debug "${fn}: TypeOf `$wslTest: $($wslTest.Gettype())"
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: TypeOf `$wslTest: $($wslTest.Gettype())"
 
         $failed = $true
         $error_message += "Pinging $WindowsHostName from $WslInstanceName failed:`n$wslTest"
     }
 
     # Before testing WSL IP address - make sure WSL Instance is up and running
-    if (-not (Get-WslIsRunning $WslInstanceName)) {
-        $runCommand = 'sleep 1; exit'  # Even after 'exit' wsl instance should be running in background
-        Write-Debug "${fn}: Running WSL instance $WslInstanceName for testing ping from Windows."
-        $null = (& wsl.exe -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$runCommand`")
-    }
+    # if (-not (Get-WslIsRunning $WslInstanceName)) {
+    #     $runCommand = 'sleep 60; exit'  # Even after 'exit' wsl instance should be running in background
+    #     Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Running WSL instance $WslInstanceName for testing ping from Windows."
+    #     $wslJob = wsl.exe -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$runCommand`" &
+    #     Start-Sleep -Seconds 3  # let WSL startup before pinging
+    # }
 
-    if (Get-WslIsRunning $WslInstanceName) {
-        Write-Verbose "Testing Ping from Windows to WSL instance ${WslInstanceName} ..."
-        $windowsTest = $(ping -n 1 $WslHostName) -join "`n"
+    # if (Get-WslIsRunning $WslInstanceName) {
+    # Write-Verbose "Testing Ping from Windows to WSL instance ${WslInstanceName} ..."
+    # $windowsTest = $(ping -n 1 $WslHostName) -join "`n"
 
-        Write-Debug "${fn}: `$windowsTest: $windowsTest"
+    # Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$windowsTest: $windowsTest"
 
-        if ($windowsTest -notmatch 'Lost = 0 \(0% loss\)') {
-            Write-Verbose "Ping from Windows to WSL instance ${WslInstanceName} failed:`n$windowsTest"
-            $failed = $true
-            $error_message += "`nPinging $WslHostName from Windows failed:`n$windowsTest"
-        }
-    }
-    else {
+    # if ($windowsTest -notmatch 'Lost = 0 \(0% loss\)') {
+    #     Write-Verbose "Ping from Windows to WSL instance ${WslInstanceName} failed:`n$windowsTest"
+    #     $failed = $true
+    #     $error_message += "`nPinging $WslHostName from Windows failed:`n$windowsTest"
+    #     }
+    # }
+    # else {
+    #     $failed = $true
+    #     $error_message += "Could not start WSL Instance: $WslInstanceName to test Ping from Windows"
+    # }
+
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Starting WSL instance $WslInstanceName for testing ping from Windows."
+    $runCommand = 'sleep 30; exit'
+    $wslJob = wsl.exe -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$runCommand`" &
+    Start-Sleep -Seconds 3  # let WSL startup before pinging
+
+    Write-Verbose "Testing Ping from Windows to WSL instance ${WslInstanceName} ..."
+    $windowsTest = $(ping -n 1 $WslHostName) -join "`n"
+
+    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$windowsTest result: $windowsTest"
+
+    if ($windowsTest -notmatch 'Lost = 0 \(0% loss\)') {
+        Write-Verbose "Ping from Windows to WSL instance ${WslInstanceName} failed:`n$windowsTest"
         $failed = $true
-        $error_message += "Could not start WSL Instance: $WslInstanceName to test Ping from Windows"
+        $error_message += "`nPinging $WslHostName from Windows failed:`n$windowsTest"
     }
+
+    $wslJob.StopJob()
+    $wslJob.Dispose()
 
     if ($failed) {
-        Write-Verbose "${fn}: on $WslInstanceName Failed!"
+        Write-Verbose "$($MyInvocation.MyCommand.Name) on $WslInstanceName Failed!"
         Write-Error ($error_message -join "`n") -ErrorAction Stop
     }
     else {
@@ -948,7 +1181,7 @@ function Update-WslIpHandlerModule {
     Adding -GitExePath parameter will allow to use git.exe that is not on PATH.
     All files in this Module's folder will be removed before update!
     #>
-[CmdletBinding()]
+    [CmdletBinding()]
     param(
         [Parameter(ParameterSetName = 'Name+Git')]
         [Parameter(ParameterSetName = 'Path+Git')]
@@ -961,9 +1194,9 @@ function Update-WslIpHandlerModule {
         [switch]$Force
     )
     $params = @{
-        ModuleNameOrPath     = $MyInvocation.MyCommand.Module.ModuleBase
-        GithubUserName = $MyInvocation.MyCommand.Module.Author
-        Branch         = 'master'
+        ModuleNameOrPath = $MyInvocation.MyCommand.Module.ModuleBase
+        GithubUserName   = $MyInvocation.MyCommand.Module.Author
+        Branch           = 'master'
     }
     $updateScript = Join-Path $PSScriptRoot 'Update-WslIpHandlerModule.ps1' -Resolve
 
@@ -989,7 +1222,7 @@ function Uninstall-WslIpHandlerModule {
     }
 }
 
-function Invoke-WslStatic {
+function Invoke-WslExe {
     <#
     .SYNOPSIS
     Takes any parameters and passes them transparently to wsl.exe. If parameter(s) requires actually starting up WSL Instance - will set up WSL Network Adapter using settings in .wslconfig. Requires administrator privileges if required adapter is not active.
@@ -998,8 +1231,8 @@ function Invoke-WslStatic {
     This command acts a wrapper around `wsl.exe` taking all it's parameters and passing them along.
     Before actually executing `wsl.exe` this command checks if WSL Network Adapter with required parameters is active (i.e. checks if network parameters in .wslconfig are in effect). If active adapter parameters are different from those in .wslconfig - active adapter is removed and new one with required parameters is activated. Requires administrator privileges if required adapter is not active.
 
-    .PARAMETER arguments
-    All arguments accepted by wsl.exe
+    .PARAMETER Timeout
+    Number of seconds to wait for vEthernet (WSL) Network Connection to become available when WSL Hyper-V Network Adapter had to be created.
 
     .EXAMPLE
     wsl -l -v
@@ -1011,8 +1244,9 @@ function Invoke-WslStatic {
     Will check if WSL Network Adapter is active and if not initialize it. Then it will execute `wsl.exe -d Ubuntu`. Thus allowing to use WSL instances with static ip addressed without manual interaction with network settings, etc.
 
     .NOTES
-    During execution of Install-WslHandler, when a static mode of operation is specified, there will be an alias created: `wsl` for Invoke-WslStatic. When working in Powershell this alias shadows actual windows `wsl` command to enable effortless operation in Static IP Mode. When there is a need to execute actual windows `wsl` command from withing Powershell use `wsl.exe` (i.e. with extension) to execute native Windows command.
+    During execution of Install-WslHandler, when a static mode of operation is specified, there will be an alias created: `wsl` for Invoke-WslExe. When working in Powershell this alias shadows actual windows `wsl` command to enable effortless operation in Static IP Mode. When there is a need to execute actual windows `wsl` command from withing Powershell use `wsl.exe` (i.e. with extension) to execute native Windows command.
     #>
+    param([int]$Timeout = 30)
     function ArgsAreExec {
         param($arguments)
         $nonExecArgs = @(
@@ -1039,32 +1273,58 @@ function Invoke-WslStatic {
         }
         $allArgsAreExec
     }
-    $fn = $MyInvocation.MyCommand.Name
+    function IsWslNetworkAvailable {
+        if ($null -eq (Get-NetIPAddress -InterfaceAlias $vEthernetWsl -AddressFamily IPv4 -ErrorAction SilentlyContinue)) { $false }
+        else { $false }
+    }
     $argsCopy = $args.Clone()
+    $setWslAdapterParams = @{}
 
     $DebugPreferenceOriginal = $DebugPreference
     if ('-debug' -in $argsCopy) {
         $DebugPreference = 'Continue'
-        $argsCopy = $argsCopy | Where-Object { $_ -notlike '-debug' }
+        $argsCopy = ($argsCopy | Where-Object { $_ -notlike '-debug' }) ?? @()
+        $setWslAdapterParams.Debug = $true
     }
 
+    if ('-verbose' -in $argsCopy) {
+        $VerbosePreference = 'Continue'
+        $argsCopy = ($argsCopy | Where-Object { $_ -notlike '-verbose' }) ?? @()
+        $setWslAdapterParams.Verbose = $true
+    }
+
+    $vEthernetWsl = 'vEthernet (WSL)'
+    $timer = [system.diagnostics.stopwatch]::StartNew()
+
     if ($argsCopy.Count -eq 0 -or (ArgsAreExec $argsCopy)) {
-        Write-Debug "${fn}: `$args: $argsCopy"
-        Write-Debug "${fn}: Passed arguments require Setting WSL Network Adapter."
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$args: $argsCopy"
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Passed arguments require Setting WSL Network Adapter."
 
-        $networkSectionName = (Get-NetworkSectionName)
+        Set-WslNetworkAdapter @setWslAdapterParams
 
-        $GatewayIpAddress = Get-WslConfigValue -SectionName $networkSectionName -KeyName (Get-GatewayIpAddressKeyName) -DefaultValue $null
-
-        if ($null -ne $GatewayIpAddress) {
-            Set-WslNetworkAdapter
+        while ($timer.Elapsed.TotalSeconds -lt $Timeout -and (-not (IsWslNetworkAvailable))) {
+            $totalSecs = [math]::Round($timer.Elapsed.TotalSeconds, 0)
+            Write-Debug "Still waiting for WSL Network Connection to be initialized after [$totalSecs] seconds..."
+            Start-Sleep -Seconds 3
         }
     }
 
-    Write-Debug "${fn}: Invoking wsl.exe $argsCopy"
-    $DebugPreference = $DebugPreferenceOriginal
-    & wsl.exe @argsCopy
+    if ((IsWslNetworkAvailable)) {
+        $totalSecs = [math]::Round($timer.Elapsed.TotalSeconds, 0)
+        Write-Debug "$vEthernetWsl Network Connection has been initialized after [$totalSecs] seconds."
+
+        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Invoking wsl.exe $argsCopy"
+        $DebugPreference = $DebugPreferenceOriginal
+        & wsl.exe @argsCopy @PSBoundParameters
+    }
+    else {
+        $msg = "$vEthernetWsl Network is NOT available after $Timeout seconds of waiting. Try increasing timeout with 'wsl -Timeout 60'."
+        Throw $msg
+    }
+
 }
+
+Set-Alias -Name wsl -Value Invoke-WslExe
 
 Register-ArgumentCompleter -CommandName Install-WslIpHandler -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
 
