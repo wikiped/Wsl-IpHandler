@@ -1,4 +1,8 @@
-﻿$ModuleName = 'WSL-IpHandler'
+﻿[CmdletBinding()]param()
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version latest
+$ModuleName = 'WSL-IpHandler'
 
 function PromptForChoice {
     param(
@@ -16,9 +20,9 @@ function PromptForChoice {
 
 if ($PSVersionTable.PSVersion.Major -ne 7) {
     $promptParams = @{
-        Title = "Incompatible Powershell version detected: $($PSVersionTable.PSVersion)!"
-        Text = "$ModuleName has only been tested to work with Powershell Core version 7.1+. Please confirm if you want to continue installing the module:"
-        FirstOption = 'No'
+        Title        = "Incompatible Powershell version detected: $($PSVersionTable.PSVersion)!"
+        Text         = "$ModuleName has only been tested to work with Powershell Core version 7.1+. Please confirm if you want to continue installing the module:"
+        FirstOption  = 'No'
         SecondOption = 'Yes'
     }
     if ((PromptForChoice @promptParams) -eq 0) {
@@ -31,6 +35,10 @@ $ModulesDirectory = "$(Split-Path $Profile)\Modules"
 New-Item $ModulesDirectory -Type Directory -ErrorAction SilentlyContinue | Out-Null
 $ModulesDirectoryInfo = Get-Item $ModulesDirectory
 $targetDirectory = Join-Path $ModulesDirectoryInfo.FullName $ModuleName
+
+if ($targetDirectory -eq $ModulesDirectory) {
+    Write-Error "$ModuleName module directory can not be the same as all modules directory: $ModulesDirectory!" -ErrorAction Stop
+}
 
 Push-Location $ModulesDirectory
 
