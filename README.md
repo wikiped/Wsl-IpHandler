@@ -1,6 +1,10 @@
 # WSL IP Handler
 
-## Content
+<details>
+<summary>
+<strong>CONTENT</strong>
+<p></p>
+</summary>
 
 [Overview](#overview)
 
@@ -8,17 +12,23 @@
 
 [Where the module is installed?](#where-the-module-is-installed)
 
-[How does it work?]("#how-does-it-work")
+<details>
+<summary>
+<a href="#how-does-it-work">How does it work?</a>
+<p></p>
+</summary>
 
-&emsp;[How On-Demand mode works?](#how-on-demand-mode-works)
+&emsp;&emsp;[How On-Demand mode works?](#how-on-demand-mode-works)
 
-&emsp;[How On-Logon mode works?](#how-on-logon-mode-works)
+&emsp;&emsp;[How On-Logon mode works?](#how-on-logon-mode-works)
 
-&emsp;[What happens during WSL Instance startup?](#what-happens-during-wsl-instance-startup)
+&emsp;&emsp;[What happens during WSL Instance startup?](#what-happens-during-wsl-instance-startup)
 
-&emsp;[What happens when WSL Hyper-V Network Adapter is being setup?](#what-happens-when-wsl-hyper-v-network-adapter-is-being-setup)
+&emsp;&emsp;[What happens when WSL Hyper-V Network Adapter is being setup?](#what-happens-when-wsl-hyper-v-network-adapter-is-being-setup)
 
-&emsp;[Powershell Profile Modification](#powershell-profile-modification)
+&emsp;&emsp;[Powershell Profile Modification](#powershell-profile-modification)
+
+</details>
 
 [How to use this module?](#how-to-use-this-module)
 
@@ -33,6 +43,8 @@
 [Credits](#credits)
 
 [What's new\?](./RELEASES.md)
+
+</details>
 
 ---
 
@@ -72,9 +84,19 @@ In other words what WSL should have been doing out-of-the-box.
 
     [How to install Powershell Core.](https://docs.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.1)
 
-1. [WSL 2](https://github.com/microsoft/WSL) (has not been tested with WSL 1)
+1. [WSL 2](https://github.com/microsoft/WSL) (This module has not been tested with WSL 1)
 
 To download and copy the module to Modules folder of Powershell profile for Current User run the following commands from Powershell prompt:
+
+### Universal web installer
+
+Command below will download the installation script and will prompt you to choose whether to use `git.exe` (if `git` can be found in `PATH`) or download zip repository:
+
+```powershell
+Invoke-WebRequest https://raw.githubusercontent.com/wikiped/WSL-IpHandler/master/Install-WslIpHandlerFromGithub.ps1 | Select -ExpandProperty Content | Invoke-Expression
+```
+
+Otherwise you can use any of the below two methods to install the module.
 
 ### If `Git` is installed
 
@@ -115,7 +137,7 @@ There are two ways how IP Address persistance of WSL Hyper-V Network Adapter can
 
 - On-Demand: The adapter is created (if it is not present) or modified (if was created beforehand by Windows) to match the required network configuration when the user runs `wsl` command through Powershell session.
 
-- On-Logon: The adapter is created by a Scheduled Task that runs on user logon. This way the user does no have to use Powershell to ensure WSL adapter's network configuration matches required.
+- On-Logon: The adapter is created by a Scheduled Task that runs on user logon. This way the user does not have to use Powershell (interactively) to ensure WSL adapter's network configuration matches required.
 
 The following sections describe which files are modified (outside of module's directory) on Windows host and WSL instance(s).
 
@@ -173,9 +195,11 @@ When `wsl` [alias](#powershell-profile-modification) is executed from Powershell
 
 ### How On-Logon mode works?
 
-When `Install-WslIpHandler` is executed with parameter `-UseScheduledTaskOnUserLogOn` the module creates a new Scheduled Task named `WSL-IpHandlerTask` is created under `WSL-IpHandler` folder. The task has a trigger to run at user logon.
+When `Install-WslIpHandler` is executed with parameter `-UseScheduledTaskOnUserLogOn` the module creates a new Scheduled Task named `WSL-IpHandlerTask` under `WSL-IpHandler` folder. The task has a trigger to run at user logon.
 
-If there was parameter `-AnyUserLogOn` given to `Install-WslIpHandler` (along with `-UseScheduledTaskOnUserLogOn`) then the task will run at logon of ANY user. Otherwise the task will run only at logon of specific user - the one who executed `Install-WslIpHandler` command.
+If parameter `-AnyUserLogOn` was specified to `Install-WslIpHandler` (along with `-UseScheduledTaskOnUserLogOn`) then the task will run at logon of ANY user. Otherwise the task will run only at logon of specific user - the one who executed `Install-WslIpHandler` command.
+
+Since Scheduled Task runs the script in non-interactive mode in a hidden terminal window there will be no usual messages from the script. To be informed of the success/failures during execution of  Scheduled Task there are Toast Notifications which are enabled by default when `Install-WslIpHandler` is executed with parameter `-UseScheduledTaskOnUserLogOn`. To disable toast notifications run `Set-WslScheduledTask` without `-ShowToast` parameter. See `Get-Help Set-WslScheduledTask` for more information.
 
 > Note that it takes some time for Windows to execute its startup process (including logon tasks among other things). So it will take some time before WSL Hyper-V Network Adapter will become available.
 
@@ -206,13 +230,13 @@ Regardless of whether the module operates in On-Demand or On-Logon mode there a 
 
 1. Check if the adapter exists and is already configured as required. If yes - nothing is done.
 
-1. If the adapter is does not exist yes or mis-configured - it is removed (and `wsl --shutdown` is executed beforehand).
+1. If the adapter does not exist yet or is mis-configured - it is removed (`wsl --shutdown` is executed beforehand).
 
-1. Check if there are any other network connections having IP network configuration that overlaps (conflicts) with the required for WSL adater.
+1. Check if there are any other network connections having IP network configuration that overlaps (conflicts) with the one specified for WSL adater (through parameters or from `.wslconfig` file).
 
 1. If there are conflicts and overlapping network is from one of Hyper-V adapters (`Ethernet` or `Default Switch`) - conflicting adapter will be recreated to take IP network subnet that does not conflict with WSL Adapter.
 
-1. Any other conflicting network will cause the module to throw an error and it is user's responsibility to either choose a different IP Subnet for WSL adapter of reconfigure conflicting network.
+1. Any other conflicting network will cause the module to throw an error and it is up to the user to either choose a different IP Subnet for WSL adapter of reconfigure IP settings of conflicting network connection.
 
 1. When no conflicts are found (or they have been resolved) WSL adapter is created.
 

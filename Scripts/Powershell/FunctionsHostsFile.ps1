@@ -1,4 +1,14 @@
-﻿function Get-IpAddressPattern {
+﻿#region Debug Functions
+if (!(Test-Path function:\_@)) {
+    function script:_@ {
+        $parentInvocationInfo = Get-Variable MyInvocation -Scope 1 -ValueOnly
+        $parentCommandName = $parentInvocationInfo.MyCommand.Name ?? $MyInvocation.MyCommand.Name
+        "$parentCommandName [$($MyInvocation.ScriptLineNumber)]:"
+    }
+}
+#endregion Debug Functions
+
+function Get-IpAddressPattern {
     '(((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))\.){3}(((25[0-5]|(2[0-4]|1\d|[1-9]|)\d))(\s|$))'
 }
 
@@ -30,10 +40,22 @@ function Get-HostsFileContent {
     Get-Content $FilePath
 }
 
+function Get-IpAddressHostRecords {
+    param (
+        [Parameter()]
+        [ValidateScript( { Test-Path $_ -PathType Leaf } )]
+        [string]$FilePath
+    )
+    if (-not $PSBoundParameters.ContainsKey('FilePath')) {
+        $FilePath = Join-Path $Env:WinDir '\system32\Drivers\etc\hosts' -Resolve
+    }
+    Get-Content $FilePath | Where-Object { -not (Test-RecordIsComment $_) }
+}
+
 function Write-HostsFileContent {
     param (
         [Parameter(Mandatory, ValueFromPipeline)][AllowEmptyString()][AllowNull()]
-        [array]$Records,
+        [string[]]$Records,
 
         [Parameter()]
         [string]$FilePath
@@ -51,10 +73,10 @@ function Write-HostsFileContent {
 
     . (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve) | Out-Null
 
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Setting $FilePath with $($Records.Count) records."
+    Write-Debug "$(_@) Setting $FilePath with $($Records.Count) records."
 
     if (-not (IsElevated)) {
-        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Invoking Elevated Permissions ..."
+        Write-Debug "$(_@) Invoking Elevated Permissions ..."
         $Records = $Records -join "`n"
         $command = "Set-Content -Path `"$FilePath`" -Value `"$Records`" -Encoding ASCII -Confirm:`$False"
         Invoke-CommandElevated $command -Encode
@@ -75,8 +97,8 @@ function Test-RecordIsComment {
 
 function Test-RecordContainsIpAddress {
     [CmdLetBinding()]
-    param ([string]$Record, [string]$regexIpAddress)
-    $Record -match "^\s*$regexIpAddress"
+    param ([string]$Record, [ipaddress]$IpAddress)
+    $Record -match "^\s*$([regex]::Escape("$IpAddress"))\b"
 }
 
 function Test-RecordContainsHost {
@@ -86,17 +108,18 @@ function Test-RecordContainsHost {
         [string]$Record,
 
         [parameter(Mandatory)][ValidateNotNullOrEmpty()]
-        [string]$regexHostName
+        [string]$HostName
     )
     if ([string]::IsNullOrWhiteSpace($Record)) { return $false }
-    ($Record -replace '#.*' -replace '\s{2,}', ' ' -split ' ' | Where-Object { $_.Trim() -match "^${regexHostName}$" } | Measure-Object).Count -gt 0
+    ($Record -replace '#.*' -replace '\s{2,}', ' ' -split ' ' |
+        Where-Object { $_.Trim() -match "^$([regex]::Escape("$HostName"))$" } |
+        Measure-Object).Count -gt 0
 }
 
-function Test-IsHostAssignedToIpAddress {
+function Test-RecordContainsIpAddressAndHost {
     [CmdLetBinding()]
-    param ([string]$Record, [string]$regexIpAddress, [string]$regexHostName)
-    $ip_pattern = "^\s*$(Get-IpAddressPattern)"
-    ($Record -match $ip_pattern) -and (Test-RecordContainsHost $Record $regexHostName) -and -not (Test-RecordContainsIpAddress $Record $regexIpAddress)
+    param ([string]$Record, [ipaddress]$IpAddress, [string]$HostName)
+    -not (Test-RecordIsComment $Record) -and (Test-RecordContainsHost $Record $HostName) -and (Test-RecordContainsIpAddress $Record $IpAddress)
 }
 
 function Get-IpAddressHostsCommentTuple {
@@ -110,7 +133,7 @@ function Get-IpAddressHostsCommentTuple {
 
 function Get-HostsCount {
     [CmdLetBinding()]
-    param([Parameter(Mandatory)][array]$Hosts)
+    param([Parameter(Mandatory)][string]$Hosts)
     ($Hosts -split ' ').Count
 }
 
@@ -129,19 +152,38 @@ function Get-HostsCountFromRecord {
     }
 }
 
+function Get-HostForIpAddress {
+    [OutputType([string])]
+    param (
+        [Parameter(Mandatory)]
+        [ipaddress]$IpAddress
+    )
+    Get-IpAddressHostRecords |
+        Where-Object { Test-RecordContainsIpAddress $_ "$IpAddress" } |
+        ForEach-Object { (Get-IpAddressHostsCommentTuple $_)[1] } |
+        Select-Object -First 1
+}
+
 function New-IpAddressHostRecord {
-    [CmdLetBinding()]
     param(
+        [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
         [string]$IpAddress,
 
+        [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
         [string]$HostName,
 
+        [Parameter()]
         [string]$Comment
     )
-    if ($PSBoundParameters.ContainsKey('Comment')) {
-        $Comment += '  # Modified by WSL-IpHandler PowerShell Module'
+    if ($Comment) {
+        if ($Comment.Contains('WSL-IpHandler')) {
+            $Comment = '  # Modified by WSL-IpHandler PowerShell Module'
+        }
+        else {
+            $Comment += ' Modified by WSL-IpHandler PowerShell Module'
+        }
     }
     else {
         $Comment = '  # Created by WSL-IpHandler PowerShell Module'
@@ -154,7 +196,7 @@ function New-IpAddressHostRecord {
 function Add-HostToRecord {
     param (
         [Parameter(Mandatory)]
-        [array]$Record,
+        [string]$Record,
 
         [ValidateNotNullOrEmpty()]
         [string]$HostName,
@@ -164,12 +206,11 @@ function Add-HostToRecord {
 
         [switch]$ReplaceExistingHosts
     )
-
-    $regexHostName = [regex]::Escape($HostName)
-
+    Write-Debug "$(_@) `$Record: $($Record | Out-String)"
+    Write-Debug "$(_@) `$Record: $($Record.GetType())"
     $existingIp, $existingHosts, $comment = Get-IpAddressHostsCommentTuple $Record
 
-    if (Test-RecordContainsHost $_ $regexHostName) {
+    if (Test-RecordContainsHost $_ $HostName) {
         if ((Get-HostsCount $existingHosts) -gt 1 -and $ReplaceExistingHosts) {
             $Modified.Value = $true
             New-IpAddressHostRecord $existingIp $HostName $comment
@@ -191,7 +232,7 @@ function Add-HostToRecord {
 function Remove-HostFromRecords {
     param (
         [Parameter(Mandatory, ValueFromPipeline)][AllowNull()][AllowEmptyString()]
-        [array]$Records,
+        [string[]]$Records,
 
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
         [string]$HostName,
@@ -208,24 +249,23 @@ function Remove-HostFromRecords {
     if (!(Test-Path variable:Records)) { $Records = @() }
     if ($null -eq $Records) { $Records = @() }
 
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Before processing: `$Records.Count=$($Records.Count)"
+    Write-Debug "$(_@) Before processing: `$Records.Count=$($Records.Count)"
 
     $Records = $Records | ForEach-Object {
         if (Test-RecordIsComment $_) {
             $_  # This line is a comment - keep it as is
         }
         else {
-            $regexHostName = [regex]::Escape($HostName)
             $existingIp, $existingHosts, $comment = Get-IpAddressHostsCommentTuple $_
 
-            if (Test-RecordContainsHost $existingHosts $regexHostName) {
+            if (Test-RecordContainsHost $existingHosts $HostName) {
                 # Host is used for another IP - Remove host from this record
                 $hostsArray = $existingHosts -split ' '
                 $Modified.Value = $true  # host in use - we need to remove this host / record
 
                 if ($hostsArray.Count -gt 1) {
                     # It is NOT the only host -> modify record
-                    $newHosts = $hostsArray | Where-Object { -not (Test-RecordContainsHost $_ $regexHostName) }
+                    $newHosts = $hostsArray | Where-Object { -not (Test-RecordContainsHost $_ $HostName) }
                     New-IpAddressHostRecord $existingIp ($newHosts -join ' ') $comment
                 } # else It is the only host -> Don't return anythin -> Drop this record
             }
@@ -235,18 +275,18 @@ function Remove-HostFromRecords {
             }
         }
     }
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: After processing: `$Records.Count=$($Records.Count)"
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: After processing: `$Modified=$($Modified.Value)"
+    Write-Debug "$(_@) After processing: `$Records.Count=$($Records.Count)"
+    Write-Debug "$(_@) After processing: `$Modified=$($Modified.Value)"
     $Records
 }
 
-function Add-IpAddressHostToRecords {
+function Add-IpAddressHostRecord {
     param (
         [Parameter(Mandatory, ValueFromPipeline)][AllowEmptyString()][AllowNull()]
-        [array]$Records,
+        [string[]]$Records,
 
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
-        [string]$HostIpAddress,
+        [ipaddress]$HostIpAddress,
 
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
         [string]$HostName,
@@ -254,6 +294,7 @@ function Add-IpAddressHostToRecords {
         [Parameter(Mandatory)]
         [ref]$Modified,
 
+        [Parameter()]
         [switch]$ReplaceExistingHosts
     )
     $array = @($input)
@@ -261,28 +302,33 @@ function Add-IpAddressHostToRecords {
     if (!(Test-Path variable:Records)) { $Records = @() }
     if ($null -eq $Records) { $Records = @() }
 
-    $regexIpAddress = [Regex]::Escape($HostIpAddress)
     $RecordFound = $false
 
-    $Records = $Records | ForEach-Object {
+    $newRecords = $Records | ForEach-Object {
         if (Test-RecordIsComment $_) {
             $_  # This line is a comment - keep it as is
         }
-        elseif (Test-RecordContainsIpAddress $_ $regexIpAddress) {
-            $RecordFound = $true
+        elseif (Test-RecordContainsIpAddress $_ $HostIpAddress) {
+            Write-Debug "$(_@) $HostIpAddress was found in existing record: $_"
             if (-not $RecordFound) {
                 Add-HostToRecord -Record $_ -HostName $HostName -Modified $Modified -ReplaceExistingHosts:$ReplaceExistingHosts
+                Write-Debug "$(_@) $HostName was added to existing record: $_"
                 $RecordFound = $true
             }  # else Record has Correct Ip and Correct Host, but it's a duplicate -> Drop it
+            else {
+                Write-Debug "$(_@) Dropping duplicate record: $_"
+            }
         }
         else {
+            Write-Debug "$(_@) Removing $HostName from record: $_"
             Remove-HostFromRecords -Record $_ -HostName $HostName -Modified $Modified -RemoveAllOtherHosts:$ReplaceExistingHosts
         }
     }
     if (-not $RecordFound) {
         $newRecord = New-IpAddressHostRecord $HostIpAddress $HostName
-        $Records += $newRecord
+        $newRecords += $newRecord
+        Write-Debug "$(_@) Created new record: $newRecord"
         $Modified.Value = $true
     }
-    $Records
+    $newRecords
 }

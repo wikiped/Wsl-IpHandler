@@ -222,7 +222,7 @@ function Update-WithWebRequest {
     .PARAMETER GitExePath
     Path to git.exe if it can not be located with environment's PATH variable.
 
-    .PARAMETER DoNotUseGit
+    .PARAMETER NoGit
     If given will update module using Invoke-WebRequest command (built-in in Powershell) even if git.exe is on PATH.
 
     .PARAMETER Force
@@ -234,7 +234,7 @@ function Update-WithWebRequest {
     Will use git.exe (that is on PATH) to update module SomeModuleToBeUpdated (if the module has been installed from GitHub in a first place!)
 
     .EXAMPLE
-    Update-ModuleFromGithub SomeModuleToBeUpdated githubuser -DoNotUseGit
+    Update-ModuleFromGithub SomeModuleToBeUpdated githubuser -NoGit
 
     Will download master.zip from https://github.com/githubuser/SomModuleToBeUpdated
 
@@ -258,11 +258,14 @@ function Update-ModuleFromGithub {
         [string]$Branch = 'master',
 
         [Parameter(ParameterSetName = 'Git')]
+        [ValidateScript({ Test-Path $_ -PathType Leaf -Include 'git.exe' })]
         [Alias('Git')]
         [string]$GitExePath,
 
-        [switch]$DoNotUseGit,
+        [Parameter()]
+        [switch]$NoGit,
 
+        [Parameter()]
         [switch]$Force
     )
     if (Test-Path $ModuleNameOrPath) {
@@ -314,26 +317,25 @@ function Update-ModuleFromGithub {
     }
 
     if ($updateIsNeeded) {
-        if ($GitExePath -and -not $DoNotUseGit) {
-            $gitParams.ModuleFolderPath = $ModulePath
-            $gitParams.GitExePath = $GitExePath
-            Write-Debug "Invoking Update-WithGit with parameters: $($gitParams | Out-String)"
-            # Update-WithGit @gitParams
+        try {
+            if ($GitExePath -and -not $NoGit) {
+                $gitParams.ModuleFolderPath = $ModulePath
+                $gitParams.GitExePath = $GitExePath
+                Write-Debug "Invoking Update-WithGit with parameters: $($gitParams | Out-String)"
+                Update-WithGit @gitParams
+            }
+            else {
+                $httpParams.ModuleFolderPath = $ModulePath
+                Write-Debug "Invoking Update-WithWebRequest with parameters: $($httpParams | Out-String)"
+                Update-WithWebRequest @httpParams
+            }
         }
-        else {
-            $httpParams.ModuleFolderPath = $ModulePath
-            Write-Debug "Invoking Update-WithWebRequest with parameters: $($httpParams | Out-String)"
-            # Update-WithWebRequest @httpParams
+        catch {
+            Write-Error "There was an error while updating WSL-IpHandler Module: $($_.Exception.Message)"
         }
-
-        if ($Error) {
-            Write-Error "There was an error while updating WSL-IpHandler Module: $($Error[0])"
-        }
-        else {
-            Remove-Module $ModuleName -Force -ea SilentlyContinue
-            Import-Module $ModulePath -Force
-            Write-Host 'WSL-IpHandler Module was successfully updated and imported!'
-        }
+        Remove-Module $ModuleName -Force -ea SilentlyContinue
+        Import-Module $ModulePath -Force
+        Write-Host 'WSL-IpHandler Module was successfully updated and imported!'
     }
     else {
         Write-Host "The latest version of '$ModuleName' is already installed: $($moduleInfo.Version)"

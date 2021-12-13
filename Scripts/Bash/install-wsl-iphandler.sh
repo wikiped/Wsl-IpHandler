@@ -1,44 +1,35 @@
 #!/usr/bin/env bash
-
+echo  "ID: $EUID Starting $0 $*"
 if [[ $EUID != 0 ]]; then
-    sudo "$0" "$@"
+    sudo -E env DEBUG="${DEBUG:-}" VERBOSE="${VERBOSE:-}" "$0" "$@"
     exit $?
 fi
 
-set -o errexit
-set -o ignoreeof
-set -o pipefail
-
-import() {
-	local filename
-	filename="$1"
-	local script_path
-	script_path="$(dirname -- "$0")"
-	readonly script_path
+resolve() {
+	local -r filename="$1"
+	local -r script_path="$(dirname -- "$0")"
 	local -r filepath="${script_path}/$filename"
-	if [[ ! -f "${filepath}" ]]; then
+	if [[ -f "${filepath}" ]]; then
+		printf '%s' "${filepath}"
+	else
 		printf '[FATAL] Could not find %s\n' "${filepath}" 1>&2
 		exit 1
 	fi
-	# shellcheck disable=SC1090
-	if ! source "$filepath"; then
-		printf '[FATAL] Could not source %s\n' "$filepath" 1>&2
-		exit 1
-	else
-		echo_verbose "Successfully imported: $filename"
-	fi
 }
 
-import "functions.sh"
-
-trap 'error ${LINENO}' ERR
+#shellcheck source=/dev/null
+source "$(resolve functions.sh)"
 
 echo_verbose "Bash Installing WSL-IpHandler..."
 
 # Prcess Incoming Arguments
-echo_verbose "Processing Incoming Arguments..."
-echo_debug "DEBUG=$DEBUG" $LINENO
-echo_debug "VERBOSE=$VERBOSE" $LINENO
+echo_debug "Starting '$0' with User ID: $EUID" ${LINENO}
+echo_debug "$0 Processing Incoming Arguments:" ${LINENO}
+echo_debug "$*" ${LINENO}
+echo_debug "Current Directory: '$(pwd)'" ${LINENO}
+echo_debug "DEBUG=${DEBUG:-}" ${LINENO}
+echo_debug "VERBOSE=${VERBOSE:-}" ${LINENO}
+
 script_source="$(wslpath "$1" 2>/dev/null)"
 test -f "${script_source}" || error ${LINENO} "File Not Found: $script_source"
 
@@ -90,7 +81,7 @@ echo_verbose "Copied Autorun Script: $script_target"
 # Edit Autorun Script to use actual path to powershell script which edits windows hosts file
 echo_verbose "Editing Autorun Script to use actual path to powershell script..."
 var_name='win_hosts_edit_script'
-echo_debug "win_hosts_edit_script_path: $win_hosts_edit_script_path"
+echo_debug "win_hosts_edit_script_path: $win_hosts_edit_script_path" ${LINENO}
 sed -i "s%${var_name}=.*$%${var_name}=\"${win_hosts_edit_script_path//\\/\\\\}\"%" "$script_target"
 echo_verbose "Finished Editing Autorun Script to use actual path to powershell script."
 

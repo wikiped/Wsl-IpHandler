@@ -222,7 +222,7 @@ ip_addr_del() {
 }
 
 get_nameserver_ip() {
-	tail -1 /etc/resolv.conf | cut -d' ' -f2 2>/dev/null || error "${LINENO}" "Error parsing IP" 5
+	tail -1 /etc/resolv.conf | cut -d' ' -f2 2>/dev/null || error "${LINENO}" "Error parsing nameserver IP" 5
 }
 
 get_default_gateway_ip() {
@@ -383,7 +383,7 @@ main() {
 	# Process locally Windows Host and IP
 	local windows_ip
 	windows_ip="$(get_nameserver_ip)"
-	test $? || error "${LINENO}" "get_nameserver_ip failed" 7
+	test -n "$windows_ip" || error "${LINENO}" "get_nameserver_ip failed" 7
 	echo_debug "windows_ip=$windows_ip"
 
 	local windows_host

@@ -5,12 +5,11 @@
 #
 
 @{
-
     # Script module or binary module file associated with this manifest.
     RootModule        = 'WSL-IpHandler'
 
     # Version number of this module.
-    ModuleVersion     = '0.10.3'
+    ModuleVersion     = '0.11.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -82,6 +81,9 @@
         'Invoke-WslExe'
         'Update-WslIpHandlerModule'
         'Uninstall-WslIpHandlerModule'
+        'Install-WslBashScripts'
+        'Update-WslBashScripts'
+        'Uninstall-WslBashScripts'
     )
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
@@ -107,6 +109,7 @@
         'functions.sh'
         'install-wsl-iphandler.sh'
         'uninstall-wsl-iphandler.sh'
+        'update-wsl-iphandler.sh'
         'wsl-iphandler.sh'
         'README.md'
         'RELEASES.md'
@@ -116,10 +119,11 @@
     # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
     PrivateData       = @{
         ScriptNames     = @{
-            WinHostsEdit  = 'WSL-WinHostsEdit.ps1'
-            BashInstall   = 'install-wsl-iphandler.sh'
-            BashUninstall = 'uninstall-wsl-iphandler.sh'
-            BashAutorun   = 'wsl-iphandler.sh'
+            WinHostsEdit  = 'Scripts\Powershell\WSL-WinHostsEdit.ps1'
+            BashInstall   = 'Scripts\Bash\install-wsl-iphandler.sh'
+            BashUninstall = 'Scripts\Bash\uninstall-wsl-iphandler.sh'
+            BashUpdate    = 'Scripts\Bash\update-wsl-iphandler.sh'
+            BashAutorun   = 'Scripts\Bash\wsl-iphandler.sh'
         }
 
         ScriptLocations = @{
@@ -134,6 +138,7 @@
             PrefixLengthKeyName          = 'prefix_length'
             DnsServersKeyName            = 'dns_servers'
             WindowsHostNameKeyName       = 'windows_host_name'
+            DynamicAdaptersKeyName       = 'dynamic_adapters'
         }
 
         ScheduledTask   = @{
@@ -150,19 +155,19 @@
 
         PSData          = @{
             # Tags applied to this module. These help with module discovery in online galleries.
-            Tags       = @('WSL', 'IP', 'IPAddress', 'Network', 'Subnet')
+            Tags         = @('WSL', 'IP', 'IPAddress', 'Network', 'Subnet')
 
             # A URL to the license for this module.
-            LicenseUri = 'https://github.com/wikiped/WSL-IpHandler/blob/master/LICENSE.txt'
+            LicenseUri   = 'https://github.com/wikiped/WSL-IpHandler/blob/master/LICENSE.txt'
 
             # A URL to the main website for this project.
-            ProjectUri = 'https://github.com/wikiped/WSL-IpHandler'
+            ProjectUri   = 'https://github.com/wikiped/WSL-IpHandler'
 
             # A URL to an icon representing this module.
             # IconUri = ''
 
             # ReleaseNotes of this module
-            # ReleaseNotes = ''
+            ReleaseNotes = 'https://github.com/wikiped/WSL-IpHandler/blob/master/RELEASES.txt'
 
             # Prerelease string of this module
             # Prerelease = ''

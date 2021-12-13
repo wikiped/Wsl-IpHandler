@@ -1,4 +1,3 @@
-[CmdletBinding()]
 param(
     [Parameter(Mandatory, Position = 0)]
     [Alias('Gateway')]
@@ -12,25 +11,42 @@ param(
     [Alias('DNS')]
     [string]$DNSServerList, # Comma separated ipaddresses/hosts
 
-    [Parameter()]
+    [Parameter(Mandatory)]
+    [ValidateNotNullOrEmpty()]
     [Alias('Name')]
-    [string]$VirtualAdapterName = 'WSL',
+    [string]$VirtualAdapterName,
 
     [Parameter()]
     [string[]]$DynamicAdapters = @('Ethernet', 'Default Switch')
 )
-Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
 
 . (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve) | Out-Null
 
 if (-not (IsElevated)) {
+    Write-Debug "Invoking: Invoke-ScriptElevated $($MyInvocation.MyCommand.Path) -ScriptParameters $(& {$args} @PSBoundParameters)"
     Invoke-ScriptElevated $MyInvocation.MyCommand.Path -ScriptParameters $PSBoundParameters
+    exit
 }
 
-$commonParameters = FilterCommonParameters $PSBoundParameters
-$removeNetworkScript = Join-Path $PSScriptRoot 'Remove-WslNetworkAdapter.ps1' -Resolve
-& $removeNetworkScript $VirtualAdapterName @commonParameters
+#region Debug Functions
+if (!(Test-Path function:\_@)) {
+    Script:function script:_@ {
+        $parentInvocationInfo = Get-Variable MyInvocation -Scope 1 -ValueOnly
+        $parentCommandName = $parentInvocationInfo.MyCommand.Name ?? $MyInvocation.MyCommand.Name
+        "$parentCommandName [$($MyInvocation.ScriptLineNumber)]:"
+    }
+}
+#endregion Debug Functions
+
+$commonParameters = @{}
+if ($VerbosePreference -eq 'Continue') {$commonParameters.Verbose = $true}
+if ($DebugPreference -eq 'Continue') {$commonParameters.Debug = $true}
+Write-Debug "$(_@) `$commonParameters: $(& {$args} @commonParameters)"
+
+$removeNetworkScript = Join-Path $PSScriptRoot 'Remove-VirtualNetworkAdapter.ps1' -Resolve
+& $removeNetworkScript -VirtualAdapterName $VirtualAdapterName @commonParameters
 
 if ([string]::IsNullOrWhiteSpace($VirtualAdapterName)) {
     $VirtualAdapterName = 'WSL'
@@ -49,8 +65,9 @@ if ([string]::IsNullOrWhiteSpace($DNSServerList)) {
 }
 
 $ipNetModuleName = 'IPNetwork'
-$ipNetModule = Join-Path $PSScriptRoot "$ipNetModuleName.psm1" -Resolve
+$ipNetModule = Join-Path $PSScriptRoot "..\..\SubModules\$ipNetModuleName.psm1" -Resolve
 Import-Module $ipNetModule -Verbose:$false -Debug:$false | Out-Null
+
 function Get-OverlappingNetworkConnectionsSplit {
     param (
         [Parameter(Mandatory)]
@@ -98,16 +115,14 @@ function Get-OverlappingNetworkConnectionsSplit {
                 }
             }
     }
-
     $result
 }
 
-
-Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: VirtualAdapterName: $VirtualAdapterName"
-Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: GatewayIpAddress: $GatewayIpAddress"
-Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: PrefixLength: $PrefixLength"
-Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: DNSServerList: $DNSServerList"
-Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: DynamicAdapters: $DynamicAdapters"
+Write-Debug "$(_@) VirtualAdapterName: $VirtualAdapterName"
+Write-Debug "$(_@) GatewayIpAddress: $GatewayIpAddress"
+Write-Debug "$(_@) PrefixLength: $PrefixLength"
+Write-Debug "$(_@) DNSServerList: $DNSServerList"
+Write-Debug "$(_@) DynamicAdapters: $DynamicAdapters"
 
 $ipObj = Get-IpNet -IPAddress $GatewayIpAddress -PrefixLength $PrefixLength
 
@@ -116,7 +131,7 @@ $networkParameters = @{
     GatewayAddress = $GatewayIpAddress
     DNSServerList  = $DNSServerList
 }
-Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: networkParameters: $(& {$args} @networkParameters)"
+Write-Debug "$(_@) networkParameters: $(& {$args} @networkParameters)"
 
 $networkParametersAsString = ($networkParameters.GetEnumerator() |
         ForEach-Object { "$($_.Name)=$($_.Value)" }) -join '; '
@@ -126,33 +141,33 @@ Write-Verbose "Creating new Hyper-V VM Adapter: '$VirtualAdapterName' with $netw
 $errorMessage = @("Cannot create Hyper-V VM Adapter '$VirtualAdapterName' with $networkParametersAsString, because it's subnet $($ipObj.CIDR) overlaps with the following Network Connection(s):")
 
 $hnsModuleName = 'HNS'
-$hnsModule = Join-Path $PSScriptRoot "$hnsModuleName.psm1" -Resolve
+$hnsModule = Join-Path $PSScriptRoot "..\..\SubModules\$hnsModuleName.psm1" -Resolve
 Import-Module $hnsModule -Verbose:$false -Debug:$false | Out-Null
 
 $overlappingConnections = Get-OverlappingNetworkConnectionsSplit -AdapterName $VirtualAdapterName -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
 
 if ($overlappingConnections.Dynamic) {
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Overlapping Dynamic Connections: $($overlappingConnections.Dynamic.InterfaceAlias -join '; ')"
+    Write-Debug "$(_@) Overlapping Dynamic Connections: $($overlappingConnections.Dynamic.InterfaceAlias -join '; ')"
     foreach ($connection in $overlappingConnections.Dynamic) {
         if ($connection.InterfaceAlias -match 'vEthernet \((?<adapter_name>.*)\).*') {
             $adapterName = $matches.adapter_name
             if ($adapterName) {
                 $adapterId = Get-HnsNetworkId $adapterName
                 if ($adapterId) {
-                    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Overlapping adapter to reallocate: '$adapterName' with Id: $adapterId."
+                    Write-Debug "$(_@) Overlapping adapter to reallocate: '$adapterName' with Id: $adapterId."
                     $adapter = Get-HnsNetworkEx -Id $adapterId
-                    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Overlapping adapter properties:`n$($adapter | Out-String)"
+                    Write-Debug "$(_@) Overlapping adapter properties:`n$($adapter | Out-String)"
                     $currentAddressPrefix = Get-IpNet -CIDR $adapter.Subnets[0].AddressPrefix
 
                     #TODO The subnetsToFitIn array ideally should be updated here to reflect the reallocation that might have happened before
                     $subnetsToFitIn = @($overlappingConnections.Dynamic |
                             ForEach-Object { "$($_.IPAddress)/$($_.PrefixLength)" } |
                             Select-Object -Unique)
-                    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Subnets to find free space within: '$($subnetsToFitIn -join '; ')'."
+                    Write-Debug "$(_@) Subnets to find free space within: '$($subnetsToFitIn -join '; ')'."
 
                     $newAddressPrefix = $currentAddressPrefix.FindFreeSubnet($subnetsToFitIn)
-                    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: New Subnet AddressPrefix: $newAddressPrefix for adapter: '$adapterName'."
-                    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Properties of existing adapter:`n$($adapter | Out-String)"
+                    Write-Debug "$(_@) New Subnet AddressPrefix: $newAddressPrefix for adapter: '$adapterName'."
+                    Write-Debug "$(_@) Properties of existing adapter:`n$($adapter | Out-String)"
 
                     $newIpNet = Get-IpNet -CIDR $newAddressPrefix
 
@@ -160,27 +175,30 @@ if ($overlappingConnections.Dynamic) {
                         GatewayIpAddress = $newIpNet.IPAddress.Add()
                         AddressPrefix    = $newAddressPrefix
                     }
-                    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Modified parameters of '$adapterName' Adapter to Re-Create:`n$($params | Out-String)"
+                    Write-Debug "$(_@) Modified parameters of '$adapterName' Adapter to Re-Create:`n$($params | Out-String)"
 
                     $reCreatedAdapter = Set-HnsNetworkEx -Id $adapterId @params
 
-                    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Created Adapter: '$adapterName' with Id: $adapterId. with modified parameters:`n$($reCreatedAdapter | Out-String)"
+                    Write-Debug "$(_@) Created Adapter: '$adapterName' with Id: $adapterId. with modified parameters:`n$($reCreatedAdapter | Out-String)"
                 }
                 else {
                     $errorMessage += "'$($connection.InterfaceAlias)' with IP Address/PrefixLength: $($conn.IPAddress)/$($conn.PrefixLength)"
                     $errorMessage += 'However Hyper-V Network adapter corresponding to this connection cannot be found. Try restarting Windows to fix this problem.'
-                    Throw ($errorMessage -join "`n")
+                    $msg = $errorMessage -join "`n"
+                    Throw "$msg"
                 }
             }
             else {
                 $errorMessage += "There was was Error extracting Hyper-V Network Adapter Name from this connection's Alias: '$($connection.InterfaceAlias)"
-                Throw ($errorMessage -join "`n")
+                $msg = $errorMessage -join "`n"
+                Throw "$msg"
             }
         }
         else {
             $errorMessage += "Network Connection's Interface Alias: '$($connection.InterfaceAlias)
             unexpectedly did not match pattern: 'vEthernet \((.*)\).*'"
-            Throw ($errorMessage -join "`n")
+            $msg = $errorMessage -join "`n"
+            Throw "$msg"
         }
     }
 }
@@ -191,7 +209,8 @@ if ($overlappingConnections.Static) {
         $errorMessage += "'$($conn.InterfaceAlias)' with IP Address/PrefixLength: $($conn.IPAddress)/$($conn.PrefixLength)"
     }
     $errorMessage += "Choose another IP Address for WSL Subnet or Change IP Addresses of Network Connection(s) above in Windows Setting App: 'Network and Internet Settings' -> 'Change Adapter Options'."
-    Throw ($errorMessage -join "`n")
+    $msg = $errorMessage -join "`n"
+    Throw "$msg"
 }
 
 switch ($VirtualAdapterName) {
@@ -201,7 +220,7 @@ switch ($VirtualAdapterName) {
     'Default Switch' {
         $Flags = 11  # "EnableDnsProxy" (1), "EnableDhcpServer" (2), "IsolateVSwitch" (8)
     }
-    Default { ThrowTerminatingError "Parameter 'VirtualAdapterName' in $($MyInvocation.MyCommand.Name) can be one of { 'WSL' | 'Default Switch' }, not '$VirtualAdapterName'." }
+    Default { Throw "Parameter 'VirtualAdapterName' in $($MyInvocation.MyCommand.Name) can be one of { 'WSL' | 'Default Switch' }, not '$VirtualAdapterName'." }
 }
 
 $networkId = Get-HnsNetworkId $VirtualAdapterName
@@ -218,28 +237,29 @@ New-HnsNetworkEx -Id $NetworkId -SettingsJsonString $networkSetting | Out-Null
 
 $hnsNetwork = Get-HnsNetworkEx -Id $networkId -ErrorAction SilentlyContinue
 
-Remove-Module $ipNetModuleName -Verbose:$false -Debug:$false
-Remove-Module $hnsModuleName -Verbose:$false -Debug:$false
+Remove-Module $ipNetModuleName -Verbose:$false -Debug:$false -ErrorAction SilentlyContinue
+Remove-Module $hnsModuleName -Verbose:$false -Debug:$false -ErrorAction SilentlyContinue
 
 if ($null -eq $hnsNetwork) {
-    ThrowTerminatingError "Failed to create Hyper-V VM Adapter: '$VirtualAdapterName': $networkParametersAsString"
+    $msg = "Failed to create Hyper-V VM Adapter: '$VirtualAdapterName': $networkParametersAsString"
+    Throw "$msg"
 }
 else {
-    $originalErrorActionPreference = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-
     $hnsNetworkSubnet = $hnsNetwork.Subnets[0]
 
     if ($hnsNetworkSubnet.GatewayAddress -ne $networkParameters.GatewayAddress) {
-        ThrowTerminatingError "New Hyper-V VM Adapter: '$VirtualAdapterName' was created, but actual GatewayAddress: $($hnsNetworkSubnet.GatewayAddress) is different from required: $($networkParameters.GatewayAddress)"
+        $msg = "New Hyper-V VM Adapter: '$VirtualAdapterName' was created, but actual GatewayAddress: $($hnsNetworkSubnet.GatewayAddress) is different from required: $($networkParameters.GatewayAddress)"
+        Throw "$msg"
     }
 
     if ($hnsNetworkSubnet.AddressPrefix -ne $networkParameters.AddressPrefix) {
-        ThrowTerminatingError "New Hyper-V VM Adapter: '$VirtualAdapterName' was created, but actual AddressPrefix: $($hnsNetworkSubnet.AddressPrefix) is different from required: $($networkParameters.AddressPrefix)"
+        $msg = "New Hyper-V VM Adapter: '$VirtualAdapterName' was created, but actual AddressPrefix: $($hnsNetworkSubnet.AddressPrefix) is different from required: $($networkParameters.AddressPrefix)"
+        Throw "$msg"
     }
 
     if ($hnsNetwork.DNSServerList -ne $networkParameters.DNSServerList) {
-        ThrowTerminatingError "New Hyper-V VM Adapter: '$VirtualAdapterName' was created, but actual DNSServerList: $($hnsNetwork.DNSServerList) is different from required: $($networkParameters.DNSServerList)"
+        $msg = "New Hyper-V VM Adapter: '$VirtualAdapterName' was created, but actual DNSServerList: $($hnsNetwork.DNSServerList) is different from required: $($networkParameters.DNSServerList)"
+        Throw "$msg"
     }
 
     $vEthernetName = "vEthernet ($VirtualAdapterName)"
@@ -247,24 +267,27 @@ else {
     $networkAdapter = Get-NetAdapter -Name $vEthernetName
 
     if ($null -eq $networkAdapter) {
-        Throw "Network Adapter: '$vEthernetName' was not created as expected!"
+        $msg = "Network Adapter: '$vEthernetName' was not created as expected!"
+        Throw "$msg"
     }
 
     if ($networkAdapter.Status -ne 'Up') {
-        Throw "Network Adapter: '$vEthernetName' was created, but is not active!"
+        $msg = "Network Adapter: '$vEthernetName' was created, but is not active!"
+        Throw "$msg"
     }
 
     $netIpAddress = Get-NetIPAddress -InterfaceAlias $vEthernetName -AddressFamily IPv4
     if ($GatewayIpAddress -ne $netIpAddress.IPAddress) {
-        Throw "Actual IP Address of Network Adapter: '$vEthernetName': $($netIpAddress.IPAddress) is different from required: $GatewayIpAddress"
+        $msg = "Actual IP Address of Network Adapter: '$vEthernetName': $($netIpAddress.IPAddress) is different from required: $GatewayIpAddress"
+        Throw "$msg"
     }
-
-    $ErrorActionPreference = $originalErrorActionPreference
 
     if ($PrefixLength -ne $netIpAddress.PrefixLength) {
-        Throw "Actual PrefixLength of Network Adapter: '$vEthernetName': $($netIpAddress.PrefixLength) is different from required: $PrefixLength"
+        $msg = "Actual PrefixLength of Network Adapter: '$vEthernetName': $($netIpAddress.PrefixLength) is different from required: $PrefixLength"
+        Throw "$msg"
     }
 
-    $msgCreated = "Created New Hyper-V VM Adapter: '$VirtualAdapterName'"
-    Write-Verbose "${msgCreated} with $networkParametersAsString"
+    $msg = "Created New Hyper-V VM Adapter: '$VirtualAdapterName' with Gateway: $GatewayIpAddress and Prefix: $PrefixLength"
+    Write-Verbose "$msg"
+    Write-Output "$msg"
 }

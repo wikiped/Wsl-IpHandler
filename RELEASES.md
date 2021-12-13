@@ -2,6 +2,14 @@
 
 [Back to Overview](./README.md)
 
+## `0.11.0`
+
+- Added Toast Notifications feature to the Scheduled Task:
+
+  - To enable use `-ShowToast` parameter in `Set-WslScheduledTask`. When this switch parameter is specified then any exception or verbose message signaling of failure or success of operation will be shown in a Popup Toast Notification message near system tray.
+
+  - To control Toasts duration use `-ToastDuration` parameter, which should be set to number of seconds to show Toast Notification (default is 5 seconds).
+
 ## `0.10.0`
 
 - Added `Set-WslScheduledTask` and `Remove-WslScheduledTask` commands:

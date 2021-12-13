@@ -1,7 +1,9 @@
 ﻿BeforeAll {
-    Import-Module WSL-IpHandler -Force
+    $ModuleName = 'WSL-IpHandler'
+    $ModulePath = Join-Path (Split-Path $PSScriptRoot) "$ModuleName"
+    Import-Module $ModulePath -Force
     Set-Variable OriginalProfileContent @('# First line comments', '# Second line comments')
-    Set-Variable WslProfileContent (InModuleScope WSL-IpHandler { Get-ProfileContent })
+    Set-Variable WslProfileContent (InModuleScope $ModuleName { Get-ProfileContent })
 }
 
 Describe 'Given profile file' {
@@ -14,8 +16,10 @@ Describe 'Given profile file' {
     Context ' That does not exist' {
         It ' Set-ProfileContent should create profile file and add content' {
             Set-ProfileContent -ProfilePath $ProfileFilePath
+            Write-Host "Content of $ProfileFilePath"
+            Write-Host "$((Get-Content $ProfileFilePath) -join "`n")"
             $ProfileFilePath |
-                Should -FileContentMatchMultilineExactly ($WslProfileContent -join "`r`n")
+                Should -FileContentMatchMultilineExactly ([regex]::Escape($WslProfileContent -join "`r`n"))
         }
         It ' Remove-ProfileContent should silently ignore absent file and not create file' {
             Remove-ProfileContent -ProfilePath $ProfileFilePath
@@ -30,7 +34,7 @@ Describe 'Given profile file' {
         It ' Set-ProfileContent should add content' {
             Set-ProfileContent -ProfilePath $ProfileFilePath
             $ProfileFilePath |
-                Should -FileContentMatchMultilineExactly ($WslProfileContent -join "`r`n")
+                Should -FileContentMatchMultilineExactly ([regex]::Escape($WslProfileContent -join "`r`n"))
         }
         It ' Remove-ProfileContent should leave file empty' {
             Remove-ProfileContent -ProfilePath $ProfileFilePath
@@ -46,14 +50,14 @@ Describe 'Given profile file' {
         }
         It ' Set-ProfileContent should add content keeping the original content' {
             Set-ProfileContent -ProfilePath $ProfileFilePath
-            $expected = ($OriginalProfileContent + $WslProfileContent) -join "`r`n"
+            $expected = [regex]::Escape(($OriginalProfileContent + $WslProfileContent) -join "`r`n")
             $ProfileFilePath | Should -FileContentMatchMultilineExactly $expected
         }
         It ' Remove-ProfileContent should not change file' {
             Remove-ProfileContent -ProfilePath $ProfileFilePath
             $ProfileFilePath | Should -Exist
             $ProfileFilePath |
-                Should -FileContentMatchMultilineExactly ($OriginalProfileContent -join "`r`n")
+                Should -FileContentMatchMultilineExactly ([regex]::Escape($OriginalProfileContent -join "`r`n"))
         }
     }
 
@@ -64,12 +68,12 @@ Describe 'Given profile file' {
         }
         It ' Set-ProfileContent should not add any content' {
             Set-ProfileContent -ProfilePath $ProfileFilePath
-            $ProfileFilePath | Should -FileContentMatchMultilineExactly ($FullContent -join "`r`n")
+            $ProfileFilePath | Should -FileContentMatchMultilineExactly ([regex]::Escape($FullContent -join "`r`n"))
         }
         It ' Remove-ProfileContent should remove WSL-IpHandler Content' {
             Remove-ProfileContent -ProfilePath $ProfileFilePath
             $ProfileFilePath |
-                Should -FileContentMatchMultilineExactly ($OriginalProfileContent -join "`r`n")
+                Should -FileContentMatchMultilineExactly ([regex]::Escape($OriginalProfileContent -join "`r`n"))
         }
     }
 }

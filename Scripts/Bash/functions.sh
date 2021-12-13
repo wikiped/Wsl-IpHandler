@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 
+set -o errexit
+set -o errtrace
+set -o ignoreeof
+set -o nounset
+set -o pipefail
+
 # if [ -n "${DEBUG:-}" ]; then
 # 	set -o xtrace
 # fi
@@ -7,6 +13,10 @@
 # if [ -n "${VERBOSE:-}" ]; then
 # 	set -o verbose
 # fi
+
+cleanup() {
+  trap - SIGINT SIGTERM ERR EXIT
+}
 
 error() {
 	local parent_lineno="$1"
@@ -32,6 +42,9 @@ error() {
 	exit "${code}"
 }
 
+trap 'error ${LINENO}' ERR
+trap cleanup SIGINT SIGTERM ERR EXIT
+
 echo_log() {
 	local level="${1:-'INFO'}"
 	local message="$2"
@@ -41,13 +54,13 @@ echo_log() {
 
 echo_verbose() {
 	if [[ -n "${VERBOSE:-}" ]]; then
-		echo_log "VERBOSE" "$1" "$2"
+		echo_log "VERBOSE" "$1" "${2:-}"
 	fi
 }
 
 echo_debug() {
 	if [[ -n "${DEBUG:-}" ]]; then
-		echo_log "DEBUG" "$1" "$2"
+		echo_log "DEBUG" "$1" "${2:-}"
 	fi
 }
 

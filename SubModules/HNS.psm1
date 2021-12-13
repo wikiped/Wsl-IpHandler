@@ -1,3 +1,13 @@
+#region Debug Functions
+if (!(Test-Path function:\_@)) {
+    function script:_@ {
+        $parentInvocationInfo = Get-Variable MyInvocation -Scope 1 -ValueOnly
+        $parentCommandName = $parentInvocationInfo.MyCommand.Name ?? $MyInvocation.MyCommand.Name
+        "$parentCommandName [$($MyInvocation.ScriptLineNumber)]:"
+    }
+}
+#endregion Debug Functions
+
 #region Global Initialize
 function Get-HnsClientNativeMethods() {
     $signature = @'
@@ -207,25 +217,25 @@ function Get-HnsNetworkEx {
     $array = @($input)
     if ($array.Count) { $Id = $array }
     if (!(Test-Path variable:Id)) { $Id = @() }
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Id initial: $Id"
+    Write-Debug "$(_@) Id initial: $Id"
 
     [guid[]]$Id = ($Id | Where-Object { $_ -ne [Guid]::Empty } )
 
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Id after removing [Guid]::Empty: $Id"
+    Write-Debug "$(_@) Id after removing [Guid]::Empty: $Id"
 
     if (-not $Id) {
         $Id = Get-HnsNetworkId -Name $Name -Version $Version
         if (-not $Id) { $Id = @() }
-        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Id after Name + Filter: $Id"
+        Write-Debug "$(_@) Id with Name Filter: $Id"
     }
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Id final: $Id"
+    Write-Debug "$(_@) Id final: $Id"
 
     $query = Get-HnsSchemaVersion -Version $Version
 
     if ($Detailed) { $query += @{Flags = 1 } }
 
     $jsonQuery = ConvertTo-Json $query -Depth 32
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: jsonQuery:`n$jsonQuery"
+    Write-Debug "$(_@) jsonQuery:`n$jsonQuery"
 
     $output = @()
 
@@ -252,7 +262,7 @@ function Remove-HnsNetworkEx {
     if (!(Test-Path variable:Id)) { $Id = @() }
     if ($PSCmdlet.ParameterSetName -eq 'Name') {
         $Id = @(Get-HnsNetworkId -Name $Name -ThrowOnFail)
-        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Found Id for '$Name': $Id"
+        Write-Debug "$(_@) Found Id for '$Name': $Id"
         if ($Id.Count -gt 1) {
             Throw "$($MyInvocation.MyCommand.Name) Expected 1 ID for '$Name', but found $($Id.Count): $Id"
         }
@@ -303,7 +313,7 @@ function Set-HnsNetworkEx {
             # if ($AddressPrefix) { $params.AddressPrefix = $AddressPrefix }
             # if ($DNSServerList) { $params.DNSServerList = $DNSServerList }
             # if ($Flags) { $params.Flags = $Flags }
-            # Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Settings to be modified: $($params | Out-String)"
+            # Write-Debug "$(_@) Settings to be modified: $($params | Out-String)"
             $newSettings = New-HnsNetworkSettings -Name $Name -GatewayIpAddress $GatewayIpAddress -AddressPrefix $AddressPrefix -DNSServerList $DNSServerList -Flags $Flags
             $settings = Set-HnsNetworkSettings -Id $Id -Settings $newSettings -Json
         }
@@ -313,8 +323,8 @@ function Set-HnsNetworkEx {
     # $handle = Invoke-HcnOpenNetwork -Id $Id
     # Invoke-HcnModifyNetwork -HcnNetworkHandle $handle -SettingsJsonString $settings -KeepHandleOpen
     Invoke-HcnDeleteNetwork -Id $Id
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Deleted Adapter with ID: $Id"
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: New Setting to create Adapter with ID: '$Id':`n$settings"
+    Write-Debug "$(_@) Deleted Adapter with ID: $Id"
+    Write-Debug "$(_@) New Setting to create Adapter with ID: '$Id':`n$settings"
     $handle = Invoke-HcnCreateNetwork -Id $Id -SettingsJsonString $settings -KeepHandleOpen
     Invoke-HcnQueryNetworkProperties -HcnNetworkHandle $handle
 }
@@ -322,12 +332,12 @@ function Set-HnsNetworkEx {
 function Get-HnsNetworkId {
     param (
         [Parameter()]
-        # [ValidateSet('WSL', 'Default Switch', 'External Switch')]
         [string]$Name,
 
         [Parameter()]
         [switch]$ThrowOnFail,
 
+        [Parameter()]
         [int]$Version = 1
     )
     switch ($Name) {
@@ -335,7 +345,7 @@ function Get-HnsNetworkId {
         'Default Switch' { return 'c08cb7b8-9b3c-408e-8e30-5e16a3aeb444' }
         'External Switch' { return '03c876a3-4c5b-40a6-98f4-a4c9a1855fd1' }
         Default {
-            Write-Debug "$($MyInvocation.MyCommand.Name) did not find ID for '$Name'."
+            Write-Debug "$($MyInvocation.MyCommand.Name) no ID in cache for '$Name'."
             Get-HnsNetworkIdEx -Name $Name -ThrowOnFail:$ThrowOnFail -Version $Version
         }
     }
@@ -362,13 +372,13 @@ function Get-HnsNetworkIdEx {
     $FilterAsJson = ConvertTo-Json $Filter -Depth 32  # Filter must be converted to Json separately!
 
     if ($Filter.Count) { $query.Filter = $FilterAsJson }
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Query: $($query | Out-String)"
+    Write-Debug "$(_@) Query: $($query | Out-String)"
 
     $jsonQuery = ConvertTo-Json $query -Depth 32
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Json Query:`n$jsonQuery"
+    Write-Debug "$(_@) Json Query:`n$jsonQuery"
 
     $ids = Invoke-HcnEnumerateNetworks -QueryJsonString $jsonQuery -ThrowOnFail:$ThrowOnFail
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: IDs: $ids"
+    Write-Debug "$(_@) IDs: $ids"
 
     if (($Name -and $ids.Count -eq 1) -or (-not $Name -and $ids.Count)) { $ids }
     elseif ($Name -and $ids.Count -gt 1) {
@@ -428,12 +438,12 @@ function Invoke-HcnEnumerateNetworks {
     }
     $ids = ''
     $result = ''
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: QueryJsonString:`n$QueryJsonString"
+    Write-Debug "$(_@) QueryJsonString:`n$QueryJsonString"
     $hr = $EnumerateMethod.Invoke($QueryJsonString, [ref]$ids, [ref]$result)
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: IDs:`n$ids"
+    Write-Debug "$(_@) IDs:`n$ids"
 
     ReportErrorsEx -FunctionName $EnumerateMethod.Name -Hr $hr -Result $result -ThrowOnFail:$ThrowOnFail
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$result:`n$($result | Out-String)"
+    Write-Debug "$(_@) `$result:`n$($result | Out-String)"
 
     if ($ids) { $ids | ConvertFrom-Json } else { @() }
 }
@@ -575,14 +585,14 @@ function ReportErrorsEx {
     $errorOutput = @()
 
     if (-NOT [string]::IsNullOrWhiteSpace($Result)) {
-        Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$Result:`n$Result"
+        Write-Debug "$(_@) `$Result:`n$Result"
         $parsedResult = ConvertFrom-Json $Result -ErrorAction SilentlyContinue
         if ($null -ne $parsedResult -and ($parsedResult | Get-Member Error -ErrorAction SilentlyContinue)) {
-            Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: `$parsedResult.Error:`n$($parsedResult.Error)"
+            Write-Debug "$(_@) `$parsedResult.Error:`n$($parsedResult.Error)"
             $errorOutput += $parsedResult.Error
         }
         else {
-            Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Error not found in parsedResult:`n$($parsedResult | Out-String)"
+            Write-Debug "$(_@) Error not found in parsedResult:`n$($parsedResult | Out-String)"
             $errorOutput += "Result: $Result"
         }
     }
@@ -594,12 +604,12 @@ function ReportErrorsEx {
     if ($errorOutput) {
         $errString = "$($FunctionName): $($errorOutput -join ' ')"
         if ($ThrowOnFail) {
-            Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: -ThrowOnFail Is Present, Throwing: $errString"
-            throw $errString
+            Write-Debug "$(_@) -ThrowOnFail Is Present, Throwing: $errString"
+            throw "$errString"
         }
         else {
-            Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: -ThrowOnFail Is NOT Present, Writing Error: $errString"
-            Write-Error $errString
+            Write-Debug "$(_@) -ThrowOnFail Is NOT Present, Writing Error: $errString"
+            Write-Error "$errString"
         }
     }
 }
@@ -616,11 +626,11 @@ function ConvertResponseFromJsonEx {
             $output = ($JsonInput | ConvertFrom-Json -Depth 32);
         }
         catch {
-            Write-Error $_.Exception.Message
+            Write-Error "$($_.Exception.Message)"
             return ''
         }
         if ($output -and [bool]($output | Get-Member Error -ErrorAction SilentlyContinue)) {
-            Write-Error $output.Error;
+            Write-Error "$($output.Error)";
         }
     }
 
@@ -668,18 +678,18 @@ function Set-HnsNetworkSettings {
     }
     $newSettings = New-HnsNetworkSettings
     $currentSettings = Get-HnsNetworkEx -Id $Id
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Current Settings to modify:`n$($currentSettings | Out-String)"
+    Write-Debug "$(_@) Current Settings to modify:`n$($currentSettings | Out-String)"
 
     ForEach ($Key in $currentSettings.psobject.Properties.Name) {
         if ($Settings.ContainsKey($Key)) {
             $newSettings.$Key = $Settings.$Key
-            Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Updated $Key=$currentSettings.$Key with Value: '$Settings.$Key'"
+            Write-Debug "$(_@) Updated $Key=$currentSettings.$Key with Value: '$Settings.$Key'"
         }
         else {
             $newSettings.$Key = $currentSettings.$Key
         }
     }
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Final Modified Settings:`n$($newSettings | Out-String)"
+    Write-Debug "$(_@) Final Modified Settings:`n$($newSettings | Out-String)"
 
     if ($Json) { $newSettings | ConvertTo-Json -Depth 32 } else { $newSettings }
 }
@@ -733,7 +743,7 @@ $DebugPreference = 'SilentlyContinue'
 $OriginalVerbosePreference = $VerbosePreference
 $VerbosePreference = 'SilentlyContinue'
 
-Export-ModuleMember -Function Invoke-HcnEnumerateNetworks
+# Export-ModuleMember -Function Invoke-HcnEnumerateNetworks
 # Export-ModuleMember -Function Invoke-HcnQueryNetworkProperties
 # Export-ModuleMember -Function Invoke-HcnCreateNetwork
 # Export-ModuleMember -Function Invoke-HcnOpenNetwork

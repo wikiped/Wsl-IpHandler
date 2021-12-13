@@ -3,6 +3,16 @@ using namespace System.Management.Automation
 
 Set-StrictMode -Version Latest
 
+#region Debug Functions
+if (!(Test-Path function:\_@)) {
+    function script:_@ {
+        $parentInvocationInfo = Get-Variable MyInvocation -Scope 1 -ValueOnly
+        $parentCommandName = $parentInvocationInfo.MyCommand.Name ?? $MyInvocation.MyCommand.Name
+        "$parentCommandName [$($MyInvocation.ScriptLineNumber)]:"
+    }
+}
+#endregion Debug Functions
+
 $IpNetworkTypeName = 'IPNetwork'
 
 #region Extend System.Net.IPAddress type
@@ -365,7 +375,7 @@ $FindFreeSubnetMethod = {
 
 
     $subnets = $CIDRs | Where-Object { Test-IsValidCidr $_ }
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Incoming subnets: $($CIDRs -join '; ')"
+    Write-Debug "$(_@) Incoming subnets: $($CIDRs -join '; ')"
 
     $privateCidr = $This.PrivateNetwork
 
@@ -375,16 +385,16 @@ $FindFreeSubnetMethod = {
 
     $privateCidrNet = Get-IpNet -CIDR $privateCidr
     $gapSize = $This.IPCount
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Gap Size: $gapSize"
+    Write-Debug "$(_@) Gap Size: $gapSize"
 
     $sortedSubnets = $subnets | Sort-Object { ($_ | Get-IpNet).IPAddress.Decimal }
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Sorted subnets: $($sortedSubnets -join '; ')"
+    Write-Debug "$(_@) Sorted subnets: $($sortedSubnets -join '; ')"
 
     $edgedSubnets = @()
     $edgedSubnets += "$($privateCidrNet.Subnet)/32"
     if ($sortedSubnets) { $edgedSubnets += $sortedSubnets }
     $edgedSubnets += "$($privateCidrNet.Broadcast)/32"
-    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Edged subnets: $($edgedSubnets -join '; ')"
+    Write-Debug "$(_@) Edged subnets: $($edgedSubnets -join '; ')"
 
     $result = (1..($edgedSubnets.Count - 1)).ForEach({
             $ip, $pref = Get-CidrParts $edgedSubnets[$_]
@@ -395,13 +405,13 @@ $FindFreeSubnetMethod = {
                 $prevPref = if ($prevPref -eq 32) { $prevPref } else { [Math]::Min($This.PrefixLength, $prevPref) }
                 $prevNet = Get-IpNet -CIDR "$prevIp/$prevPref"
                 $distance = $net.DistanceFrom($prevNet.Cidr)
-                Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Distance = $distance between $prevNet and $net"
+                Write-Debug "$(_@) Distance = $distance between $prevNet and $net"
                 if ($distance -ge $gapSize) {
-                    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Free subnet space: $distance is enough to fit target size: $gapSize"
+                    Write-Debug "$(_@) Free subnet space: $distance is enough to fit target size: $gapSize"
                     $newSubnetStart = $prevNet.Broadcast.Add()
-                    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: New subnet can start from: $newSubnetStart"
+                    Write-Debug "$(_@) New subnet can start from: $newSubnetStart"
                     $out = (Get-IpNet -CIDR "$newSubnetStart/$($This.PrefixLength)").CIDR
-                    Write-Debug "$($MyInvocation.MyCommand.Name) [$($MyInvocation.ScriptLineNumber)]: Subnet: $This can be reallocated to: $out."
+                    Write-Debug "$(_@) Subnet: $This can be reallocated to: $out."
                     $out
                 }
             }

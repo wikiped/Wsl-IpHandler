@@ -1,40 +1,34 @@
 #!/usr/bin/env bash
 
 if [[ $EUID != 0 ]]; then
-    sudo "$0" "$@"
+	sudo -E env DEBUG="${DEBUG:-}" VERBOSE="${VERBOSE:-}" "$0" "$@"
     exit $?
 fi
 
-set -o errexit
-set -o ignoreeof
-set -o pipefail
-
-import() {
-	filename="$1"
-	local script_path
-	script_path="$(dirname -- "$0")"
-	local -r script_path
-	declare -rx filepath="${script_path}/$filename"
-	if [[ ! -f "${filepath}" ]]; then
+resolve() {
+	local -r filename="$1"
+	local -r script_path="$(dirname -- "$0")"
+	local -r filepath="${script_path}/$filename"
+	if [[ -f "${filepath}" ]]; then
+		printf '%s' "${filepath}"
+	else
 		printf '[FATAL] Could not find %s\n' "${filepath}" 1>&2
 		exit 1
 	fi
-	# shellcheck disable=SC1090
-	if ! source "$filepath"; then
-		printf '[FATAL] Could not source %s\n' "$filepath" 1>&2
-		exit 1
-	else
-		echo_verbose "Successfully imported: $filename"
-	fi
 }
 
-import "functions.sh"
-
-trap 'error ${LINENO}' ERR
+#shellcheck source=/dev/null
+source "$(resolve functions.sh)"
 
 echo_verbose "Bash Uninstalling WSL-IpHandler..."
 
 # Prcess Incoming Arguments
+echo_debug "Starting '$0' with User ID: $EUID"
+echo_debug "$0 Processing Incoming Arguments:" ${LINENO}
+echo_debug "$*" ${LINENO}
+echo_debug "Current Directory: '$(pwd)'" ${LINENO}
+echo_debug "DEBUG=${DEBUG:-}" ${LINENO}
+echo_debug "VERBOSE=${VERBOSE:-}" ${LINENO}
 script_name="$1"
 script_target="${2:-'/usr/local/bin'}"
 script_target="${script_target%/}/${script_name##*/}"
@@ -45,7 +39,7 @@ remove_config 'windows_host' || error ${LINENO} "remove_config 'windows_host'"
 remove_config 'wsl_host' || error ${LINENO} "remove_config 'wsl_host'"
 remove_config 'static_ip' || error ${LINENO} "remove_config 'static_ip'"
 remove_config 'ip_offset' || error ${LINENO} "set_config 'ip_offset'"
-echo_verbose "Finised Removing Config Options in /etc/wsl.conf."
+echo_verbose "Finished Removing Config Options in /etc/wsl.conf."
 
 # Remove Autorun Script
 echo_verbose "Removing Autorun Script: $script_target"
