@@ -1,5 +1,3 @@
-﻿[CmdletBinding()]param()
-
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version latest
 $ModuleName = 'WSL-IpHandler'
