@@ -14,8 +14,8 @@ Describe 'Install & Uninstall WSL IP Handler' -ForEach @(
         $scriptsRoot = Join-Path $moduleRoot 'Scripts' 'Powershell'
         Set-Variable hnsModulePath (Join-Path $subModulesRoot 'HNS.psm1')
         Import-Module $moduleRoot
-        Import-Module $hnsModulePath
-        Import-Module (Join-Path $subModulesRoot 'IPNetwork.psm1')
+        Import-Module $hnsModulePath -Verbose:$false -Debug:$false
+        Import-Module (Join-Path $subModulesRoot 'IPNetwork.psm1') -Verbose:$false -Debug:$false
         . (Join-Path $scriptsRoot 'FunctionsPSElevation.ps1')
     }
     Context " When WSL Adater does not exist and it's IP subnet is free" {

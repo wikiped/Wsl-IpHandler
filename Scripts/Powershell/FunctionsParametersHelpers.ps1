@@ -9,7 +9,7 @@ function Get-CommonParameters {
     )
     begin {
         $paramNames = 'Verbose', 'Debug', 'ErrorAction', 'WarningAction', 'InformationAction'
-        $commonParams = @{}
+        $commonParameters = @{}
     }
     process {
         $module = [PSModuleInfo]::new($false)
@@ -21,15 +21,15 @@ function Get-CommonParameters {
                 switch ($value) {
                     { $_ -is [System.Management.Automation.ActionPreference] } {
                         switch -wildcard ($param) {
-                            '*Action' { $commonParams[$param] = $value; break }
-                            Default { $commonParams[$param] = $value -eq 'Continue' }
+                            '*Action' { $commonParameters[$param] = $value; break }
+                            Default { $commonParameters[$param] = $value -eq 'Continue' }
                         }
                     }
                 }
             }
         }
     }
-    end { $commonParams }
+    end { $commonParameters }
 }
 
 function Get-ArgsArray {

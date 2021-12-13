@@ -12,13 +12,11 @@ Set-StrictMode -Version Latest
 $vEthernetWsl = 'vEthernet (WSL)'
 
 #region Debug Functions
-# if (!(Test-Path function:\_@)) {
 function _@ {
     $parentInvocationInfo = Get-Variable MyInvocation -Scope 1 -ValueOnly
     $parentCommandName = $parentInvocationInfo.MyCommand.Name ?? $MyInvocation.MyCommand.Name
     "$parentCommandName [$($MyInvocation.ScriptLineNumber)]:"
 }
-# }
 #endregion Debug Functions
 
 function Install-WslIpHandler {
@@ -1110,7 +1108,7 @@ function Set-WslNetworkAdapter {
     if ($ShowToast) {
         $toastModuleName = 'Show-ToastMessages'
         $toastModulePath = Join-Path $PSScriptRoot 'SubModules' "$toastModuleName.psm1" -Resolve
-        Import-Module $toastModulePath -Function Show-ToastMessage
+        Import-Module $toastModulePath -Function Show-ToastMessage -Verbose:$false -Debug:$false
         $toastParams = @{
             Title   = 'WSL-IpHandler'
             Seconds = $ToastDuration
@@ -1275,6 +1273,9 @@ function Set-WslScheduledTask {
     .PARAMETER RunWhetherUserLoggedOnOrNot
     Has the same effect as the setting with the same name in Task Scheduler. If this switch parameter is set, then -ShowToast parameter is ignored.
 
+    .PARAMETER CheckSuccess
+    When this parameter is present - registration of scheduled task will be validated by querying its existence. This operation takes some time and is therefore optional.
+
     .EXAMPLE
     Set-WslScheduledTask -AllUsers
 
@@ -1303,10 +1304,16 @@ function Set-WslScheduledTask {
         [ValidateNotNullOrEmpty()]
         [string]$UserName = $env:USERNAME,
 
+        [Parameter()]
         [switch]$AnyUserLogOn,
 
-        [switch]$RunWhetherUserLoggedOnOrNot
-        # [switch]$AsLocalSystem
+        [Parameter()]
+        [switch]$RunWhetherUserLoggedOnOrNot,
+
+        [Parameter()]
+        [Alias('Validate', 'Check')]
+        [switch]$CheckSuccess
+        # [switch]$AsLocalSystem  # This breaks Toasts
     )
     $elevationScript = Join-Path $PSScriptRoot 'Scripts\Powershell\FunctionsPSElevation.ps1' -Resolve
     . $elevationScript
@@ -1345,18 +1352,18 @@ function Set-WslScheduledTask {
         '-NoProfile'
     )
 
-    if ($VerbosePreference -ne 0) {
-        $command += '-Verbose'
-        Write-Debug "$(_@) Command in verbose mode: $command"
-    }
-    if ($DebugPreference -eq 0) {
-        # $psExeArguments += '-NonInteractive'
-        $psExeArguments += '-WindowStyle Hidden'
-    }
-    else {
+    if ($DebugPreference -eq 'Continue') {
         $psExeArguments += '-NoExit'
+        if ($VerbosePreference -eq 'Continue') {
+            $command += '-Verbose'
+            Write-Debug "$(_@) Command in verbose mode: $command"
+        }
         $command += '-Debug'
         Write-Debug "$(_@) Command in debug mode: $command"
+    }
+    else {
+        $psExeArguments += '-NonInteractive'
+        $psExeArguments += '-WindowStyle Hidden'
     }
 
     $psExeArguments += "-Command ```"$($command -join ' ')```""
@@ -1373,10 +1380,16 @@ function Set-WslScheduledTask {
         AnyUserLogOn    = $AnyUserLogOn
     }
 
+    Write-Verbose "Scheduled Task to register: ${taskPath}${taskName}"
+    Write-Verbose "Task command: '$psExe'"
+    Write-Verbose "Task command arguments: $($scriptParams.Argument)"
+    if ($AnyUserLogOn) { Write-Verbose "Task will be run on logon of ANY user." }
+
     if ($RunWhetherUserLoggedOnOrNot) {
         $credential = Get-WslScheduledTaskCredential -UserName $FullUserName -MaxNumberOfAttempts 5
         $scriptParams.RunAsUserName = $credential.UserName
         $scriptParams.EncryptedSecureString = $credential.Password | ConvertFrom-SecureString
+        Write-Verbose "User name to run task under: $($credential.UserName)"
     }
 
     $registerTaskScript = Join-Path $PSScriptRoot 'Scripts\Powershell\Set-ScheduledTask.ps1' -Resolve
@@ -1385,8 +1398,31 @@ function Set-WslScheduledTask {
     if ($DebugPreference -eq 'Continue') { $commonParameters.Debug = $true }
     Write-Debug "$(_@) `$commonParameters $(& { $args } @commonParameters)"
 
-    Write-Debug "$(_@) Invoke-ScriptElevated -Encode -ScriptPath $registerTaskScript -ScriptParameters $(& {$args} @scriptParams) $(& {$args} @commonParams)"
-    Invoke-ScriptElevated -Encode -ScriptPath $registerTaskScript -ScriptParameters $scriptParams @commonParams
+    Write-Debug "$(_@) Invoke-ScriptElevated -Encode -ScriptPath $registerTaskScript -ScriptParameters $(& {$args} @scriptParams) $(& {$args} @commonParameters)"
+    Invoke-ScriptElevated -Encode -ScriptPath $registerTaskScript -ScriptParameters $scriptParams @commonParameters
+
+    if (-not $CheckSuccess) { return }
+
+    $waitingMessage = ''
+    $eventLabel = 'WSL-IpHandler Scheduled Task Registration'
+    $waitParams = @{
+        ValidationScript = {
+            $null -ne (Get-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction SilentlyContinue)
+        }
+        EventLabel       = $eventLabel
+        Timeout          = $Timeout
+        MessageVariable  = ([ref]$waitingMessage)
+    }
+    if (Wait-ForExpressionTimeout @waitParams) {
+        Write-Verbose "Successfully registered Scheduled Task: '${taskPath}${taskName}'!"
+        Write-Debug "$(_@) Successfully registered Scheduled Task: '${taskPath}${taskName}'"
+    }
+    else {
+        Write-Verbose "Failed to register Scheduled Task: '${taskPath}${taskName}'!"
+        Write-Debug "$(_@) Failed to register Scheduled Task: ${taskPath}${taskName}"
+        if ($waitingMessage) { Write-Error "$waitingMessage" }
+        else { Write-Error "Time out error while waiting for $eventLabel." }
+    }
 }
 
 function Remove-WslScheduledTask {
@@ -1394,7 +1430,7 @@ function Remove-WslScheduledTask {
     .SYNOPSIS
     Removes WSL-IpHandlerTask Scheduled Task created with Set-WslScheduledTask command.
 
-    .PARAMETER CheckRemoval
+    .PARAMETER CheckSuccess
     If this switch parameter is specified after the task was removed the command will check that the task does not actually exist.
 
     .PARAMETER Timeout
@@ -1406,14 +1442,13 @@ function Remove-WslScheduledTask {
     #>
     param (
         [Parameter()]
-        [switch]$CheckRemoval,
+        [Alias('Validate', 'Check')]
+        [switch]$CheckSuccess,
 
         [Parameter()]
         [int]$Timeout = 15
     )
-
-    $elevationScript = Join-Path $PSScriptRoot 'Scripts\Powershell\FunctionsPSElevation.ps1' -Resolve
-    . $elevationScript
+    . (Join-Path $PSScriptRoot 'Scripts\Powershell\FunctionsPSElevation.ps1' -Resolve)
 
     $taskName = Get-ScheduledTaskName
     $taskPath = Get-ScheduledTaskPath
@@ -1423,11 +1458,12 @@ function Remove-WslScheduledTask {
     $existingTask = Get-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction SilentlyContinue
 
     if (-not $existingTask) {
-        Write-Debug "$(_@) $taskName does not exist - nothing to remove."
+        Write-Verbose "Scheduled Task ${taskPath}${taskName} does not exist - nothing to remove."
+        Write-Debug "$(_@) Task ${taskPath}${taskName} does not exist - nothing to remove."
         return
     }
 
-    Write-Verbose "Removing Scheduled Task: ${taskPath}${taskName}"
+    Write-Verbose "Removing Scheduled Task: ${taskPath}${taskName}..."
     if (IsElevated) {
         Unregister-ScheduledTask -TaskName $taskName -TaskPath $taskPath -Confirm:$false -ErrorAction SilentlyContinue
     }
@@ -1436,7 +1472,7 @@ function Remove-WslScheduledTask {
         Invoke-CommandElevated "Unregister-ScheduledTask $arguments"
     }
 
-    if (-not $CheckRemoval) { return }
+    if (-not $CheckSuccess) { return }
 
     $waitingMessage = ''
     $eventLabel = 'WSL-IpHandler Scheduled Task Removal'
@@ -1449,12 +1485,14 @@ function Remove-WslScheduledTask {
         MessageVariable  = ([ref]$waitingMessage)
     }
     if (Wait-ForExpressionTimeout @waitParams) {
-        Write-Debug "$(_@)) Successfully removed Scheduled Task: ${taskPath}${taskName}"
+        Write-Verbose "Successfully removed Scheduled Task: ${taskPath}${taskName}"
+        Write-Debug "$(_@) Successfully removed Scheduled Task: ${taskPath}${taskName}"
     }
     else {
-        Write-Debug "$(_@)) Failed to remove Scheduled Task: ${taskPath}${taskName}"
+        Write-Verbose "Failed to remove Scheduled Task: ${taskPath}${taskName}"
+        Write-Debug "$(_@) Failed to remove Scheduled Task: ${taskPath}${taskName}"
         if ($waitingMessage) { Write-Error "$waitingMessage" }
-        else { Write-Error "Error waiting for $eventLabel - operation timed out." }
+        else { Write-Error "Time out error while waiting for $eventLabel." }
     }
 }
 
@@ -1595,13 +1633,13 @@ function Update-WslIpHandlerModule {
 
     $updaterModuleName = 'Update-ModuleFromGithub'
     $updaterModulePath = Join-Path $PSScriptRoot 'SubModules' "$updaterModuleName.psm1" -Resolve
-    Import-Module $updaterModulePath -Function Update-ModuleFromGithub
+    Import-Module $updaterModulePath  -Verbose:$false -Debug:$false
 
     Update-ModuleFromGithub @params @PSBoundParameters
 
     Remove-Module $updaterModulePath -Force -ErrorAction SilentlyContinue
 
-    Import-Module $modulePath -Function Update-WslBashScripts -Force
+    Import-Module $modulePath -Force
 
     $staticIps = Get-WslConfigStaticIpSection
     if ($staticIps.Count -gt 0) {

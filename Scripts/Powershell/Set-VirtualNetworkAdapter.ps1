@@ -66,7 +66,7 @@ if ([string]::IsNullOrWhiteSpace($DNSServerList)) {
 
 $ipNetModuleName = 'IPNetwork'
 $ipNetModule = Join-Path $PSScriptRoot "..\..\SubModules\$ipNetModuleName.psm1" -Resolve
-Import-Module $ipNetModule -Verbose:$false -Debug:$false | Out-Null
+Import-Module $ipNetModule -Verbose:$false -Debug:$false
 
 function Get-OverlappingNetworkConnectionsSplit {
     param (
@@ -142,7 +142,7 @@ $errorMessage = @("Cannot create Hyper-V VM Adapter '$VirtualAdapterName' with $
 
 $hnsModuleName = 'HNS'
 $hnsModule = Join-Path $PSScriptRoot "..\..\SubModules\$hnsModuleName.psm1" -Resolve
-Import-Module $hnsModule -Verbose:$false -Debug:$false | Out-Null
+Import-Module $hnsModule -Verbose:$false -Debug:$false
 
 $overlappingConnections = Get-OverlappingNetworkConnectionsSplit -AdapterName $VirtualAdapterName -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
 

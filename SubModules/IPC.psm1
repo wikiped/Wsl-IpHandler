@@ -108,7 +108,7 @@ function Receive-ObjectFromPipe {
         Write-Debug "$(_@) $cliXml"
 
         $clixmlModule = Join-Path $PSScriptRoot 'CliXml.psm1'
-        Import-Module $clixmlModule
+        Import-Module $clixmlModule -Verbose:$false -Debug:$false
         $result = $cliXml | ConvertFrom-Clixml
         Write-Debug "$(_@) Deserialized message:"
         Write-Debug "$(_@) $($result | Out-String)"
@@ -142,7 +142,7 @@ function Send-ObjectToPipe {
     )
     try {
         $clixmlModule = Join-Path $PSScriptRoot 'CliXml.psm1'
-        Import-Module $clixmlModule
+        Import-Module $clixmlModule -Verbose:$false -Debug:$false
         $pipeClient = New-Object -TypeName System.IO.Pipes.NamedPipeClientStream -ArgumentList '.', "\\.\pipe\$PipeName", ([System.IO.Pipes.PipeDirection]::Out)
         $pipeClientWriter = New-Object -TypeName System.IO.StreamWriter -ArgumentList $pipeClient, ([System.Text.Encoding]::GetEncoding($encoding)), $BufferSize
         Write-Debug 'Client Pipe trying to connect to Pipe Server...'
@@ -194,7 +194,7 @@ function Send-CommandOutputToPipe {
     try {
         if ($PSCmdlet.ParameterSetName -eq 'EncodedCommand') {
             $encoderModule = Join-Path $ModulesPath 'Encoders.psm1'
-            Import-Module $encoderModule
+            Import-Module $encoderModule -Verbose:$false -Debug:$false
             $Command = Get-DecodedCommand $EncodedCommand
         }
         Write-Debug "Command: $Command"
@@ -220,11 +220,11 @@ function Send-CommandOutputToPipe {
     if ($BufferSize -gt 0) {
         $sendParams.Buffer = $BufferSize
     }
-    Import-Module (Join-Path $ModulesPath 'IPC.psm1')
-    $commonParams = @{}
-    if ($VerbosePreference -gt 0) { $commonParams.Verbose = $true }
-    if ($DebugPreference -gt 0) { $commonParams.Debug = $true }
-    Send-ObjectToPipe @sendParams @commonParams
+    Import-Module (Join-Path $ModulesPath 'IPC.psm1') -Verbose:$false -Debug:$false
+    $commonParameters = @{}
+    if ($VerbosePreference -gt 0) { $commonParameters.Verbose = $true }
+    if ($DebugPreference -gt 0) { $commonParameters.Debug = $true }
+    Send-ObjectToPipe @sendParams @commonParameters
 }
 
 function Get-CommandStringToSendOutputToPipe {
@@ -248,7 +248,7 @@ function Get-CommandStringToSendOutputToPipe {
     )
     $subModulesPath = Split-Path $PSCommandPath
     $encoderModule = Join-Path $subModulesPath 'Encoders.psm1'
-    Import-Module $encoderModule
+    Import-Module $encoderModule -Verbose:$false -Debug:$false
 
     if ($PSCmdlet.ParameterSetName -eq 'Command') {
         # Write-Debug "$(_@) Command: $Command"

@@ -1,4 +1,3 @@
-[CmdletBinding()]
 param (
     [Parameter(Mandatory)]
     [ValidateNotNullOrEmpty()]
@@ -47,6 +46,7 @@ $elevationScript = Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve
 if (-not (IsElevated)) {
     Write-Debug "$(_@) Invoke-ScriptElevated $(& {$args} @PSBoundParameters)"
     Invoke-ScriptElevated $MyInvocation.MyCommand.Path -ScriptParameters $PSBoundParameters
+    exit
 }
 
 #region Debug Functions

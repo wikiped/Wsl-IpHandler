@@ -7,7 +7,7 @@ Set-Variable NoSection '_'  # Variable Required by Get-IniContent.ps1 and Out-In
 . (Join-Path $PSScriptRoot 'FunctionsHostsFile.ps1' -Resolve) | Out-Null
 
 $IPNetworkModuleName = 'IPNetwork'
-Import-Module (Join-Path $PSScriptRoot "..\..\SubModules\$IPNetworkModuleName.psm1" -Resolve) -Function Test-IsValidIpAddress, Get-IpNet | Out-Null
+Import-Module (Join-Path $PSScriptRoot "..\..\SubModules\$IPNetworkModuleName.psm1" -Resolve) -Verbose:$false -Debug:$false
 
 #region Debug Functions
 if (!(Test-Path function:\_@)) {

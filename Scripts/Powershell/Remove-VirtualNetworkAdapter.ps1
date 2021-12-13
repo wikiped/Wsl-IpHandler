@@ -27,7 +27,7 @@ if (!(Test-Path function:\_@)) {
 #endregion Debug Functions
 
 $hnsModule = Join-Path $PSScriptRoot '..\..\SubModules\HNS.psm1' -Resolve
-Import-Module $hnsModule -Verbose:$false -Debug:$false | Out-Null
+Import-Module $hnsModule -Verbose:$false -Debug:$false
 
 $networkId = Get-HnsNetworkId -Name $VirtualAdapterName
 

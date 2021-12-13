@@ -98,7 +98,7 @@ function Invoke-ScriptElevated {
     }
     else {
         $startProcessParams.WindowStyle = $WindowStyle
-        # $psExeArgs += '-NonInteractive'
+        $psExeArgs += '-NonInteractive'
         $psExeArgs += "-WindowStyle $WindowStyle"
     }
 
@@ -135,7 +135,7 @@ function Invoke-CommandElevated {
     $psexe = (GetPowerShellExecutablePath)
     Write-Debug "$(_@) PowerShellExecutablePath: '$psexe'"
 
-    $psExeArgsList = '-NoLogo', '-NoProfile'  #, '-NonInteractive'
+    $psExeArgsList = '-NoLogo', '-NoProfile', '-NonInteractive'
     $startProcessParams = @{ Verb = 'RunAs' }
 
     if ($Wait) { $startProcessParams.Wait = $true }
@@ -173,7 +173,7 @@ function Invoke-CommandElevated {
             BufferSize = $bufferSize
         }
         $ipcModule = Join-Path $PSScriptRoot '..\..\SubModules\IPC.psm1'
-        Import-Module $ipcModule
+        Import-Module $ipcModule -Verbose:$false -Debug:$false
         $Command = Get-CommandStringToSendOutputToPipe @pipeClientCommandParams @commonParameters
         Write-Debug "$(_@) `$Command to send output to pipe: $Command"
     }
@@ -181,7 +181,7 @@ function Invoke-CommandElevated {
     if ($Encode) {
         if (-not (Get-Module Encoders -ErrorAction 'Continue')) {
             $encodeModule = Join-Path $PSScriptRoot '..\..\SubModules\Encoders.psm1'
-            Import-Module $encodeModule
+            Import-Module $encodeModule -Verbose:$false -Debug:$false
         }
         $encodedCommand = Get-EncodedCommand ($Command -join ' ')
         if ($encodedCommand.Length -gt 8100) {
