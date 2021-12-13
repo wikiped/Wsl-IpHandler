@@ -1,4 +1,4 @@
-﻿#region Helper Functions to work with PrivateData hashtable from Module's PSD1 file.
+#region Helper Functions to work with PrivateData hashtable from Module's PSD1 file.
 
 $WslPrivateData = $null
 

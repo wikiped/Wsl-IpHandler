@@ -1,4 +1,4 @@
-﻿$WslConfig = $null
+$WslConfig = $null
 
 Set-Variable NoSection '_'  # Variable Required by Get-IniContent.ps1 and Out-IniFile.ps1
 . (Join-Path $PSScriptRoot 'Get-IniContent.ps1' -Resolve) | Out-Null

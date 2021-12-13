@@ -1,4 +1,4 @@
-﻿#region Debug Functions
+#region Debug Functions
 if (!(Test-Path function:\_@)) {
     function script:_@ {
         $parentInvocationInfo = Get-Variable MyInvocation -Scope 1 -ValueOnly

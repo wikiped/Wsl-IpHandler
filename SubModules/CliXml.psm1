@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version latest
 
 function ConvertTo-Clixml {
@@ -174,7 +174,7 @@ function ConvertFrom-Clixml {
     $inputArray = @($input)
     if ($inputArray.Count) { $ClixmlString = $inputArray }
     if (!(Test-Path variable:ClixmlString)) {
-        $ClixmlString = '<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"></Objs>' 
+        $ClixmlString = '<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04"></Objs>'
     }
 
     try {

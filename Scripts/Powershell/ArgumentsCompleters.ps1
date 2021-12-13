@@ -1,4 +1,4 @@
-﻿function WslNameCompleter {
+function WslNameCompleter {
     <#
     .SYNOPSIS
     Completes WSL name

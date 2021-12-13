@@ -1,4 +1,4 @@
-﻿if (-not ('System.Windows.Forms.NotifyIcon' -as [type])) {
+if (-not ('System.Windows.Forms.NotifyIcon' -as [type])) {
     Add-Type -AssemblyName System.Windows.Forms
 }
 

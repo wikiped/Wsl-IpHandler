@@ -1,4 +1,4 @@
-﻿Describe 'Editing Network settings in wslconfig' -ForEach @(
+Describe 'Editing Network settings in wslconfig' -ForEach @(
     @{
         GatewayIpAddress = '172.16.0.1'
         PrefixLength     = '24'

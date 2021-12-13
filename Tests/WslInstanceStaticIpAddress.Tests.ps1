@@ -1,4 +1,4 @@
-﻿Describe 'Editing Static IP addresses in wslconfig' {
+Describe 'Editing Static IP addresses in wslconfig' {
     BeforeAll {
         Set-Variable ConfigPath 'TestDrive:\test.wslconfig'
         Import-Module (Join-Path $PSScriptRoot '..\SubModules\IPNetwork.psm1' -Resolve) -Function Get-IpNet

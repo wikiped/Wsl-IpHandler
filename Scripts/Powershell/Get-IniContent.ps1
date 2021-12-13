@@ -1,4 +1,4 @@
-﻿Function Get-IniContent {
+Function Get-IniContent {
     <#
     .Synopsis
         Gets the content of an INI file

@@ -1,4 +1,4 @@
-﻿BeforeAll {
+BeforeAll {
     $ModuleName = 'WSL-IpHandler'
     $ModulePath = Join-Path (Split-Path $PSScriptRoot) "$ModuleName"
     Import-Module $ModulePath -Force

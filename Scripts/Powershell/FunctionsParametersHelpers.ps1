@@ -1,4 +1,4 @@
-﻿function Get-CommonParameters {
+function Get-CommonParameters {
     param(
         [Parameter(ValueFromPipeline,
             ValueFromPipelineByPropertyName,

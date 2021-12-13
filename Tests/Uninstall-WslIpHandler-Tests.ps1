@@ -1,4 +1,4 @@
-﻿Describe 'Uninstall WSL IP Handler' -ForEach @(
+Describe 'Uninstall WSL IP Handler' -ForEach @(
     @{
         WslInstanceName      = 'Ubuntu'
         GatewayIpAddress     = '172.16.0.1'
