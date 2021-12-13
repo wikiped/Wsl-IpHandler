@@ -28,7 +28,8 @@ if ($PSVersionTable.PSVersion.Major -ne 7) {
 }
 
 $ModulesDirectory = "$(Split-Path $Profile)\Modules"
-$ModulesDirectoryInfo = New-Item $ModulesDirectory -Type Directory -ErrorAction SilentlyContinue
+New-Item $ModulesDirectory -Type Directory -ErrorAction SilentlyContinue | Out-Null
+$ModulesDirectoryInfo = Get-Item $ModulesDirectory
 $targetDirectory = Join-Path $ModulesDirectoryInfo.FullName $ModuleName
 
 Push-Location $ModulesDirectory
