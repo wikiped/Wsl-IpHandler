@@ -19,7 +19,7 @@ resolve() {
 #shellcheck source=/dev/null
 source "$(resolve functions.sh)"
 
-echo_verbose "Bash Updating WSL-IpHandler..."
+echo_verbose "Bash Updating Wsl-IpHandler..."
 
 # Prcess Incoming Arguments
 echo_debug "Starting '$0' with User ID: $EUID" ${LINENO}
@@ -35,4 +35,4 @@ source "$(resolve uninstall-wsl-iphandler.sh)" "${@:1:2}" || error ${LINENO} "ex
 # shellcheck source=/dev/null
 source "$(resolve install-wsl-iphandler.sh)" "${@:3}" || error ${LINENO} "executing install-wsl-iphandler.sh"
 
-echo_verbose "Bash Updated WSL-IpHandler..."
+echo_verbose "Bash Updated Wsl-IpHandler..."

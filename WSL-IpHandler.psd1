@@ -1,15 +1,15 @@
 #
-# Module manifest for module 'WSL-IpHandler'
+# Module manifest for module 'Wsl-IpHandler'
 #
 # Generated on: 2021.08.24
 #
 
 @{
     # Script module or binary module file associated with this manifest.
-    RootModule        = 'WSL-IpHandler'
+    RootModule        = 'Wsl-IpHandler'
 
     # Version number of this module.
-    ModuleVersion     = '0.11.5'
+    ModuleVersion     = '0.12.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -60,7 +60,15 @@
     # FormatsToProcess = @()
 
     # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-    # NestedModules = @()
+    # NestedModules = @(
+    #     '.\SubModules\CliXml.psm1'
+    #     '.\SubModules\Encoders.psm1'
+    #     '.\SubModules\GithubPsModulesUpdater.psm1'
+    #     '.\SubModules\HNS.psm1'
+    #     '.\SubModules\IPC.psm1'
+    #     '.\SubModules\IPNetwork.psm1'
+    #     '.\SubModules\Show-ToastMessages.psm1'
+    # )
 
     # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
     # FunctionsToExport = '*'
@@ -84,6 +92,8 @@
         'Install-WslBashScripts'
         'Update-WslBashScripts'
         'Uninstall-WslBashScripts'
+        'Get-WslStatus'
+        'Get-WslInstanceStatus'
     )
 
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
@@ -131,9 +141,12 @@
         }
 
         WslConfig       = @{
+            GlobalSectionName            = 'wsl2'
             NetworkSectionName           = 'network'
             StaticIpAddressesSectionName = 'static_ips'
             IpOffsetSectionName          = 'ip_offsets'
+            SwapSizeKeyName              = 'swap'
+            SwapFileKeyName              = 'swapFile'
             GatewayIpAddressKeyName      = 'gateway_ip'
             PrefixLengthKeyName          = 'prefix_length'
             DnsServersKeyName            = 'dns_servers'
@@ -142,15 +155,15 @@
         }
 
         ScheduledTask   = @{
-            Name        = 'WSL-IpHandlerTask'
-            Path        = '\WSL-IpHandler\'
-            Description = 'Task created by WSL-IpHandler Powershell module to set Hyper-V Network Adapter WSL to predefined IP Address.'
+            Name        = 'Wsl-IpHandlerTask'
+            Path        = '\Wsl-IpHandler\'
+            Description = 'Task created by Wsl-IpHandler Powershell module to set Hyper-V Network Adapter WSL to predefined IP Address.'
         }
 
         ProfileContent  = @(
-            '# Start of WSL-IpHandler Section'
-            'Import-Module WSL-IpHandler'
-            '# End of WSL-IpHandler Section'
+            '# Start of Wsl-IpHandler Section'
+            'Import-Module Wsl-IpHandler'
+            '# End of Wsl-IpHandler Section'
         )
 
         PSData          = @{
@@ -158,16 +171,16 @@
             Tags         = @('WSL', 'IP', 'IPAddress', 'Network', 'Subnet')
 
             # A URL to the license for this module.
-            LicenseUri   = 'https://github.com/wikiped/WSL-IpHandler/blob/master/LICENSE.txt'
+            LicenseUri   = 'https://github.com/wikiped/Wsl-IpHandler/blob/master/LICENSE.txt'
 
             # A URL to the main website for this project.
-            ProjectUri   = 'https://github.com/wikiped/WSL-IpHandler'
+            ProjectUri   = 'https://github.com/wikiped/Wsl-IpHandler'
 
             # A URL to an icon representing this module.
             # IconUri = ''
 
             # ReleaseNotes of this module
-            ReleaseNotes = 'https://github.com/wikiped/WSL-IpHandler/blob/master/RELEASES.txt'
+            ReleaseNotes = 'https://github.com/wikiped/Wsl-IpHandler/blob/master/RELEASES.txt'
 
             # Prerelease string of this module
             # Prerelease = ''
@@ -183,7 +196,7 @@
     } # End of PrivateData hashtable
 
     # HelpInfo URI of this module
-    HelpInfoURI       = 'https://github.com/wikiped/WSL-IpHandler'
+    HelpInfoURI       = 'https://github.com/wikiped/Wsl-IpHandler'
 
     # Default prefix for commands exported from this module. Override the default prefix using Import-Module -Prefix.
     # DefaultCommandPrefix = ''

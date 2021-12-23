@@ -1,14 +1,18 @@
 #Requires -Version 7.1
 
-$ErrorActionPreference = 'Stop'
+$scriptsToImport = @(
+    'Scripts\Powershell\FunctionsArgumentCompleters.ps1'
+    'Scripts\Powershell\FunctionsWslConfig.ps1'
+    'Scripts\Powershell\FunctionsHostsFile.ps1'
+    'Scripts\Powershell\FunctionsPrivateData.ps1'
+    'Scripts\Powershell\FunctionsPSElevation.ps1'
+    'Scripts\Powershell\Get-IniContent.ps1'
+    'Scripts\Powershell\Out-IniFile.ps1'
+)
+$scriptsToImport | ForEach-Object { . (Join-Path $PSScriptRoot $_ -Resolve) | Out-Null }
+
 Set-StrictMode -Version Latest
-
-. (Join-Path $PSScriptRoot 'Scripts\Powershell\ArgumentsCompleters.ps1' -Resolve) | Out-Null
-. (Join-Path $PSScriptRoot 'Scripts\Powershell\WindowsCommandsUTF16Converters.ps1' -Resolve) | Out-Null
-. (Join-Path $PSScriptRoot 'Scripts\Powershell\FunctionsWslConfig.ps1' -Resolve) | Out-Null
-. (Join-Path $PSScriptRoot 'Scripts\Powershell\FunctionsHostsFile.ps1' -Resolve) | Out-Null
-. (Join-Path $PSScriptRoot 'Scripts\Powershell\FunctionsPrivateData.ps1' -Resolve) | Out-Null
-
+$ErrorActionPreference = 'Stop'
 $vEthernetWsl = 'vEthernet (WSL)'
 
 #region Debug Functions
@@ -47,7 +51,7 @@ function Install-WslIpHandler {
     @ specified WSL instance's file system:
         a) the same scripts will be created as in Static Mode.
         b) /etc/wsl.conf will be modified to store Host names / IP Addresses
-           Note that if parameter WslInstanceIpAddress is not specified a first available IP address will be selected and will be used until the WSL-IpHandler is Uninstalled. Otherwise specified IP address will be used.
+           Note that if parameter WslInstanceIpAddress is not specified a first available IP address will be selected and will be used until the Wsl-IpHandler is Uninstalled. Otherwise specified IP address will be used.
     @ Windows host file system:
         a) New [static_ips] section in ~/.wslconfig will be created to store ip address for a specified WSL Instance. This ip address will be used by bash startup script to bind this IP Address at start time to eth0 interface.
         b) The same as for Static Mode.
@@ -78,7 +82,7 @@ function Install-WslIpHandler {
     Optional. If specifies will not modify Powershell Profile (default profile: CurrentUserAllHosts). Otherwise profile will be modified to Import this module and create an Alias `wsl` which will transparently pass through any and all paramaters to `wsl.exe` and, if necessary, initialize beforehand WSL Hyper-V network adapter to allow usage of Static IP Addresses. Will be ignored in Dynamic Mode.
 
     .PARAMETER UseScheduledTaskOnUserLogOn
-    When present - a new Scheduled Task will be created: WSL-IpHandlerTask. It will be triggered at user LogOn. This task execution is equivalent to running Set-WslNetworkAdapter command. It will create WSL Hyper-V Network Adapter when user Logs On.
+    When present - a new Scheduled Task will be created: Wsl-IpHandlerTask. It will be triggered at user LogOn. This task execution is equivalent to running Set-WslNetworkAdapter command. It will create WSL Hyper-V Network Adapter when user Logs On.
 
     .PARAMETER AnyUserLogOn
     When this parameter is present - The Scheduled Task will be set to run when any user logs on. Otherwise (default behavior) - the task will run only when current user (who executed Install-WslIpHandler command) logs on.
@@ -156,17 +160,22 @@ function Install-WslIpHandler {
         [Alias('Backup')]
         [switch]$BackupWslConfig,
 
+        [Parameter()]
+        [Alias('IgnoreSwap')]
+        [switch]$NoSwapCheck,
+
         [Parameter(ParameterSetName = 'Static')]
         [string[]]$DynamicAdapters = @('Ethernet', 'Default Switch')
     )
-    Write-Host "PowerShell installing WSL-IpHandler to $WslInstanceName..."
+    Write-Host "PowerShell installing Wsl-IpHandler to $WslInstanceName..."
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
-    # $PSDefaultParameterValues['*:Verbose'] = $VerbosePreference -eq 'Continue'
-    # $PSDefaultParameterValues['*:Debug'] = $DebugPreference -eq 'Continue'
 
-    #region Save Network Parameters to .wslconfig and Setup Network Adapters
     $configModified = $false
 
+    Test-ModuleOnNetworkShareAndWarn
+    if (-not $NoSwapCheck) { Test-SwapAndWarn -Modified ([ref]$configModified) }
+
+    #region Save Network Parameters to .wslconfig and Setup Network Adapters
     Set-WslNetworkConfig -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $DNSServerList -DynamicAdapters $DynamicAdapters -WindowsHostName $WindowsHostName -Modified ([ref]$configModified)
 
     if ($null -ne $GatewayIpAddress) {
@@ -184,7 +193,7 @@ function Install-WslIpHandler {
         Set-WslInstanceStaticIpAddress -WslInstanceName $WslInstanceName -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -WslInstanceIpAddress $WslInstanceIpAddress.IPAddressToString -Modified ([ref]$configModified)
 
         if ($UseScheduledTaskOnUserLogOn) {
-            Write-Verbose 'Registering WSL-IpHandler scheduled task...'
+            Write-Verbose 'Registering Wsl-IpHandler scheduled task...'
             $taskParams = @{
                 WaitForWslNetworkConnection = $true
                 ShowToast                   = $true
@@ -230,7 +239,7 @@ function Install-WslIpHandler {
         Test-WslInstallation -WslInstanceName $WslInstanceName -WslHostName $WslHostName -WindowsHostName $WindowsHostName
     }
     catch {
-        Write-Host "PowerShell finished installation of WSL-IpHandler to $WslInstanceName with Errors:"
+        Write-Host "PowerShell finished installation of Wsl-IpHandler to $WslInstanceName with Errors:"
         Write-Debug "$(_@) ScriptStackTrace: $($_.ScriptStackTrace)"
         Write-Host "$_" -ForegroundColor Red
         return
@@ -241,7 +250,7 @@ function Install-WslIpHandler {
     }
     #endregion Test IP and host Assignments
 
-    Write-Host "PowerShell successfully installed WSL-IpHandler to $WslInstanceName."
+    Write-Host "PowerShell successfully installed Wsl-IpHandler to $WslInstanceName."
 }
 
 function Uninstall-WslIpHandler {
@@ -272,7 +281,7 @@ function Uninstall-WslIpHandler {
 
         [switch]$BackupWslConfig
     )
-    Write-Host "PowerShell Uninstalling WSL-IpHandler from $WslInstanceName..."
+    Write-Host "PowerShell Uninstalling Wsl-IpHandler from $WslInstanceName..."
 
     #region Bash Scripts UnInstallation
     Uninstall-WslBashScripts -WslInstanceName $WslInstanceName
@@ -320,7 +329,7 @@ function Uninstall-WslIpHandler {
         Remove-ProfileContent
 
         Write-Debug "$(_@) Removing Scheduled Task ..."
-        Remove-WslScheduledTask -CheckRemoval
+        Remove-WslScheduledTask -CheckSuccess
     }
     else {
         Write-Debug "$(_@) Skipping Removal of Network Config, Powershell Profile modifications and ScheduledTaskThere because there are Static IPs remaining:"
@@ -329,7 +338,7 @@ function Uninstall-WslIpHandler {
     if ($wslconfigModified) { Write-WslConfig -Backup:$BackupWslConfig }
     #endregion Remove Network Config and Content from Powershell Profile and ScheduledTask
 
-    Write-Host "PowerShell successfully uninstalled WSL-IpHandler from $WslInstanceName!"
+    Write-Host "PowerShell successfully uninstalled Wsl-IpHandler from $WslInstanceName!"
 }
 
 function Install-WslBashScripts {
@@ -389,7 +398,7 @@ function Install-WslBashScripts {
             Throw "$msg"
         }
     }
-    $WindowsHostName = Get-WslConfigValue -SectionName (Get-NetworkSectionName) -KeyName (Get-WindowsHostNameKeyName) -DefaultValue 'windows'
+    $WindowsHostName = Get-WslConfigWindowsHostName -DefaultValue 'windows'
     Write-Debug "$(_@) `$WindowsHostName='$WindowsHostName'"
     #endregion Read WSL config
 
@@ -534,10 +543,13 @@ function Update-WslBashScripts {
     Uninstalls (deletes) and then installs (copies) last version of Bash scripts to specified WSL Instance
 
     .PARAMETER WslInstanceName
-    Required. Name of the WSL Instance as listed by `wsl.exe -l` command
+    Required. Name of the WSL Instance as listed by `wsl.exe -l` command.
 
     .PARAMETER WslHostName
     Optional. Defaults to WslInstanceName. The name to use to access the WSL Instance on WSL SubNet. This name together with WslInstanceIpAddress are added to Windows HOSTS file.
+
+    .PARAMETER All
+    If this switch parameter is specified all instances where Wsl-IpHandler was installed will be updated.
 
     .EXAMPLE
     Update-WslBashScripts -WslInstanceName Ubuntu
@@ -548,20 +560,33 @@ function Update-WslBashScripts {
     This command can only be used AFTER `Install-WslIpHandler` command was used to setup network configuration.
     #>
     param(
-        [Parameter(Mandatory, Position = 0)]
+        [Parameter(Mandatory, Position = 0, ParameterSetName = 'Single')]
         [Alias('Name')]
         [string]$WslInstanceName,
 
-        [Parameter()]
+        [Parameter(ParameterSetName = 'Single')]
         [ValidateNotNullOrEmpty()]
         [string]$WslHostName = $WslInstanceName,
 
-        [Parameter()]
-        [switch]$BashVerbose,
-
-        [Parameter()]
-        [switch]$BashDebug
+        [Parameter(Mandatory, ParameterSetName = 'All')]
+        [switch]$All
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
+    if ($All) {
+        $status = Get-WslStatus -StaticIp -DynamicIp -PassThru -InformationAction SilentlyContinue
+        $wslInstances = [string[]]($status.StaticIp.Keys) + $status.DynamicIp
+        foreach ($instance in $wslInstances) {
+            $wslHostName = (Get-HostForIpAddress $instance) ?? $instance
+            $params = @{
+                WslInstanceName = $instance
+                WslHostName     = $wslHostName
+            }
+            if ($VerbosePreference -eq 'Continue') { $params.Verbose = $true }
+            if ($DebugPreference -eq 'Continue') { $params.Debug = $true }
+            Write-Debug "$(_@) Invoking Update-WslBashScripts $(& {$args} @params)"
+            Update-WslBashScripts @params
+        }
+    }
     #region Local Bash Script Paths
     $BashUpdateScript = Get-SourcePath 'BashUpdate'
     Write-Debug "$(_@) `$BashUpdateScript='$BashUpdateScript'"
@@ -593,7 +618,7 @@ function Update-WslBashScripts {
     $WinHostsEditScript = Get-SourcePath 'WinHostsEdit'
     Write-Debug "$(_@) `$WinHostsEditScript='$WinHostsEditScript'"
 
-    $WindowsHostName = Get-WslConfigValue -SectionName (Get-NetworkSectionName) -KeyName (Get-WindowsHostNameKeyName) -DefaultValue 'windows'
+    $WindowsHostName = Get-WslConfigWindowsHostName -DefaultValue 'windows'
     Write-Debug "$(_@) `$WindowsHostName='$WindowsHostName'"
 
     $existingIp = Get-WslConfigStaticIpAddress -WslInstanceName $WslInstanceName
@@ -637,12 +662,9 @@ function Update-WslBashScripts {
     $bashCommand = + $bashInstallArgs
 
     $envVars = @()
-    if ($DebugPreference -gt 0) { $envVars += 'DEBUG=1' }
-    if ($VerbosePreference -gt 0) { $envVars += 'VERBOSE=1' }
-
     $bashArgs = @()
-    if ($BashVerbose) { $bashArgs += '--verbose' }
-    if ($BashDebug) { $bashArgs += '--debug' }
+    if ($VerbosePreference -eq 'Continue') { $envVars += 'VERBOSE=1'; $bashArgs += '--verbose' }
+    if ($DebugPreference -eq 'Continue') { $envVars += 'DEBUG=1'; $bashArgs += '--debug' }
 
     Write-Debug "$(_@) Invoking: wsl.exe -d $WslInstanceName sudo -E env '`"PATH=``$PATH`"' $envVars bash $bashArgs $bashCommand"
     $bashUpdateScriptOutput = wsl.exe -d $WslInstanceName sudo -E env '"PATH=$PATH"' @envVars bash @bashArgs @bashCommand
@@ -689,7 +711,7 @@ function Set-ProfileContent {
 
     Write-Debug "$(_@) ProfilePath: $ProfilePath"
 
-    $handlerContent = Get-ProfileContent
+    $handlerContent = Get-ProfileContentTemplate
 
     $content = (Get-Content -Path $ProfilePath -ErrorAction SilentlyContinue) ?? @()
 
@@ -703,12 +725,12 @@ function Set-ProfileContent {
         $content = $content | Where-Object { $handlerContent -notcontains $_ }
         $content += $handlerContent
         Set-Content -Path $ProfilePath -Value $content -Force
-        Write-Warning "WSL-IpHandler Content was added to Powershell profile: $ProfilePath."
+        Write-Warning "Wsl-IpHandler Content was added to Powershell profile: $ProfilePath."
         Write-Warning 'The changes will take effect after Powershell session is restarted!'
         # . $ProfilePath  # !!! DONT DO THAT -> IT Removes ALL Sourced functions (i.e. '. File.ps1')
     }
     else {
-        Write-Debug "$(_@) WSL-IpHandler Content is already present in Powershell profile: $ProfilePath."
+        Write-Debug "$(_@) Wsl-IpHandler Content is already present in Powershell profile: $ProfilePath."
     }
 }
 
@@ -727,7 +749,7 @@ function Remove-ProfileContent {
     param($ProfilePath = $Profile.CurrentUserAllHosts)
     Write-Debug "$(_@) ProfilePath: $ProfilePath"
 
-    $handlerContent = Get-ProfileContent
+    $handlerContent = Get-ProfileContentTemplate
 
     $content = (Get-Content -Path $ProfilePath -ErrorAction SilentlyContinue) ?? @()
     if ($content) {
@@ -737,11 +759,11 @@ function Remove-ProfileContent {
         if ($handlerContentIsPresent) {
             $content = $content | Where-Object { $handlerContent -notcontains $_ }
             Set-Content -Path $ProfilePath -Value $content -Force
-            Write-Warning "WSL-IpHandler Content was removed from Powershell profile: $ProfilePath."
+            Write-Warning "Wsl-IpHandler Content was removed from Powershell profile: $ProfilePath."
             Write-Warning 'The changes will take effect after Powershell session is restarted!'
         }
         else {
-            Write-Debug "$(_@) WSL-IpHandler Content not found in $ProfilePath"
+            Write-Debug "$(_@) Wsl-IpHandler Content not found in $ProfilePath"
         }
     }
 }
@@ -1110,13 +1132,13 @@ function Set-WslNetworkAdapter {
         $toastModulePath = Join-Path $PSScriptRoot 'SubModules' "$toastModuleName.psm1" -Resolve
         Import-Module $toastModulePath -Function Show-ToastMessage -Verbose:$false -Debug:$false
         $toastParams = @{
-            Title   = 'WSL-IpHandler'
+            Title   = 'Wsl-IpHandler'
             Seconds = $ToastDuration
         }
     }
 
     if ($null -eq $GatewayIpAddress) {
-        $msg = 'Gateway IP Address is not specified neither as parameter nor in .wslconfig. WSL Hyper-V Network Adapter cannot be setup without Gateway IP Address!'
+        $msg = "Gateway IP Address is not specified neither as parameter nor in .wslconfig.`nWSL Hyper-V Network Adapter cannot be setup without Gateway IP Address!"
         if ($ShowToast) { Show-ToastMessage -Text "$msg" -Type 'Info' @toastParams }
         Throw "$msg"
     }
@@ -1154,7 +1176,7 @@ function Set-WslNetworkAdapter {
     Write-Debug "$(_@) Shutting down all WSL instances before Setting up WSL Network Adapter..."
     wsl.exe --shutdown
 
-    . (Join-Path $PSScriptRoot 'Scripts\Powershell\FunctionsPSElevation.ps1' -Resolve) | Out-Null
+    # . (Join-Path $PSScriptRoot 'Scripts\Powershell\FunctionsPSElevation.ps1' -Resolve) | Out-Null
     $setAdapterScript = Join-Path $PSScriptRoot 'Scripts\Powershell\Set-VirtualNetworkAdapter.ps1' -Resolve
 
     $scriptParameters = @{
@@ -1243,11 +1265,11 @@ function Remove-WslNetworkAdapter {
 function Set-WslScheduledTask {
     <#
     .SYNOPSIS
-    Creates a new Scheduled Task: WSL-IpHandlerTask that will be triggered at user LogOn.
+    Creates a new Scheduled Task: Wsl-IpHandlerTask that will be triggered at user LogOn.
     This task execution is equivalent to running Set-WslNetworkAdapter command. It will create WSL Hyper-V Network Adapter when user logs on.
 
     .DESCRIPTION
-    Creates Scheduled Task named 'WSL-IpHandlerTask' under 'WSL-IpHandler' folder.
+    Creates Scheduled Task named 'Wsl-IpHandlerTask' under 'Wsl-IpHandler' folder.
     The task will be executed with Highest level of privileges under SYSTEM account.
     It will run in background without any interaction with user.
     After it is finished there will be WSL Hyper-V network adapter with network properties specified with this command.
@@ -1315,8 +1337,8 @@ function Set-WslScheduledTask {
         [switch]$CheckSuccess
         # [switch]$AsLocalSystem  # This breaks Toasts
     )
-    $elevationScript = Join-Path $PSScriptRoot 'Scripts\Powershell\FunctionsPSElevation.ps1' -Resolve
-    . $elevationScript
+    # $elevationScript = Join-Path $PSScriptRoot 'Scripts\Powershell\FunctionsPSElevation.ps1' -Resolve
+    # . $elevationScript
 
     $taskName = Get-ScheduledTaskName
     $taskPath = Get-ScheduledTaskPath
@@ -1383,7 +1405,7 @@ function Set-WslScheduledTask {
     Write-Verbose "Scheduled Task to register: ${taskPath}${taskName}"
     Write-Verbose "Task command: '$psExe'"
     Write-Verbose "Task command arguments: $($scriptParams.Argument)"
-    if ($AnyUserLogOn) { Write-Verbose "Task will be run on logon of ANY user." }
+    if ($AnyUserLogOn) { Write-Verbose 'Task will be run on logon of ANY user.' }
 
     if ($RunWhetherUserLoggedOnOrNot) {
         $credential = Get-WslScheduledTaskCredential -UserName $FullUserName -MaxNumberOfAttempts 5
@@ -1404,7 +1426,7 @@ function Set-WslScheduledTask {
     if (-not $CheckSuccess) { return }
 
     $waitingMessage = ''
-    $eventLabel = 'WSL-IpHandler Scheduled Task Registration'
+    $eventLabel = 'Wsl-IpHandler Scheduled Task Registration'
     $waitParams = @{
         ValidationScript = {
             $null -ne (Get-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction SilentlyContinue)
@@ -1428,7 +1450,7 @@ function Set-WslScheduledTask {
 function Remove-WslScheduledTask {
     <#
     .SYNOPSIS
-    Removes WSL-IpHandlerTask Scheduled Task created with Set-WslScheduledTask command.
+    Removes Wsl-IpHandlerTask Scheduled Task created with Set-WslScheduledTask command.
 
     .PARAMETER CheckSuccess
     If this switch parameter is specified after the task was removed the command will check that the task does not actually exist.
@@ -1448,7 +1470,7 @@ function Remove-WslScheduledTask {
         [Parameter()]
         [int]$Timeout = 15
     )
-    . (Join-Path $PSScriptRoot 'Scripts\Powershell\FunctionsPSElevation.ps1' -Resolve)
+    # . (Join-Path $PSScriptRoot 'Scripts\Powershell\FunctionsPSElevation.ps1' -Resolve)
 
     $taskName = Get-ScheduledTaskName
     $taskPath = Get-ScheduledTaskPath
@@ -1475,7 +1497,7 @@ function Remove-WslScheduledTask {
     if (-not $CheckSuccess) { return }
 
     $waitingMessage = ''
-    $eventLabel = 'WSL-IpHandler Scheduled Task Removal'
+    $eventLabel = 'Wsl-IpHandler Scheduled Task Removal'
     $waitParams = @{
         ValidationScript = {
             $null -eq (Get-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction SilentlyContinue)
@@ -1529,18 +1551,17 @@ function Test-WslInstallation {
         [ValidateNotNullOrEmpty()]
         [string]$WindowsHostName
     )
-    $networkSectionName = (Get-NetworkSectionName)
     $failed = $false
 
     if (-not $PSBoundParameters.ContainsKey('WindowsHostName')) {
-        $WindowsHostName = Get-WslConfigValue -SectionName $networkSectionName -KeyName (Get-WindowsHostNameKeyName) -DefaultValue 'windows'
+        $WindowsHostName = Get-WslConfigWindowsHostName -DefaultValue 'windows'
     }
 
     $error_message = @()
 
     $bashTestCommand = "ping -c1 $WindowsHostName 2>&1"
     Write-Verbose "Testing Ping from WSL instance ${WslInstanceName}: `"$bashTestCommand`" ..."
-    $wslTest = (Invoke-WslExe -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$bashTestCommand`") -join "`n"
+    $wslTest = (Invoke-WslExe -NoSwapCheck -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$bashTestCommand`") -join "`n"
 
     Write-Debug "$(_@) `$wslTest: $wslTest"
 
@@ -1554,7 +1575,7 @@ function Test-WslInstallation {
 
     Write-Debug "$(_@) Starting WSL instance $WslInstanceName for testing ping from Windows."
     $runCommand = 'sleep 60; exit'
-    $wslJob = Invoke-WslExe -d $WslInstanceName env BASH_ENV=/etc/profile bash -c "`"$runCommand`"" &
+    $wslJob = Invoke-WslExe -NoSwapCheck -d $WslInstanceName env BASH_ENV=/etc/profile bash -c "`"$runCommand`"" &
     Start-Sleep -Seconds 7  # let WSL startup before pinging
 
     Write-Verbose "Testing Ping from Windows to WSL instance ${WslInstanceName} ..."
@@ -1576,8 +1597,332 @@ function Test-WslInstallation {
         Write-Error ($error_message -join "`n") -ErrorAction Stop
     }
     else {
-        Write-Host "Test of WSL-IpHandler Installation on $WslInstanceName Succeeded!" -ForegroundColor Green
+        Write-Host "Test of Wsl-IpHandler Installation on $WslInstanceName Succeeded!" -ForegroundColor Green
     }
+}
+
+function Get-WslStatus {
+    <#
+    .SYNOPSIS
+    Displays or outputs status of Wsl-IpHandler installation.
+
+    .DESCRIPTION
+    By default this function outputs nothing and only displays the status of All properties:
+    .WslInstances: The list of distribution names obtained from `wsl.exe -l` command
+    .WslInstancesStatus: output of Get-WslInstanceStatus command for each WSL instance.
+    .StaticIp: The dictionary with WslInstances names and their static IP addresses if those were configured with this module.
+    .DynamicIp: The list of WslInstances names for which dynamic IP address was configured with this module.
+    .WslSubnet: vEthernet (WSL) gateway IP address and prefix length, if present, otherwise $null.
+    .ProfileModified: Path to Powershell profile which have been modified or $false.
+    .ScheduledTaskExists: bool value indicating whether Wsl-IpHandler Scheduled Task exists.
+    .WslSwapEnabled: bool value indicating whether WSL2 has swap enabled.
+    .WslSwapFile: Path to swap file specified in .wslconfig (or WSL default path).
+    .WslSwapFileCompressed: bool value indicating whether swap file is compressed.
+    .ModuleOnPath: bool value indicating whether Wsl-IpHandler module can be found in PSModulePath.
+    .ModuleOnNetworkShare: $true if this module is installed on a network share, else $false.
+
+    When -PassThru parameter is specified the function will output PSCustomObject with above fields.
+    Display of information can be suppressed (i.e. if only output is needed) by specifying parameter: `-InformationAction 'SilentlyContinue'`
+
+    .PARAMETER WslInstances
+    If this switch parameter is specifiedL WslInstances property will contain the list of distribution names obtained from `wsl.exe -l` command.
+
+    .PARAMETER WslInstancesStatus
+    If this switch parameter is specified: WslInstancesStatus property will contain PSCustomObject with each distribution name and set of properties outlined in Get-WslInstanceStatus command
+
+    .PARAMETER StaticIp
+    If this switch parameter is specified: StaticIp property will contain the dictionary with WslInstances names and their static IP addresses (if those were configured with this module).
+
+    .PARAMETER DynamicIp
+    If this switch parameter is specified: DynamicIp property will contain the list of WslInstances names for which dynamic IP address was configured with this module.
+
+    .PARAMETER WslSubnet
+    If this switch parameter is specified: WslSubnet property will contain vEthernet (WSL) gateway IP address and prefix length, if present, otherwise $null.
+
+    .PARAMETER ProfileModified
+    If this switch parameter is specified: ProfileModified property will have a Path to Powershell profile which have been modified (or $false if no profile was modified).
+
+    .PARAMETER ScheduledTaskExists
+    If this switch parameter is specified: ScheduledTaskExists property will have a bool value indicating whether Wsl-IpHandler Scheduled Task exists.
+
+    .PARAMETER WslSwapEnabled
+    If this switch parameter is specified: WslSwapEnabled property will have a bool value indicating whether WSL2 has swap enabled.
+
+    .PARAMETER WslSwapFile
+    If this switch parameter is specified: WslSwapFile property will have a string value with path swap file specified in .wslconfig or WSL default path if path is not specified in .wslconfig.
+
+    .PARAMETER WslSwapFileCompressed
+    If this switch parameter is specified: WslSwapFileCompressed property will have a bool value indicating whether swap file is compressed.
+
+    .PARAMETER ModuleOnPath
+    If this switch parameter is specified: ModuleOnPath property will have a bool value indicating whether Wsl-IpHandler module can be found in one locations where Powershell looks for modules.
+
+    .PARAMETER ModuleOnNetworkShare
+    If this switch parameter is specified: ModuleOnNetworkShare property will have a bool value indicating whether Wsl-IpHandler module is installed on a network share.
+
+    .PARAMETER ExpandEnvironmentVariables
+    If this switch parameter is specified: When swap file is set in .wslconfig with environment variable the variable will be expanded and WslSwapFile property will have an absolute path to the swap file.
+
+    .PARAMETER All
+    This is the default parameter that is passed to the command. It is the same as if all other parameters were specified. Can not be combined with other parameters (except for -PassThru).
+
+    .PARAMETER PassThru
+    If this switch parameter is specified the function will output PSCustomObject with selected Properties.
+
+    .EXAMPLE
+    Get-WslStatus
+    Will display all information.
+
+    $status = Get-WslStatus -PassThru
+    Will assign output of the function to $status variable and diplay the information.
+
+    $status = Get-WslStatus -PassThru -InformationAction SilentlyContinue
+    Will assign output of the function to $status variable without diplaying anything.
+
+    .NOTES
+    All properties are added or displayed regardless of the parameters, but the content of the property is $null if the parameters was not specified.
+    #>
+    [CmdletBinding(DefaultParameterSetName = 'All')]
+    param(
+        [Parameter(ParameterSetName = 'Selected')][switch]$WslInstances,
+
+        [Parameter(ParameterSetName = 'Selected')][switch]$WslInstancesStatus,
+
+        [Parameter(ParameterSetName = 'Selected')][switch]$StaticIp,
+
+        [Parameter(ParameterSetName = 'Selected')][switch]$DynamicIp,
+
+        [Parameter(ParameterSetName = 'Selected')][switch]$WslSubnet,
+
+        [Parameter(ParameterSetName = 'Selected')][switch]$ScheduledTaskExists,
+
+        [Parameter(ParameterSetName = 'Selected')][switch]$ProfileModified,
+
+        [Parameter(ParameterSetName = 'Selected')][switch]$WslSwapEnabled,
+
+        [Parameter(ParameterSetName = 'Selected')][switch]$WslSwapFile,
+
+        [Parameter(ParameterSetName = 'Selected')][switch]$WslSwapFileCompressed,
+
+        [Parameter()][switch]$ExpandEnvironmentVariables,
+
+        [Parameter(ParameterSetName = 'Selected')][switch]$ModuleOnPath,
+
+        [Parameter(ParameterSetName = 'Selected')][switch]$ModuleOnNetworkShare,
+
+        [Parameter(ParameterSetName = 'All')][switch]$All,
+
+        [Parameter()][switch]$PassThru
+    )
+    if (-not $PSBoundParameters.ContainsKey('InformationAction')) {
+        $InformationPreference = 'Continue'
+    }
+
+    $status = [PSCustomObject][ordered]@{
+        WslInstances          = $null
+        StaticIp              = $null
+        DynamicIp             = $null
+        WslSubnet             = $null
+        ProfileModified       = $null
+        ScheduledTaskExists   = $null
+        WslSwapEnabled        = $null
+        WslSwapFile           = $null
+        WslSwapFileCompressed = $null
+        ModuleOnPath          = $null
+        ModuleOnNetworkShare  = $null
+        WslInstancesStatus    = $null
+        PSTypeName            = 'WslStatus'
+    }
+    if ($PSCmdlet.ParameterSetName -eq 'All') {
+        $WslInstances = $true
+        $WslInstancesStatus = $true
+        $StaticIp = $true
+        $DynamicIp = $true
+        $WslSubnet = $true
+        $ProfileModified = $true
+        $WslSwapEnabled = $true
+        $WslSwapFile = $true
+        $WslSwapFileCompressed = $true
+        $ModuleOnPath = $true
+        $ModuleOnNetworkShare = $true
+        $ScheduledTaskExists = $true
+    }
+    $propertiesToDisplay = New-Object System.Collections.ArrayList
+
+    if ($WslInstances -or $WslInstancesStatus) {
+        $wslInstancesAll = Get-WslInstancesNames
+        if ($WslInstances) {
+            $status.WslInstances = $wslInstancesAll
+            $null = $propertiesToDisplay.Add('WslInstances')
+        }
+        if ($WslInstancesStatus) {
+            $instancesStatus = [ordered]@{}
+            foreach ($instance in $wslInstancesAll) {
+                $instanceStatus = Get-WslInstanceStatus $instance
+                $instancesStatus[$instance] = $instanceStatus
+            }
+            $status.WslInstancesStatus = [PSCustomObject]$instancesStatus
+        }
+    }
+    if ($StaticIp) {
+        $staticSection = Get-WslConfigStaticIpSection
+        if ($staticSection.Count) {
+            $status.StaticIp = [PSCustomObject]($staticSection)
+            $null = $propertiesToDisplay.Add('StaticIp')
+        }
+    }
+    if ($DynamicIp) {
+        $ipOffsetSectionKeys = [string[]]((Get-WslConfigIpOffsetSection).Keys)
+        if ($ipOffsetSectionKeys) {
+            $status.DynamicIp = $ipOffsetSectionKeys
+            $null = $propertiesToDisplay.Add('DynamicIp')
+        }
+    }
+    if ($WslSubnet) {
+        $wslNet = Get-NetIPAddress -InterfaceAlias $vEthernetWsl -AddressFamily IPv4 -ErrorAction Ignore
+        if ($wslNet) {
+            $status.WslSubnet = "$($wslNet.IPAddress)/$($wslNet.PrefixLength)"
+            $null = $propertiesToDisplay.Add('WslSubnet')
+        }
+    }
+    if ($WslSwapEnabled) {
+        [string]$swapSize = Get-WslConfigSwapSize
+        Write-Debug "$(_@) `$swapSize: '$swapSize'"
+        $status.WslSwapEnabled = $swapSize -ne '0'
+        $null = $propertiesToDisplay.Add('WslSwapEnabled')
+    }
+    if ($WslSwapFile -or $WslSwapFileCompressed) {
+        $defaultSwapFile = '%USERPROFILE%\AppData\Local\Temp\swap.vhdx'
+        $swapFile = Get-WslConfigSwapFile -ExpandEnvironmentVariables:$ExpandEnvironmentVariables
+        if (-not $swapFile) {
+            $swapFile = $ExpandEnvironmentVariables ? $ExecutionContext.InvokeCommand.ExpandString(($defaultSwapFile -replace '%([^=\s]+)%', '${env:$1}')) : $defaultSwapFile
+        }
+        Write-Debug "$(_@) `$swapFile: '$swapFile'"
+        if ($WslSwapFile) {
+            $status.WslSwapFile = $swapFile
+            $null = $propertiesToDisplay.Add('WslSwapFile')
+        }
+        if ($WslSwapFileCompressed) {
+            if ($ExpandEnvironmentVariables) { $swapFileExpanded = $swapFile }
+            else { $swapFileExpanded = Get-WslConfigSwapFile -ExpandEnvironmentVariables }
+            if (-not $swapFileExpanded) {
+                $swapFileExpanded = $ExecutionContext.InvokeCommand.ExpandString(($defaultSwapFile -replace '%([^=\s]+)%', '${env:$1}'))
+            }
+            Write-Debug "$(_@) `$swapFileExpanded: '$swapFileExpanded'"
+            $status.WslSwapFileCompressed = Test-NtfsCompressionEnabled $swapFileExpanded
+            $null = $propertiesToDisplay.Add('WslSwapFileCompressed')
+        }
+    }
+    if ($ModuleOnPath) {
+        $paths = $env:PSModulePath -split ';'
+        $modulePath = $MyInvocation.MyCommand.Module.ModuleBase
+        $onPath = $false
+        foreach ($path in $paths) { if ($modulePath.Contains($path)) { $onPath = $true; break } }
+        $status.ModuleOnPath = $onPath
+        $null = $propertiesToDisplay.Add('ModuleOnPath')
+    }
+    if ($ModuleOnNetworkShare) {
+        $status.ModuleOnNetworkShare = Test-PathOnNetworkShare $MyInvocation.MyCommand.Module.ModuleBase
+        $null = $propertiesToDisplay.Add('ModuleOnNetworkShare')
+    }
+    if ($ProfileModified) {
+        $profiles = @(
+            $Profile.AllUsersAllHosts
+            $Profile.AllUsersCurrentHost
+            $Profile.CurrentUserAllHosts
+            $Profile.CurrentUserCurrentHost
+        )
+        $modifiedProfile = $false
+        foreach ($profile in $profiles) {
+            $content = (Get-Content -Path $profile -ErrorAction SilentlyContinue) ?? @()
+            if ($content -match '^\s*Import-Module.*Wsl-IpHandler') {
+                $modifiedProfile = $profile; break
+            }
+        }
+        $status.ProfileModified = $modifiedProfile
+        $null = $propertiesToDisplay.Add('ProfileModified')
+    }
+    if ($ScheduledTaskExists) {
+        $taskName = Get-ScheduledTaskName
+        $taskPath = Get-ScheduledTaskPath
+        $existingTask = Get-ScheduledTask -TaskName $taskName -TaskPath $taskPath -ErrorAction SilentlyContinue
+        $status.ScheduledTaskExists = $null -ne $existingTask
+        $null = $propertiesToDisplay.Add('ScheduledTaskExists')
+    }
+
+    Write-Information "$($status | Select-Object -Property $propertiesToDisplay | Format-List -Expand Both | Out-String)"
+    if ($WslInstancesStatus) {
+        Write-Information "WslInstancesStatus:`n"
+        foreach ($instance in $status.WslInstancesStatus.psobject.Properties.Name) {
+            Write-Information "${instance}: $($status.WslInstancesStatus.$instance | Format-List -Expand Both | Out-String)"
+        }
+    }
+    if ($PassThru) { $status }
+}
+
+function Get-WslInstanceStatus {
+    <#
+    .SYNOPSIS
+    Outputs PSCustomObject with status of Wsl-IpHandler module installation on the specified WSL Instance.
+
+    .DESCRIPTION
+    The resulting PSCustomObject has the following properties:
+    WslInstanceName: The name of WSL instance as listed by `wsl.exe -l`
+    StaticIp: Static IP address if one was specified when activating the module on the instance
+    DynamicIp: Bool indicating whether the instance has dynamically assigned IP address.
+    WslHostName: Host name that windows will use to access specified WSL instance.
+    WindowsHostName: Host name the instance will use to access Windows.
+    ModuleScript: Bool indicating whether Wsl-IpHandler module bash script is installed.
+    ModuleSudoers: Bool indicating whether Wsl-IpHandler sudoers file is installed.
+
+    .PARAMETER WslInstanceName
+    Name of the WSL instance to check
+
+    .EXAMPLE
+    Get-WslInstanceStatus Ubuntu
+    #>
+    param (
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('Name')]
+        [string]$WslInstanceName
+    )
+    $status = [PSCustomObject]@{
+        WslInstanceName = $WslInstanceName
+        StaticIp        = $null
+        DynamicIp       = $null
+        WslHostName     = $null
+        WindowsHostName = $null
+        ModuleScript    = $null
+        ModuleSudoers   = $null
+        PSTypeName      = 'WslInstanceStatus'
+    }
+    $isRunningOnStart = Test-WslInstanceIsRunning $WslInstanceName
+
+    $staticIp = wsl.exe -d $WslInstanceName grep -Po "'static_ip\s*=\s*\K([\d\.]+)'" '/etc/wsl.conf'
+    if (![string]::IsNullOrWhiteSpace($staticIp)) { $status.StaticIp = $staticIp }
+
+    $dynamicIp = wsl.exe -d $WslInstanceName grep -Poqw "'ip_offset'" '/etc/wsl.conf' && 1 || 0
+    if ($dynamicIp -eq '1') { $status.DynamicIp = $true } else { $status.DynamicIp = $false }
+
+    $wslHostName = wsl.exe -d $WslInstanceName grep -Po "'wsl_host\s*=\s*\K[\S]+'" '/etc/wsl.conf'
+    if (![string]::IsNullOrWhiteSpace($wslHostName)) {
+        $status.WslHostName = $wslHostName
+    }
+    $windowsHostName = wsl.exe -d $WslInstanceName grep -Po "'windows_host\s*=\s*\K[\S]+'" '/etc/wsl.conf'
+    if (![string]::IsNullOrWhiteSpace($windowsHostName)) {
+        $status.WindowsHostName = $windowsHostName
+    }
+    $moduleScript = wsl.exe -d $WslInstanceName test -f '/usr/local/bin/wsl-iphandler.sh' && 1 || 0
+    if ($moduleScript -eq '1') { $status.ModuleScript = $true }
+    else { $status.ModuleScript = $false }
+
+    $moduleSudoers = wsl.exe -d $WslInstanceName test -f '/etc/sudoers.d/wsl-iphandler' && 1 || 0
+    if ($moduleSudoers -eq '1') { $status.ModuleSudoers = $true }
+    else { $status.ModuleSudoers = $false }
+
+    if (-not $isRunningOnStart) { wsl.exe -t $WslInstanceName }
+    $status
 }
 
 function Update-WslIpHandlerModule {
@@ -1601,20 +1946,21 @@ function Update-WslIpHandlerModule {
     .EXAMPLE
     Update-WslIpHandlerModule
 
-    Will update this module using git.exe if it can be located, otherwise will use Invoke-WebRequest to download latest master.zip from repository and overwrite all existing file in WSL-IpHandler module's folder.
+    Will update this module using git.exe if it can be located, otherwise will use Invoke-WebRequest to download latest master.zip from repository and overwrite all existing file in Wsl-IpHandler module's folder.
 
     .NOTES
     The default update mode is to use git.exe if it can be located with PATH.
     Adding -GitExePath parameter will allow to use git.exe that is not on PATH.
     All files in this Module's folder will be removed before update!
     #>
+    [CmdletBinding(DefaultParameterSetName = 'Git')]
     param(
-        [Parameter()]
+        [Parameter(ParameterSetName = 'Git')]
         [ValidateScript({ Test-Path $_ -PathType Leaf -Include 'git.exe' })]
         [Alias('Git')]
         [string]$GitExePath,
 
-        [Parameter()]
+        [Parameter(Mandatory, ParameterSetName = 'HTTP')]
         [switch]$NoGit,
 
         [Parameter()]
@@ -1623,30 +1969,31 @@ function Update-WslIpHandlerModule {
     $modulePath = $MyInvocation.MyCommand.Module.ModuleBase
 
     $params = @{
-        ModuleNameOrPath = $modulePath
-        GithubUserName   = $MyInvocation.MyCommand.Module.Author
-        Branch           = 'master'
-        Force            = $Force
-        NoGit            = $NoGit
+        ModulePath     = $modulePath
+        GithubUserName = $MyInvocation.MyCommand.Module.Author
+        Branch         = 'master'
+        Force          = $Force
     }
-    if ($GitExePath) { $params.GitExePath = $GitExePath }
+    if ($NoGit) { $params.NoGit = $NoGit }
+    else { if ($GitExePath) { $params.GitExePath = $GitExePath } }
 
-    $updaterModuleName = 'Update-ModuleFromGithub'
+    $updaterModuleName = 'GithubPsModulesUpdater'
     $updaterModulePath = Join-Path $PSScriptRoot 'SubModules' "$updaterModuleName.psm1" -Resolve
-    Import-Module $updaterModulePath  -Verbose:$false -Debug:$false
+    Write-Debug "$(_@) `$updaterModulePath: $updaterModulePath"
+    Import-Module $updaterModulePath -Force -Verbose:$false -Debug:$false
 
-    Update-ModuleFromGithub @params @PSBoundParameters
+    $commonParameters = @{ ErrorAction = 'Continue' }
+    if ($VerbosePreference -eq 'Continue') { $commonParameters.Verbose = $true }
+    if ($DebugPreference -eq 'Continue') { $commonParameters.Debug = $true }
 
-    Remove-Module $updaterModulePath -Force -ErrorAction SilentlyContinue
+    Write-Debug "$(_@) Update-ModuleFromGithub $(& {$args} @params) $(& {$args} @commonParameters)"
+    $result = Update-ModuleFromGithub @params @commonParameters
 
-    Import-Module $modulePath -Force
-
-    $staticIps = Get-WslConfigStaticIpSection
-    if ($staticIps.Count -gt 0) {
-        $staticIps.GetEnumerator() | ForEach-Object {
-            $wslHost = (Get-HostForIpAddress $_.Value) ?? $_.Key
-            Update-WslBashScripts -WslInstanceName $_.Key -WslHostName $wslHost
-        }
+    switch ($result.Status) {
+        'Updated' { Write-Warning 'Wsl-IpHandler module has been updated and needs to be re-imported. I' }
+        'UpToDate' { return }
+        'Error' { Write-Error -ErrorRecord $_ }
+        Default { Write-Error "Unknown Error occurred while updating '$($MyInvocation.MyCommand.ModuleName)'!" }
     }
 }
 
@@ -1724,6 +2071,17 @@ function Invoke-WslExe {
 
     $DebugPreferenceOriginal = $DebugPreference
 
+    Test-ModuleOnNetworkShareAndWarn
+
+    if ('-NoSwapCheck' -in $argsCopy) {
+        $argsCopy = ($argsCopy | Where-Object { $_ -notlike '-NoSwapCheck' }) ?? @()
+    }
+    else {
+        $configModified = $false
+        Test-SwapAndWarn -Modified ([ref]$configModified)
+        if ($configModified) { Write-WslConfig }
+    }
+
     if ('-timeout' -in $argsCopy) {
         $timeoutIndex = $argsCopy.IndexOf('-timeout')
         [int]$Timeout = $argsCopy[$timeoutIndex + 1]
@@ -1733,6 +2091,7 @@ function Invoke-WslExe {
     else {
         $Timeout = 30
     }
+
     if ('-debug' -in $argsCopy) {
         $DebugPreference = 'Continue'
         $argsCopy = ($argsCopy | Where-Object { $_ -notlike '-debug' }) ?? @()
@@ -1788,7 +2147,7 @@ function Get-WslScheduledTaskCredential {
     )
     $getCredential = {
         $getCredParams = @{
-            Title   = 'WSL-IpHandler'
+            Title   = 'Wsl-IpHandler'
             Message = 'To Create Scheduled Task That Can Run Whether User Logged On Or Not, Please Enter'
         }
         if ($UserName) {
@@ -1810,7 +2169,7 @@ function Get-WslScheduledTaskCredential {
         ValidationScript      = $credentialValidator
         ValidationInputScript = $getCredential
         Countdown             = $MaxNumberOfAttempts
-        EventLabel            = 'Getting credential for WSL-IpHandler Scheduled Task'
+        EventLabel            = 'Getting credential for Wsl-IpHandler Scheduled Task'
         OutputVariable        = ([ref]$validCredential)
         MessageVariable       = ([ref]$waitingMessage)
     }
@@ -2061,20 +2420,120 @@ function Wait-ForExpression {
     }
 }
 
+function Test-NtfsCompressionEnabled {
+    param ([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$Path)
+    if ($Path -match '%[^=\s]+%') {
+        $Path = $ExecutionContext.InvokeCommand.ExpandString(($Path -replace '%([^=\s]+)%', '${env:$1}'))
+    }
+    if (Test-Path -Path $Path) {
+        $attributes = $Path | Get-Item | Select-Object -ExpandProperty Attributes
+        $attributes.HasFlag([System.IO.FileAttributes]::Compressed)
+    }
+    else {
+        # only check the containing directory if exists
+        $parent = Split-Path $Path
+        if (Test-Path $parent) {
+            $attributes = $parent | Get-Item | Select-Object -ExpandProperty Attributes
+            $attributes.HasFlag([System.IO.FileAttributes]::Compressed)
+        }
+        else { $false }
+    }
+}
+
+function Test-SwapAndWarn {
+    param([Parameter()][ref]$Modified)
+    $status = Get-WslStatus -WslSwapEnabled -WslSwapFileCompressed -PassThru -InformationAction SilentlyContinue
+    if ($status.WslSwapEnabled -and $status.WslSwapFileCompressed) {
+        $promptParams = @{
+            Title        = 'WSL2 swap is enabled and swap file is compressed!'
+            Text         = "This is a known issue causing linux network interface (eth0) to be in DOWN state.`nIt is recommended to either disable compression of swap file or disable swap by adding to .wslconfig:`n[wsl2]`nswap=0`nPlease confirm if you want to continue:"
+            FirstOption  = 'Fix'
+            FirstHelp    = 'Fix: Recommended settings will be added to .wslconfig and operation will continue.'
+            SecondOption = 'No'
+            SecondHelp   = 'No: Current operation will be aborted.'
+            ThirdOption  = 'Yes'
+            ThirdHelp    = 'Yes: Operation will continue and the module will NOT work as intended.'
+        }
+        switch (PromptForChoice @promptParams) {
+            0 { Set-WslConfigSwapSize -Value 0 -Modified $Modified }
+            1 {
+                Throw 'Operation was cancelled by user because WSL2 swap is enabled and swap file is compressed.'
+            }
+        }
+    }
+}
+
+function Test-PathOnNetworkShare {
+    param([Parameter()][ValidateNotNullOrEmpty()][string]$Path)
+    $pathStartsWithSlash = $Path.StartsWith('\\')
+    $pathOnMappedDrive = $false
+    foreach ($psDrive in (Get-PSDrive -PSProvider FileSystem)) {
+        $root = $psDrive | Select-Object -ExpandProperty Root -ea SilentlyContinue
+        if ($root -and $Path.StartsWith($root)) {
+            $displayRoot = $psDrive | Select-Object -ExpandProperty DisplayRoot -ea SilentlyContinue
+            if ($displayRoot -and $displayRoot.StartsWith('\\)')) {
+                $pathOnMappedDrive = $true
+                break
+            }
+        }
+    }
+    $pathStartsWithSlash -or $pathOnMappedDrive
+}
+
+function Test-ModuleOnNetworkShareAndWarn {
+    [CmdletBinding()]param()
+    $moduleName = $MyInvocation.MyCommand.ModuleName
+    $modulePath = $MyInvocation.MyCommand.Module.ModuleBase
+    if ((Test-PathOnNetworkShare $modulePath)) {
+        $promptParams = @{
+            Title        = "$moduleName is installed on a network share!"
+            Text         = "WSL2 does not support yet file operations with network shares.`nThis makes this module non-operational.`nInstall $moduleName to a local drive to avoid this warning. Please confirm if you want to continue:"
+            FirstOption  = 'No'
+            FirstHelp    = 'No: Current operation will be aborted.'
+            SecondOption = 'Yes'
+            SecondHelp   = 'Yes: Operation will continue and the module will NOT work as intended.'
+        }
+        if ((PromptForChoice @promptParams) -eq 0) {
+            Throw "Operation was cancelled by user because $moduleName is installed on a network share"
+        }
+    }
+}
+
+function PromptForChoice {
+    param(
+        [Parameter(Mandatory)][string]$Title,
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][string]$FirstOption,
+        [Parameter()][string]$FirstHelp,
+        [Parameter(Mandatory)][string]$SecondOption,
+        [Parameter()][string]$SecondHelp,
+        [string]$ThirdOption,
+        [string]$ThirdHelp
+    )
+    $firstChoice = New-Object System.Management.Automation.Host.ChoiceDescription -ArgumentList "&$FirstOption", $FirstHelp
+    $secondChoice = New-Object System.Management.Automation.Host.ChoiceDescription -ArgumentList "&$SecondOption", $SecondHelp
+    $choices = @($firstChoice, $secondChoice)
+    if ($ThirdOption) {
+        $thirdChoice = New-Object System.Management.Automation.Host.ChoiceDescription -ArgumentList "&$ThirdOption", $ThirdHelp
+        $choices = $choices + @($thirdChoice)
+    }
+    $Host.UI.PromptForChoice($Title, $Text, $choices, 0)
+}
+
 Set-Alias -Name wsl -Value Invoke-WslExe
 
-Register-ArgumentCompleter -CommandName Install-WslIpHandler -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
+$functionsForWslNameCompleter = @(
+    'Install-WslIpHandler'
+    'Uninstall-WslIpHandler'
+    'Install-WslBashScripts'
+    'Uninstall-WslBashScripts'
+    'Update-WslBashScripts'
+    'Set-WslInstanceStaticIpAddress'
+    'Remove-WslInstanceStaticIpAddress'
+    'Test-WslInstallation'
+    'Get-WslInstanceStatus'
+)
 
-Register-ArgumentCompleter -CommandName Uninstall-WslIpHandler -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
-
-Register-ArgumentCompleter -CommandName Install-WslBashScripts -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
-
-Register-ArgumentCompleter -CommandName Uninstall-WslBashScripts -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
-
-Register-ArgumentCompleter -CommandName Update-WslBashScripts -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
-
-Register-ArgumentCompleter -CommandName Set-WslInstanceStaticIpAddress -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
-
-Register-ArgumentCompleter -CommandName Remove-WslInstanceStaticIpAddress -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
-
-Register-ArgumentCompleter -CommandName Test-WslInstallation -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
+foreach ($command in $functionsForWslNameCompleter) {
+    Register-ArgumentCompleter -CommandName $command -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
+}

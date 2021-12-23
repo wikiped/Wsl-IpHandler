@@ -4,11 +4,11 @@ Describe 'Editing Static IP addresses in wslconfig' {
         Import-Module (Join-Path $PSScriptRoot '..\SubModules\IPNetwork.psm1' -Resolve) -Function Get-IpNet
     }
     BeforeEach {
-        $ModuleName = 'WSL-IpHandler'
+        $ModuleName = 'Wsl-IpHandler'
         $ModulePath = Join-Path (Split-Path $PSScriptRoot) "$ModuleName"
         Import-Module $ModulePath -Force
 
-        Mock -ModuleName WSL-IpHandler Get-WslConfigPath {
+        Mock -ModuleName Wsl-IpHandler Get-WslConfigPath {
             param([switch]$Resolve) return $ConfigPath
         }
     }
@@ -137,7 +137,7 @@ Describe 'Editing Static IP addresses in wslconfig' {
         Context ' With config file that does not exist' {
             Context ' Set-WslInstanceStaticIpAddress' {
                 BeforeEach {
-                    Set-WslInstanceStaticIpAddress -WslInstanceName $WslInstanceName -GatewayIpAddress $GatewayIpAddress -WslInstanceIpAddress $WslInstanceIpAddress
+                    Set-WslInstanceStaticIpAddress -WslInstanceName $WslInstanceName -GatewayIpAddress $GatewayIpAddress
                 }
                 It ' Should create file with a record of IP assignment' {
                     $ConfigPath | Should -FileContentMatchMultiline ([regex]::Escape($Expected))

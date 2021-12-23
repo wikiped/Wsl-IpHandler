@@ -20,7 +20,7 @@ resolve() {
 #shellcheck source=/dev/null
 source "$(resolve functions.sh)"
 
-echo_verbose "Bash Uninstalling WSL-IpHandler..."
+echo_verbose "Bash Uninstalling Wsl-IpHandler..."
 
 # Prcess Incoming Arguments
 echo_debug "Starting '$0' with User ID: $EUID"
@@ -73,4 +73,4 @@ else
 	echo_verbose "File was not found: $sudoers_file"
 fi
 
-echo_verbose "Bash Uninstalled WSL-IpHandler."
+echo_verbose "Bash Uninstalled Wsl-IpHandler."

@@ -88,7 +88,7 @@ function MergeParameters {
     $mergedParams
 }
 
-function FilterParameters {
+function Select-Parameters {
     param(
         [Parameter(Mandatory)]
         [hashtable]$Parameters,
@@ -127,14 +127,14 @@ function FilterParameters {
     $result
 }
 
-function FilterCommonParameters {
+function Select-CommonParameters {
     param([Parameter()][hashtable]$Parameters = @{})
-    FilterParameters $Parameters -Include ([System.Management.Automation.Cmdlet]::CommonParameters)
+    Select-Parameters $Parameters -Include ([System.Management.Automation.Cmdlet]::CommonParameters)
 }
 
-function FilterNonCommonParameters {
+function Select-NonCommonParameters {
     param([Parameter()][hashtable]$Parameters = @{})
-    FilterParameters $Parameters -Exclude ([System.Management.Automation.Cmdlet]::CommonParameters)
+    Select-Parameters $Parameters -Exclude ([System.Management.Automation.Cmdlet]::CommonParameters)
 }
 
 function ConvertFrom-NamedParametersToArgsArray {
@@ -152,7 +152,7 @@ function ConvertFrom-NamedParametersToArgsArray {
     Write-Debug "$(_@) `$Include: $Include"
     Write-Debug "$(_@) `$Exclude: $Exclude"
 
-    $filteredParameters = FilterParameters $Parameters -Include $Include -Exclude $Exclude
+    $filteredParameters = Select-Parameters $Parameters -Include $Include -Exclude $Exclude
     Write-Debug "$(_@) `$filteredParameters: $(& {$args} @filteredParameters)"
 
     $convertedParameters = ConvertParametersToArgsArray $filteredParameters -InitialArray $InitialArray

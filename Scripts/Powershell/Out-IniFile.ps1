@@ -101,7 +101,11 @@ Function Out-IniFile {
         #
         # Adds an extra linebreak between Sections
         [Switch]
-        $Pretty
+        $Pretty,
+
+        # How to label sections without name
+        [string]
+        $NoSection = '_'
     )
 
     Begin {
@@ -193,7 +197,7 @@ Function Out-IniFile {
                 "$i$delimiter$($InputObject[$i])" | Out-File -Append @parameters
 
             }
-            elseif ($i -eq $script:NoSection) {
+            elseif ($i -eq $NoSection) {
                 #Key value pair of NoSection
                 Out-Keys $InputObject[$i] `
                     @parameters `
@@ -204,8 +208,8 @@ Function Out-IniFile {
                 #Sections
                 Write-Verbose "$($MyInvocation.MyCommand.Name):: Writing Section: [$i]"
 
-                # Only write section, if it is not a dummy ($script:NoSection)
-                if ($i -ne $script:NoSection) { "$extraLF[$i]" | Out-File -Append @parameters }
+                # Only write section, if it is not a dummy ($NoSection)
+                if ($i -ne $NoSection) { "$extraLF[$i]" | Out-File -Append @parameters }
                 if ($Pretty) {
                     $extraLF = "`r`n"
                 }

@@ -1,16 +1,16 @@
 $WslConfig = $null
 
-Set-Variable NoSection '_'  # Variable Required by Get-IniContent.ps1 and Out-IniFile.ps1
-. (Join-Path $PSScriptRoot 'Get-IniContent.ps1' -Resolve) | Out-Null
-. (Join-Path $PSScriptRoot 'Out-IniFile.ps1' -Resolve) | Out-Null
-. (Join-Path $PSScriptRoot 'FunctionsPrivateData.ps1' -Resolve) | Out-Null
-. (Join-Path $PSScriptRoot 'FunctionsHostsFile.ps1' -Resolve) | Out-Null
+# Set-Variable NoSection '_'  # Variable Required by Get-IniContent.ps1 and Out-IniFile.ps1
+# . (Join-Path $PSScriptRoot 'Get-IniContent.ps1' -Resolve) | Out-Null
+# . (Join-Path $PSScriptRoot 'Out-IniFile.ps1' -Resolve) | Out-Null
+# . (Join-Path $PSScriptRoot 'FunctionsPrivateData.ps1' -Resolve) | Out-Null
+# . (Join-Path $PSScriptRoot 'FunctionsHostsFile.ps1' -Resolve) | Out-Null
 
 $IPNetworkModuleName = 'IPNetwork'
 Import-Module (Join-Path $PSScriptRoot "..\..\SubModules\$IPNetworkModuleName.psm1" -Resolve) -Verbose:$false -Debug:$false
 
 #region Debug Functions
-if (!(Test-Path function:\_@)) {
+if (!(Test-Path function:/_@)) {
     function script:_@ {
         $parentInvocationInfo = Get-Variable MyInvocation -Scope 1 -ValueOnly
         $parentCommandName = $parentInvocationInfo.MyCommand.Name ?? $MyInvocation.MyCommand.Name
@@ -92,7 +92,7 @@ function Write-WslConfig {
 }
 #endregion WSL Config Getter Writer
 
-#region Section Getter and Helpers
+#region Generic Section Getter and Helpers
 function Test-WslConfigSectionExists {
     [CmdletBinding()]
     param(
@@ -193,7 +193,7 @@ function Remove-WslConfigSection {
         }
     }
 }
-#endregion Section Getter and Helpers
+#endregion Generic Section Getter and Helpers
 
 #region Generic Value Getter Setter
 function Get-WslConfigValue {
@@ -222,8 +222,8 @@ function Get-WslConfigValue {
     if (-not $section.Contains($KeyName)) {
         Write-Debug "$(_@) Section '$SectionName' has no key: '$KeyName'!"
         if ($PSBoundParameters.ContainsKey('DefaultValue')) {
-            if ($null -eq $DefaultValue) {
-                Write-Debug "$(_@) Returning specified DefaultValue = `$null"
+            if ([string]::IsNullOrWhiteSpace($DefaultValue)) {
+                Write-Debug "$(_@) Returning `$DefaultValue: '$DefaultValue' without modifying the section: '$SectionName'"
                 return $DefaultValue
             }
             else {
@@ -268,6 +268,11 @@ function Set-WslConfigValue {
     Write-Debug "$(_@) `$KeyName = '$KeyName'"
     Write-Debug "$(_@) `$Value = '$Value'"
 
+    # Setting $null or '' does not make sense in .wslconfig context
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        Write-Debug "$(_@) Ignoring `$Value of `$null or WhiteSpace. If the intention was to remove the value - use Remove-WslConfigValue command."
+        return
+    }
     $section = Get-WslConfigSection $SectionName -ForceReadFileFromDisk:$ForceReadFileFromDisk
     Write-Debug "$(_@) Initial Section Content: $($section | Out-String)"
 
@@ -323,9 +328,8 @@ function Remove-WslConfigValue {
         [switch]$ForceReadFileFromDisk
     )
 
-    Write-Debug "$(_@) `$SectionName = '$SectionName''
-    Write-Debug '$($MyInvocation.MyCommand.Name) `$KeyName = '$KeyName''
-    Write-Debug '$($MyInvocation.MyCommand.Name) `$Modified = '$($Modified.Value)'"
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
+    Write-Debug "$(_@) `$Modified = '$($Modified.Value)'"
 
     $section = Get-WslConfigSection $SectionName -ForceReadFileFromDisk:$ForceReadFileFromDisk
     Write-Debug "$(_@) Initial Section Content: $($section | Out-String)"
@@ -539,7 +543,6 @@ function Get-WslConfigAvailableStaticIpAddress {
 
 #region IP Offset Getter Setter Helper
 function Get-WslConfigIpOffsetSection {
-    [CmdletBinding()]
     param(
         [Parameter()][ValidateNotNullOrEmpty()]
         [string]$SectionName,
@@ -918,3 +921,104 @@ function Remove-WslConfigDynamicAdapters {
     Remove-WslConfigValue (Get-NetworkSectionName) (Get-DynamicAdaptersKeyName) -Modified $Modified -ForceReadFileFromDisk:$ForceReadFileFromDisk
 }
 #endregion Dynamic Adapters Getter Setter
+
+#region SwapSize Getter Setter
+function Get-WslConfigSwapSize {
+    [OutputType([string])]
+    param(
+        [Parameter()]
+        [string]$DefaultValue,
+
+        [Parameter()]
+        [ref]$Modified,
+
+        [Parameter()]
+        [switch]$ForceReadFileFromDisk
+    )
+    $getParams = @{
+        SectionName           = Get-GlobalSectionName
+        KeyName               = Get-SwapSizeKeyName
+        DefaultValue          = $DefaultValue
+        ForceReadFileFromDisk = $ForceReadFileFromDisk
+    }
+    if ($Modified) { $getParams.Modified = $Modified }
+    Get-WslConfigValue @getParams
+}
+
+function Set-WslConfigSwapSize {
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
+        [string]$Value,
+
+        [Parameter(Mandatory)]
+        [ref]$Modified,
+
+        [switch]$ForceReadFileFromDisk
+    )
+    Set-WslConfigValue (Get-GlobalSectionName) (Get-SwapSizeKeyName) $Value -Modified $Modified -ForceReadFileFromDisk:$ForceReadFileFromDisk
+}
+
+function Remove-WslConfigSwapSize {
+    param(
+        [Parameter(Mandatory)]
+        [ref]$Modified,
+
+        [switch]$ForceReadFileFromDisk
+    )
+    Remove-WslConfigValue (Get-GlobalSectionName) (Get-SwapSizeKeyName) -Modified $Modified -ForceReadFileFromDisk:$ForceReadFileFromDisk
+}
+#endregion SwapSize Getter Setter
+
+#region SwapFile Getter Setter
+function Get-WslConfigSwapFile {
+    [OutputType([string])]
+    param(
+        [Parameter()]
+        [string]$DefaultValue,
+
+        [Parameter()]
+        [ref]$Modified,
+
+        [Parameter()]
+        [switch]$ExpandEnvironmentVariables,
+
+        [Parameter()]
+        [switch]$ForceReadFileFromDisk
+    )
+    $getParams = @{
+        SectionName           = Get-GlobalSectionName
+        KeyName               = Get-SwapFileKeyName
+        DefaultValue          = $DefaultValue
+        ForceReadFileFromDisk = $ForceReadFileFromDisk
+    }
+    if ($Modified) { $getParams.Modified = $Modified }
+    $value = Get-WslConfigValue @getParams
+    if ($ExpandEnvironmentVariables) {
+        $ExecutionContext.InvokeCommand.ExpandString(($value -replace '%([^=\s]+)%', '${env:$1}'))
+    }
+    else { $value }
+}
+
+function Set-WslConfigSwapFile {
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
+        [object]$Value,
+
+        [Parameter(Mandatory)]
+        [ref]$Modified,
+
+        [switch]$ForceReadFileFromDisk
+    )
+    Set-WslConfigValue (Get-GlobalSectionName) (Get-SwapFileKeyName) $Value -Modified $Modified -ForceReadFileFromDisk:$ForceReadFileFromDisk
+}
+
+function Remove-WslConfigSwapFile {
+    param(
+        [Parameter(Mandatory)]
+        [ref]$Modified,
+
+        [switch]$ForceReadFileFromDisk
+    )
+    Remove-WslConfigValue (Get-GlobalSectionName) (Get-SwapFileKeyName) -Modified $Modified -ForceReadFileFromDisk:$ForceReadFileFromDisk
+}
+#endregion SwapFile Getter Setter

@@ -71,7 +71,9 @@ function Write-HostsFileContent {
     if (!(Test-Path variable:Records)) { $Records = @() }
     if ($null -eq $Records) { $Records = @() }
 
-    . (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve) | Out-Null
+    if (-not (Test-Path function:/IsElevated)) {
+        . (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve) | Out-Null
+    }
 
     Write-Debug "$(_@) Setting $FilePath with $($Records.Count) records."
 
@@ -178,15 +180,15 @@ function New-IpAddressHostRecord {
         [string]$Comment
     )
     if ($Comment) {
-        if ($Comment.Contains('WSL-IpHandler')) {
-            $Comment = '  # Modified by WSL-IpHandler PowerShell Module'
+        if ($Comment.Contains('Wsl-IpHandler')) {
+            $Comment = '  # Modified by Wsl-IpHandler PowerShell Module'
         }
         else {
-            $Comment += ' Modified by WSL-IpHandler PowerShell Module'
+            $Comment += ' Modified by Wsl-IpHandler PowerShell Module'
         }
     }
     else {
-        $Comment = '  # Created by WSL-IpHandler PowerShell Module'
+        $Comment = '  # Created by Wsl-IpHandler PowerShell Module'
     }
     $line = $IpAddress.PadRight(17, ' ')
     $line += $HostName

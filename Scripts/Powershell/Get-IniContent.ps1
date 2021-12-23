@@ -72,6 +72,10 @@ Function Get-IniContent {
         [Char[]]
         $CommentChar = @(";", "#"),
 
+        # How to label sections without name
+        [string]
+        $NoSection = '_',
+
         # Remove lines determined to be comments from the resulting dictionary.
         [Switch]
         $IgnoreComments
@@ -118,7 +122,7 @@ Function Get-IniContent {
                 # Comment
                 if (!$IgnoreComments) {
                     if (!(test-path "variable:local:section")) {
-                        $section = $script:NoSection
+                        $section = $NoSection
                         $ini[$section] = New-Object System.Collections.Specialized.OrderedDictionary([System.StringComparer]::OrdinalIgnoreCase)
                     }
                     $value = $matches[1]
@@ -137,7 +141,7 @@ Function Get-IniContent {
             $keyRegex {
                 # Key
                 if (!(test-path "variable:local:section")) {
-                    $section = $script:NoSection
+                    $section = $NoSection
                     $ini[$section] = New-Object System.Collections.Specialized.OrderedDictionary([System.StringComparer]::OrdinalIgnoreCase)
                 }
                 $name, $value = $matches[1, 3]
@@ -167,4 +171,4 @@ Function Get-IniContent {
     }
 }
 
-Set-Alias gic Get-IniContent
+# Set-Alias gic Get-IniContent

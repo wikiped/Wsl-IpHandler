@@ -42,7 +42,7 @@
 
 [Credits](#credits)
 
-[What's new\?](./RELEASES.md)
+[What's new\?](./CHANGELOG.md)
 
 </details>
 
@@ -93,7 +93,7 @@ To download and copy the module to Modules folder of Powershell profile for Curr
 Command below will download the installation script and will prompt you to choose whether to use `git.exe` (if `git` can be found in `PATH`) or download zip repository:
 
 ```powershell
-Invoke-WebRequest https://raw.githubusercontent.com/wikiped/WSL-IpHandler/master/Install-WslIpHandlerFromGithub.ps1 | Select -ExpandProperty Content | Invoke-Expression
+Invoke-WebRequest https://raw.githubusercontent.com/wikiped/Wsl-IpHandler/master/Install-WslIpHandlerFromGithub.ps1 | Select -ExpandProperty Content | Invoke-Expression
 ```
 
 Otherwise you can use any of the below two methods to install the module.
@@ -111,7 +111,7 @@ git clone https://github.com/wikiped/Wsl-IpHandler
 ```powershell
 New-Item "$(split-path $Profile)\Modules" -Type Directory -ea SilentlyContinue
 cd "$(split-path $Profile)\Modules"
-Invoke-WebRequest -Uri https://codeload.github.com/wikiped/WSL-IpHandler/zip/refs/heads/master -OutFile 'Wsl-IpHandler.zip'
+Invoke-WebRequest -Uri https://codeload.github.com/wikiped/Wsl-IpHandler/zip/refs/heads/master -OutFile 'Wsl-IpHandler.zip'
 Expand-Archive -Path 'Wsl-IpHandler.zip' -DestinationPath '.'
 Remove-Item -Path 'Wsl-IpHandler.zip'
 Rename-Item -Path 'Wsl-IpHandler-master' -NewName 'Wsl-IpHandler'
@@ -195,7 +195,7 @@ When `wsl` [alias](#powershell-profile-modification) is executed from Powershell
 
 ### How On-Logon mode works?
 
-When `Install-WslIpHandler` is executed with parameter `-UseScheduledTaskOnUserLogOn` the module creates a new Scheduled Task named `WSL-IpHandlerTask` under `WSL-IpHandler` folder. The task has a trigger to run at user logon.
+When `Install-WslIpHandler` is executed with parameter `-UseScheduledTaskOnUserLogOn` the module creates a new Scheduled Task named `Wsl-IpHandlerTask` under `Wsl-IpHandler` folder. The task has a trigger to run at user logon.
 
 If parameter `-AnyUserLogOn` was specified to `Install-WslIpHandler` (along with `-UseScheduledTaskOnUserLogOn`) then the task will run at logon of ANY user. Otherwise the task will run only at logon of specific user - the one who executed `Install-WslIpHandler` command.
 
@@ -294,7 +294,7 @@ In Dynamic mode WSL IP Handler does not interfere with how Windows manages WSL n
 1. Import Module.
 
     ```powershell
-    Import-Module WSL-IpHandler
+    Import-Module Wsl-IpHandler
     ```
 
    > All commands that follow below require that the module has been imported with above command.
@@ -395,7 +395,7 @@ Uninstall-WslIpHandler -WslInstanceName Ubuntu
 
 If WSL Instance being removed had Static IP address and it is the only one remaining all network configuration settings (Windows Host Name and Gataway IP Address) will also be removed along with Scheduled Task and Powershell profile modifications.
 
-Even after WSL-IpHandler was deactivated on all WSL instances WSL Hyper-V Network Adapter will remain active until next reboot or manual removal with `Remove-WslNetworkAdapter` command.
+Even after Wsl-IpHandler was deactivated on all WSL instances WSL Hyper-V Network Adapter will remain active until next reboot or manual removal with `Remove-WslNetworkAdapter` command.
 
 ---
 
@@ -416,13 +416,13 @@ Update-WslIpHandlerModule
 To remove the module - delete the module's folder. It's location can be checked with:
 
 ```powershell
-(Import-Module WSL-IpHandler -PassThru | Get-Module).ModuleBase
+(Import-Module Wsl-IpHandler -PassThru | Get-Module).ModuleBase
 ```
 
 Or execute from Powershell prompt:
 
 ```powershell
-Import-Module WSL-IpHandler
+Import-Module Wsl-IpHandler
 Uninstall-WslIpHandlerModule
 ```
 
@@ -433,7 +433,7 @@ Uninstall-WslIpHandlerModule
 To see list of all available commands from this module, execute in Powershell::
 
 ```powershell
-Get-Command -Module WSL-IpHandler
+Get-Command -Module Wsl-IpHandler
 ```
 
 To get help on any of the commands, execute `Get-Help <Command-Name>`, i.e.:

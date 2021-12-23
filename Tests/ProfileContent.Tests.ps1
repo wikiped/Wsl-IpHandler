@@ -1,9 +1,9 @@
 BeforeAll {
-    $ModuleName = 'WSL-IpHandler'
+    $ModuleName = 'Wsl-IpHandler'
     $ModulePath = Join-Path (Split-Path $PSScriptRoot) "$ModuleName"
     Import-Module $ModulePath -Force
     Set-Variable OriginalProfileContent @('# First line comments', '# Second line comments')
-    Set-Variable WslProfileContent (InModuleScope $ModuleName { Get-ProfileContent })
+    Set-Variable WslProfileContent (InModuleScope $ModuleName { Get-ProfileContentTemplate })
 }
 
 Describe 'Given profile file' {
@@ -61,7 +61,7 @@ Describe 'Given profile file' {
         }
     }
 
-    Context ' That has WSL-IpHandler Content' {
+    Context ' That has Wsl-IpHandler Content' {
         BeforeEach {
             Set-Variable FullContent ($OriginalProfileContent + $WslProfileContent)
             Set-Content -Path $ProfileFilePath -Value $FullContent
@@ -70,7 +70,7 @@ Describe 'Given profile file' {
             Set-ProfileContent -ProfilePath $ProfileFilePath
             $ProfileFilePath | Should -FileContentMatchMultilineExactly ([regex]::Escape($FullContent -join "`r`n"))
         }
-        It ' Remove-ProfileContent should remove WSL-IpHandler Content' {
+        It ' Remove-ProfileContent should remove Wsl-IpHandler Content' {
             Remove-ProfileContent -ProfilePath $ProfileFilePath
             $ProfileFilePath |
                 Should -FileContentMatchMultilineExactly ([regex]::Escape($OriginalProfileContent -join "`r`n"))

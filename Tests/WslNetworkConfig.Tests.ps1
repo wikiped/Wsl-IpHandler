@@ -14,38 +14,45 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
     }
 ) {
     BeforeAll {
-        $ModuleName = 'WSL-IpHandler'
+        $ModuleName = 'Wsl-IpHandler'
         $ModulePath = Join-Path (Split-Path $PSScriptRoot) "$ModuleName"
         Import-Module $ModulePath -Force
         Set-Variable ConfigPath 'TestDrive:\test.wslconfig'
-        $sectionName = InModuleScope WSL-IpHandler { Get-NetworkSectionName }
-        $gatewayKeyName = InModuleScope WSL-IpHandler { Get-GatewayIpAddressKeyName }
-        $prefixKeyName = InModuleScope WSL-IpHandler { Get-PrefixLengthKeyName }
-        $dnsKeyName = InModuleScope WSL-IpHandler { Get-DnsServersKeyName }
-        $dynamicAdaptersKeyName = InModuleScope WSL-IpHandler { Get-DynamicAdaptersKeyName }
-        $windowsHostNameKeyName = InModuleScope WSL-IpHandler { Get-WindowsHostNameKeyName }
+        $sectionName = InModuleScope Wsl-IpHandler { Get-NetworkSectionName }
+        $gatewayKeyName = InModuleScope Wsl-IpHandler { Get-GatewayIpAddressKeyName }
+        $prefixKeyName = InModuleScope Wsl-IpHandler { Get-PrefixLengthKeyName }
+        $dnsKeyName = InModuleScope Wsl-IpHandler { Get-DnsServersKeyName }
+        $dynamicAdaptersKeyName = InModuleScope Wsl-IpHandler { Get-DynamicAdaptersKeyName }
+        $windowsHostNameKeyName = InModuleScope Wsl-IpHandler { Get-WindowsHostNameKeyName }
         $expectedText = @(
             "[$sectionName]"
             "$windowsHostNameKeyName = $WindowsHostName"
             "$gatewayKeyName = $GatewayIpAddress"
             "$prefixKeyName = $PrefixLength"
-            "$dnsKeyName = $(if ($DNSServerList) {$DNSServerList -join ', '} else {$GatewayIpAddress})"
+            "$dnsKeyName = $(if (Test-Path variable:DNSServerList) {$DNSServerList -join ', '} else {$GatewayIpAddress})"
             "$dynamicAdaptersKeyName = $($DynamicAdapters -join ', ')"
         ) -join "`r`n"
         Set-Variable Expected $expectedText
     }
     BeforeEach {
-        # $ModuleName = 'WSL-IpHandler'
+        # $ModuleName = 'Wsl-IpHandler'
         # $ModulePath = Join-Path (Split-Path $PSScriptRoot) "$ModuleName"
         Import-Module $ModulePath -Force
-        Mock -ModuleName WSL-IpHandler Get-WslConfigPath {
+        Mock -ModuleName Wsl-IpHandler Get-WslConfigPath {
             param([switch]$Resolve) return $ConfigPath
         }
     }
     Context ' With config file that does not exist' {
         Context ' Set-WslNetworkConfig' {
             BeforeEach {
-                Set-WslNetworkConfig -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $DNSServerList -WindowsHostName $WindowsHostName -DynamicAdapters $DynamicAdapters
+                $params = @{
+                    GatewayIpAddress = $GatewayIpAddress
+                    PrefixLength     = $PrefixLength
+                    WindowsHostName  = $WindowsHostName
+                    DynamicAdapters  = $DynamicAdapters
+                }
+                if (Test-Path variable:DNSServerList) { $params.DNSServerList = $DNSServerList }
+                Set-WslNetworkConfig @params
             }
             It ' Should create file with a record of IP assignment' {
                 try {
@@ -79,7 +86,14 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
         }
         Context ' Set-WslNetworkConfig' {
             BeforeEach {
-                Set-WslNetworkConfig -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $DNSServerList -WindowsHostName $WindowsHostName -DynamicAdapters $DynamicAdapters
+                $params = @{
+                    GatewayIpAddress = $GatewayIpAddress
+                    PrefixLength     = $PrefixLength
+                    WindowsHostName  = $WindowsHostName
+                    DynamicAdapters  = $DynamicAdapters
+                }
+                if (Test-Path variable:DNSServerList) { $params.DNSServerList = $DNSServerList }
+                Set-WslNetworkConfig @params
             }
             It ' Should make a record with IP assignment' {
                 $ConfigPath | Should -FileContentMatchMultiline ([regex]::Escape($Expected))
@@ -101,7 +115,14 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
         Context ' Set-WslNetworkConfig' {
             BeforeEach {
                 $Modified = $false
-                Set-WslNetworkConfig -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $DNSServerList -WindowsHostName $WindowsHostName -DynamicAdapters $DynamicAdapters -Modified ([ref]$Modified)
+                $params = @{
+                    GatewayIpAddress = $GatewayIpAddress
+                    PrefixLength     = $PrefixLength
+                    WindowsHostName  = $WindowsHostName
+                    DynamicAdapters  = $DynamicAdapters
+                }
+                if (Test-Path variable:DNSServerList) { $params.DNSServerList = $DNSServerList }
+                Set-WslNetworkConfig -Modified ([ref]$Modified) @params
             }
             It ' Should not change existing file' {
                 try {
@@ -145,7 +166,14 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
         }
         Context ' Set-WslNetworkConfig' {
             BeforeEach {
-                Set-WslNetworkConfig -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $DNSServerList -WindowsHostName $WindowsHostName -DynamicAdapters $DynamicAdapters
+                $params = @{
+                    GatewayIpAddress = $GatewayIpAddress
+                    PrefixLength     = $PrefixLength
+                    WindowsHostName  = $WindowsHostName
+                    DynamicAdapters  = $DynamicAdapters
+                }
+                if (Test-Path variable:DNSServerList) { $params.DNSServerList = $DNSServerList }
+                Set-WslNetworkConfig @params
             }
             It ' Should replace existing setting in config file removing bad record' {
                 try {

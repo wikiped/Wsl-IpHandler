@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version latest
-$ModuleName = 'WSL-IpHandler'
+$ModuleName = 'Wsl-IpHandler'
 
 function PromptForChoice {
     param(
@@ -86,11 +86,11 @@ if ($chooseGit -eq 0) {
 }
 else {
     $outFile = "$ModuleName.zip"
-    Invoke-WebRequest -Uri https://codeload.github.com/wikiped/WSL-IpHandler/zip/refs/heads/master -OutFile $outFile
+    Invoke-WebRequest -Uri https://codeload.github.com/wikiped/Wsl-IpHandler/zip/refs/heads/master -OutFile $outFile
     Expand-Archive -Path $outFile -DestinationPath '.'
     Remove-Item -Path $outFile
     Rename-Item -Path "${ModuleName}-master" -NewName $ModuleName
 }
 
 Pop-Location
-Write-Host "WSL-IpHandler was installed in: '$targetDirectory'"
+Write-Host "Wsl-IpHandler was installed in: '$targetDirectory'"

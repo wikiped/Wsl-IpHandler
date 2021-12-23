@@ -73,7 +73,7 @@ error() {
 	exit "${code}"
 }
 
-trap 'error ${LINENO}' ERR
+trap 'error ${LINENO} TrappedError' ERR
 
 set_or_echo() {
 	local result
@@ -137,6 +137,10 @@ get_config_in_section() {
 			echo "$default"
 		fi
 	fi
+}
+
+get_link_is_down() {
+	test -z "$(ip link show $dev up)"
 }
 
 get_ip_with_prefix() {
@@ -335,6 +339,11 @@ check_wsl_conf_settings() {
 
 main() {
 	# Check that wsl.conf has right settings for correct operation of WSL IP Handler
+	if get_link_is_down
+	then
+		echo_log "Wsl-IpHandler cannot operate when $dev link state is DOWN!"
+		error ${LINENO} "$dev link state is DOWN" 99
+	fi
 	check_wsl_conf_settings 'network' 'generateResolvConf' 'true'
 	check_wsl_conf_settings 'automount' 'enabled' 'true'
 

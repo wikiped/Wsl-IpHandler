@@ -11,7 +11,9 @@ if (!(Test-Path function:\_@)) {
 }
 #endregion Debug Functions
 
-. (Join-Path $PSScriptRoot 'FunctionsParametersHelpers.ps1' -Resolve) | Out-Null
+if (-not (Test-Path 'function:Get-ArgsArray')) {
+    . (Join-Path $PSScriptRoot 'FunctionsParametersHelpers.ps1' -Resolve) | Out-Null
+}
 
 function IsElevated {
     $id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
