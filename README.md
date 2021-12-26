@@ -18,6 +18,8 @@
 <p></p>
 </summary>
 
+&emsp;&emsp;[WSL2 Configuration Requirements](#wsl2-configuration-requirements)
+
 &emsp;&emsp;[How On-Demand mode works?](#how-on-demand-mode-works)
 
 &emsp;&emsp;[How On-Logon mode works?](#how-on-logon-mode-works)
@@ -90,7 +92,7 @@ To download and copy the module to Modules folder of Powershell profile for Curr
 
 ### Universal web installer
 
-Command below will download the installation script and will prompt you to choose whether to use `git.exe` (if `git` can be found in `PATH`) or download zip repository:
+Command below will download the installation script and will prompt you to choose whether to use `git.exe` (if `git` can be found in `PATH`) or use zippied repository:
 
 ```powershell
 Invoke-WebRequest https://raw.githubusercontent.com/wikiped/Wsl-IpHandler/master/Install-WslIpHandlerFromGithub.ps1 | Select -ExpandProperty Content | Invoke-Expression
@@ -127,6 +129,8 @@ Run `Split-Path $Profile` to see location of this profile directory.
 
 When `Import-Module SomeModule` command is executed, Powershell looks for `SomeModule` in this directory (among others).
 
+> __It is important__ to be aware of the fact that WSL2 does not yet support windows network shares within linux, so if the module is installed on a network share it will NOT be working correctly. To mitigate this issue the module checks where it is installed and warns the user of the problem.
+
 ---
 
 ## How does it work?
@@ -140,6 +144,47 @@ There are two ways how IP Address persistance of WSL Hyper-V Network Adapter can
 - On-Logon: The adapter is created by a Scheduled Task that runs on user logon. This way the user does not have to use Powershell (interactively) to ensure WSL adapter's network configuration matches required.
 
 The following sections describe which files are modified (outside of module's directory) on Windows host and WSL instance(s).
+
+---
+
+### WSL2 Configuration Requirements
+
+WSL uses two configuration files:
+
+- `~/.wslconfig` on Windows
+
+- `/etc/wsl.conf` on Linux
+
+Wsl-IpHandler module requires default configuration of some of the settings in linux `/etc/wsl.conf` to work correctly (settings below do not have to be present in the file!):
+
+  ```ini
+  [interop]
+  enabled = true
+  appendWindowsPath = true
+  [automount]
+  enabled = true
+  [network]
+  generateResolvConf = true
+  ```
+
+On Windows side in `/.wslconfig` there is one setting which has side effect on WSL2 networking and which affects this module operation:
+
+  ```ini
+  [wsl2]
+  swap = ...
+  ```
+
+The problem appears when swap setting is enabled and the swap file in use is using NTFS compression.
+This is a known WSL2 issue ([#4731](https://github.com/microsoft/WSL/issues/4731), [#5286](https://github.com/microsoft/WSL/issues/5286), [#5336](https://github.com/microsoft/WSL/issues/5336), [#5437](https://github.com/microsoft/WSL/issues/5437)) causing linux `eth0` interface to be in a `DOWN` state when WSL instance starts. This makes the WSL network unavailable and hence the module non-operational.
+
+The solution to this problem is to either disable swap or disable NTFS compression on a swap file. This module by default opts for disabling swap in `.wslconfig`:
+
+  ```ini
+  [wsl2]
+  swap = 0
+  ```
+
+For these reasons the module validates WSL configuration both on windows side and linux side to ensure correct behavior.
 
 ---
 

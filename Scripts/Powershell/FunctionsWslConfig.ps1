@@ -1,8 +1,8 @@
 $WslConfig = $null
 
-# Set-Variable NoSection '_'  # Variable Required by Get-IniContent.ps1 and Out-IniFile.ps1
-# . (Join-Path $PSScriptRoot 'Get-IniContent.ps1' -Resolve) | Out-Null
-# . (Join-Path $PSScriptRoot 'Out-IniFile.ps1' -Resolve) | Out-Null
+# Set-Variable NoSection '_'  # Variable Required by Ini-In.ps1 and Ini-Out.ps1
+# . (Join-Path $PSScriptRoot 'Ini-In.ps1' -Resolve) | Out-Null
+# . (Join-Path $PSScriptRoot 'Ini-Out.ps1' -Resolve) | Out-Null
 # . (Join-Path $PSScriptRoot 'FunctionsPrivateData.ps1' -Resolve) | Out-Null
 # . (Join-Path $PSScriptRoot 'FunctionsHostsFile.ps1' -Resolve) | Out-Null
 
@@ -38,7 +38,7 @@ function Get-WslConfig {
             try {
                 $ConfigPath = (Get-WslConfigPath -Resolve)
                 Write-Debug "$(_@) Loading config from: $ConfigPath"
-                $script:WslConfig = Get-IniContent $ConfigPath -Verbose:$false -Debug:$false
+                $script:WslConfig = Read-IniFile $ConfigPath -Verbose:$false -Debug:$false
             }
             catch {
                 Write-Debug "$(_@) No ConfigPath specified. Return empty Dictionary."
@@ -47,7 +47,7 @@ function Get-WslConfig {
         }
         else {
             Write-Debug "$(_@) Loading config from: $ConfigPath"
-            $script:WslConfig = Get-IniContent $ConfigPath -Verbose:$false -Debug:$false
+            $script:WslConfig = Read-IniFile $ConfigPath -Verbose:$false -Debug:$false
         }
     }
     Write-Debug "$(_@) Returning Cached Config..."
@@ -87,8 +87,8 @@ function Write-WslConfig {
         Pretty      = $true
     }
 
-    Write-Debug "$(_@) Invoking Out-IniFile with Parameters:`n$($outIniParams | Out-String)"
-    Out-IniFile @outIniParams
+    Write-Debug "$(_@) Invoking Write-IniFile with Parameters:`n$($outIniParams | Out-String)"
+    Write-IniFile @outIniParams
 }
 #endregion WSL Config Getter Writer
 

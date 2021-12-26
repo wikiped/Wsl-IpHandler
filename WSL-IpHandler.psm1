@@ -6,8 +6,8 @@ $scriptsToImport = @(
     'Scripts\Powershell\FunctionsHostsFile.ps1'
     'Scripts\Powershell\FunctionsPrivateData.ps1'
     'Scripts\Powershell\FunctionsPSElevation.ps1'
-    'Scripts\Powershell\Get-IniContent.ps1'
-    'Scripts\Powershell\Out-IniFile.ps1'
+    'Scripts\Powershell\Ini-In.ps1'
+    'Scripts\Powershell\Ini-Out.ps1'
 )
 $scriptsToImport | ForEach-Object { . (Join-Path $PSScriptRoot $_ -Resolve) | Out-Null }
 
@@ -82,13 +82,38 @@ function Install-WslIpHandler {
     Optional. If specifies will not modify Powershell Profile (default profile: CurrentUserAllHosts). Otherwise profile will be modified to Import this module and create an Alias `wsl` which will transparently pass through any and all paramaters to `wsl.exe` and, if necessary, initialize beforehand WSL Hyper-V network adapter to allow usage of Static IP Addresses. Will be ignored in Dynamic Mode.
 
     .PARAMETER UseScheduledTaskOnUserLogOn
-    When present - a new Scheduled Task will be created: Wsl-IpHandlerTask. It will be triggered at user LogOn. This task execution is equivalent to running Set-WslNetworkAdapter command. It will create WSL Hyper-V Network Adapter when user Logs On.
+    When this parameter is present - a new Scheduled Task will be created: Wsl-IpHandlerTask. It will be triggered at user LogOn. This task execution is equivalent to running Set-WslNetworkAdapter command. It will create WSL Hyper-V Network Adapter when user Logs On.
 
     .PARAMETER AnyUserLogOn
     When this parameter is present - The Scheduled Task will be set to run when any user logs on. Otherwise (default behavior) - the task will run only when current user (who executed Install-WslIpHandler command) logs on.
 
     .PARAMETER BackupWslConfig
     Optional. If specified will create backup of ~/.wslconfig before modifications.
+
+    .PARAMETER NoSwapCheck
+    When this parameter is present there will be no checking whether WSL2 is configured to use swap file which is compressed. Compressed swap file is a known cause of networking issue in WSL2. It is not recommended to use this parameter.
+
+    .PARAMETER NoNetworkShareCheck
+    When this parameter is present there will be no checking whether Wsl-IpHandler module is installed on a network share. WSL2 does not yet support windows network shares within linux so when the module is installed on a network share it will NOT be working correctly. It is not recommended to use this parameter.
+
+    .PARAMETER AutoFixWslConfig
+    Wsl-IpHandler module requires the default configuration settings in windows ~/.wslconfig and in linux /etc/wsl.conf files. When these files are modified by the user the module might not work correctly. When this parameter is present any misconfiguration that will cause the module to NOT work correctly will be automatically fixed (i.e. default settings will be restored).
+
+    Specifically the following settings are checked:
+    - in ~/.wslconfig:
+      [wsl2]
+      swap = ...
+    - in /etc/wsl.conf:
+      [interop]
+      enabled = true
+      appendWindowsPath = true
+      [automount]
+      enabled = true
+      [network]
+      generateResolvConf = true
+
+    .PARAMETER DynamicAdapters
+    Array of strings - names of Hyper-V Network Adapters that can be moved to other IP network space to free space for WSL adapter. Defaults to: `'Ethernet', 'Default Switch'`
 
     .EXAMPLE
     ------------------------------------------------------------------------------------------------
@@ -164,6 +189,14 @@ function Install-WslIpHandler {
         [Alias('IgnoreSwap')]
         [switch]$NoSwapCheck,
 
+        [Parameter()]
+        [Alias('IgnoreNetworkShare')]
+        [switch]$NoNetworkShareCheck,
+
+        [Parameter()]
+        [Alias('Fix')]
+        [switch]$AutoFixWslConfig,
+
         [Parameter(ParameterSetName = 'Static')]
         [string[]]$DynamicAdapters = @('Ethernet', 'Default Switch')
     )
@@ -172,8 +205,13 @@ function Install-WslIpHandler {
 
     $configModified = $false
 
-    Test-ModuleOnNetworkShareAndWarn
-    if (-not $NoSwapCheck) { Test-SwapAndWarn -Modified ([ref]$configModified) }
+    if (-not $NoNetworkShareCheck) { Test-ModuleOnNetworkShareAndPrompt }
+
+    if (-not $NoSwapCheck) {
+        Test-SwapAndPrompt -Modified ([ref]$configModified) -AutoFix:$AutoFixWslConfig
+    }
+
+    Test-EtcWslConfAndPrompt -WslInstanceName $WslInstanceName -AutoFix:$AutoFixWslConfig
 
     #region Save Network Parameters to .wslconfig and Setup Network Adapters
     Set-WslNetworkConfig -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $DNSServerList -DynamicAdapters $DynamicAdapters -WindowsHostName $WindowsHostName -Modified ([ref]$configModified)
@@ -428,7 +466,7 @@ function Install-WslBashScripts {
 
     $bashInstallScriptWslPath = '$(wslpath "' + "$BashInstallScript" + '")'
     $bashCommand = @(
-        $bashInstallScriptWslPath,
+        $bashInstallScriptWslPath
         "`"$BashAutorunScriptSource`""
         "$BashAutorunScriptTarget"
         "`"$WinHostsEditScript`""
@@ -573,7 +611,7 @@ function Update-WslBashScripts {
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     if ($All) {
-        $status = Get-WslStatus -StaticIp -DynamicIp -PassThru -InformationAction SilentlyContinue
+        $status = Get-WslStatus -StaticIp -DynamicIp -PassThru -InformationAction Ignore
         $wslInstances = [string[]]($status.StaticIp.Keys) + $status.DynamicIp
         foreach ($instance in $wslInstances) {
             $wslHostName = (Get-HostForIpAddress $instance) ?? $instance
@@ -706,8 +744,7 @@ function Set-ProfileContent {
     .NOTES
     Having `wsl` alias in profile allows to automatically enable WSL Network Adapter with manually setting it up before launching WSL instance.
     #>
-    [CmdletBinding()]
-    param($ProfilePath = $profile.CurrentUserAllHosts)
+    param([Parameter()]$ProfilePath = $profile.CurrentUserAllHosts)
 
     Write-Debug "$(_@) ProfilePath: $ProfilePath"
 
@@ -745,8 +782,7 @@ function Remove-ProfileContent {
     .PARAMETER ProfilePath
     Optional. Path to Powershell profile. Defaults to value of $Profile.CurrentUserAllhosts.
     #>
-    [CmdletBinding()]
-    param($ProfilePath = $Profile.CurrentUserAllHosts)
+    param([Parameter()]$ProfilePath = $Profile.CurrentUserAllHosts)
     Write-Debug "$(_@) ProfilePath: $ProfilePath"
 
     $handlerContent = Get-ProfileContentTemplate
@@ -1012,7 +1048,6 @@ function Remove-WslNetworkConfig {
     .NOTES
     This command only clears parameters of the network adapter in .wslconfig file, without any effect on active adapter (if it exists). To remove adapter itself use command Remove-WslNetworkAdapter.
     #>
-    [CmdletBinding()]
     param (
         [Parameter(Mandatory, ParameterSetName = 'SaveExternally')]
         [ref]$Modified,
@@ -1093,7 +1128,6 @@ function Set-WslNetworkAdapter {
     Executing this command will not save specified parameters to .wslconfig. To save settings use command Set-WslNetworkConfig.
     Or preferably first run Set-WslNetworkConfig with required parameters and then execute Set-WslNetworkAdapter without parameters for this command to read settings from .wslconfig.
     #>
-    [CmdletBinding()]
     param(
         [Parameter()][Alias('Gateway')]
         [ipaddress]$GatewayIpAddress,
@@ -1538,7 +1572,6 @@ function Test-WslInstallation {
     .EXAMPLE
     Test-WslInstallation -WslInstanceName Ubuntu
     #>
-    [CmdletBinding()]
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
@@ -1622,7 +1655,7 @@ function Get-WslStatus {
     .ModuleOnNetworkShare: $true if this module is installed on a network share, else $false.
 
     When -PassThru parameter is specified the function will output PSCustomObject with above fields.
-    Display of information can be suppressed (i.e. if only output is needed) by specifying parameter: `-InformationAction 'SilentlyContinue'`
+    Display of information can be suppressed (i.e. if only output is needed) by specifying parameter: `-InformationAction 'Ignore'`
 
     .PARAMETER WslInstances
     If this switch parameter is specifiedL WslInstances property will contain the list of distribution names obtained from `wsl.exe -l` command.
@@ -1676,7 +1709,7 @@ function Get-WslStatus {
     $status = Get-WslStatus -PassThru
     Will assign output of the function to $status variable and diplay the information.
 
-    $status = Get-WslStatus -PassThru -InformationAction SilentlyContinue
+    $status = Get-WslStatus -PassThru -InformationAction Ignore
     Will assign output of the function to $status variable without diplaying anything.
 
     .NOTES
@@ -1686,7 +1719,7 @@ function Get-WslStatus {
     param(
         [Parameter(ParameterSetName = 'Selected')][switch]$WslInstances,
 
-        [Parameter(ParameterSetName = 'Selected')][switch]$WslInstancesStatus,
+        [Parameter()][switch]$WslInstancesStatus,
 
         [Parameter(ParameterSetName = 'Selected')][switch]$StaticIp,
 
@@ -1735,7 +1768,6 @@ function Get-WslStatus {
     }
     if ($PSCmdlet.ParameterSetName -eq 'All') {
         $WslInstances = $true
-        $WslInstancesStatus = $true
         $StaticIp = $true
         $DynamicIp = $true
         $WslSubnet = $true
@@ -1758,7 +1790,7 @@ function Get-WslStatus {
         if ($WslInstancesStatus) {
             $instancesStatus = [ordered]@{}
             foreach ($instance in $wslInstancesAll) {
-                $instanceStatus = Get-WslInstanceStatus $instance
+                $instanceStatus = Get-WslInstanceStatus -WslInstanceName $instance
                 $instancesStatus[$instance] = $instanceStatus
             }
             $status.WslInstancesStatus = [PSCustomObject]$instancesStatus
@@ -1852,7 +1884,6 @@ function Get-WslStatus {
 
     Write-Information "$($status | Select-Object -Property $propertiesToDisplay | Format-List -Expand Both | Out-String)"
     if ($WslInstancesStatus) {
-        Write-Information "WslInstancesStatus:`n"
         foreach ($instance in $status.WslInstancesStatus.psobject.Properties.Name) {
             Write-Information "${instance}: $($status.WslInstancesStatus.$instance | Format-List -Expand Both | Out-String)"
         }
@@ -1874,52 +1905,115 @@ function Get-WslInstanceStatus {
     WindowsHostName: Host name the instance will use to access Windows.
     ModuleScript: Bool indicating whether Wsl-IpHandler module bash script is installed.
     ModuleSudoers: Bool indicating whether Wsl-IpHandler sudoers file is installed.
+    GenerateResolvConf: True if /etc/wsl.conf has 'generateResolvConf = true' in [network] section
+    AutomountEnabled: True if /etc/wsl.conf has 'enabled = true' in [automount] section
+    InteropEnabled: True if /etc/wsl.conf has 'enabled = true' in [interop] section
+    AppendWindowsPath: True if /etc/wsl.conf has 'appendWindowsPath = true' in [interop] section
 
     .PARAMETER WslInstanceName
     Name of the WSL instance to check
 
+    .PARAMETER WslConf
+    If this switch Parameter is specified then the returned status will only have values for the following properties:
+    StaticIp
+    DynamicIp
+    WslHostName
+    WindowsHostName
+    GenerateResolvConf
+    AutomountEnabled
+    InteropEnabled
+    AppendWindowsPath
+
+    .PARAMETER ModuleScript
+    If this switch Parameter is specified then the returned status will only have value for ModuleScript property.
+
+    .PARAMETER ModuleSudoers
+    If this switch Parameter is specified then the returned status will only have value for ModuleSudoers property.
+
     .EXAMPLE
     Get-WslInstanceStatus Ubuntu
     #>
+    [CmdletBinding(DefaultParameterSetName = 'All')]
     param (
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, Position = 0)]
         [ValidateNotNullOrEmpty()]
         [Alias('Name')]
-        [string]$WslInstanceName
+        [string]$WslInstanceName,
+
+        [Parameter(ParameterSetName = 'Part')]
+        [switch]$WslConf,
+
+        [Parameter(ParameterSetName = 'Part')]
+        [switch]$ModuleScript,
+
+        [Parameter(ParameterSetName = 'Part')]
+        [switch]$ModuleSudoers,
+
+        [Parameter(ParameterSetName = 'All')]
+        [switch]$All
     )
-    $status = [PSCustomObject]@{
-        WslInstanceName = $WslInstanceName
-        StaticIp        = $null
-        DynamicIp       = $null
-        WslHostName     = $null
-        WindowsHostName = $null
-        ModuleScript    = $null
-        ModuleSudoers   = $null
-        PSTypeName      = 'WslInstanceStatus'
+    $status = [PSCustomObject][ordered]@{
+        WslInstanceName    = $WslInstanceName
+        StaticIp           = $null
+        DynamicIp          = $null
+        WslHostName        = $null
+        WindowsHostName    = $null
+        ModuleScript       = $null
+        ModuleSudoers      = $null
+        GenerateResolvConf = $null
+        AutomountEnabled   = $null
+        InteropEnabled     = $null
+        AppendWindowsPath  = $null
+        PSTypeName         = 'WslInstanceStatus'
     }
     $isRunningOnStart = Test-WslInstanceIsRunning $WslInstanceName
 
-    $staticIp = wsl.exe -d $WslInstanceName grep -Po "'static_ip\s*=\s*\K([\d\.]+)'" '/etc/wsl.conf'
-    if (![string]::IsNullOrWhiteSpace($staticIp)) { $status.StaticIp = $staticIp }
-
-    $dynamicIp = wsl.exe -d $WslInstanceName grep -Poqw "'ip_offset'" '/etc/wsl.conf' && 1 || 0
-    if ($dynamicIp -eq '1') { $status.DynamicIp = $true } else { $status.DynamicIp = $false }
-
-    $wslHostName = wsl.exe -d $WslInstanceName grep -Po "'wsl_host\s*=\s*\K[\S]+'" '/etc/wsl.conf'
-    if (![string]::IsNullOrWhiteSpace($wslHostName)) {
-        $status.WslHostName = $wslHostName
+    if ($PSCmdlet.ParameterSetName -eq 'All') {
+        $WslConf = $true
+        $ModuleScript = $true
+        $ModuleSudoers = $true
     }
-    $windowsHostName = wsl.exe -d $WslInstanceName grep -Po "'windows_host\s*=\s*\K[\S]+'" '/etc/wsl.conf'
-    if (![string]::IsNullOrWhiteSpace($windowsHostName)) {
-        $status.WindowsHostName = $windowsHostName
-    }
-    $moduleScript = wsl.exe -d $WslInstanceName test -f '/usr/local/bin/wsl-iphandler.sh' && 1 || 0
-    if ($moduleScript -eq '1') { $status.ModuleScript = $true }
-    else { $status.ModuleScript = $false }
 
-    $moduleSudoers = wsl.exe -d $WslInstanceName test -f '/etc/sudoers.d/wsl-iphandler' && 1 || 0
-    if ($moduleSudoers -eq '1') { $status.ModuleSudoers = $true }
-    else { $status.ModuleSudoers = $false }
+    if ($WslConf) {
+        $wslConfData = wsl.exe -d $WslInstanceName cat /etc/wsl.conf | ConvertFrom-IniContent
+        Write-Debug "$(_@) wslConf:`n$($wslConfData | Out-String)"
+
+        $staticIp = $wslConfData['network']?['static_ip']
+        if ($staticIp) { $status.StaticIp = $staticIp }
+
+        $dynamicIp = $wslConfData['network']?['ip_offset']
+        if ($dynamicIp) { $status.DynamicIp = $true }  #  else { $status.DynamicIp = $false }
+
+        $wslHostName = $wslConfData['network']?['wsl_host']
+        if ($wslHostName) { $status.WslHostName = $wslHostName }
+
+        $windowsHostName = $wslConfData['network']?['windows_host']
+        if ($windowsHostName) { $status.WindowsHostName = $windowsHostName }
+
+        $generateResolvConf = $wslConfData['network']?['generateResolvConf']
+        $status.GenerateResolvConf = $null -eq $generateResolvConf -or $generateResolvConf -eq 'true'
+
+        $interopEnabled = $wslConfData['interop']?['enabled']
+        $status.InteropEnabled = $null -eq $interopEnabled -or $interopEnabled -eq 'true'
+
+        $appendWindowsPath = $wslConfData['interop']?['appendWindowsPath']
+        $status.AppendWindowsPath = $null -eq $appendWindowsPath -or $appendWindowsPath -eq 'true'
+
+        $automountEnabled = $wslConfData['automount']?['enabled']
+        $status.AutomountEnabled = $null -eq $automountEnabled -or $automountEnabled -eq 'true'
+    }
+
+    if ($ModuleScript) {
+        $moduleScriptExists = wsl.exe -d $WslInstanceName test -f '/usr/local/bin/wsl-iphandler.sh' && 1 || 0
+        if ($moduleScriptExists -eq '1') { $status.ModuleScript = $true }
+        else { $status.ModuleScript = $false }
+    }
+
+    if ($ModuleSudoers) {
+        $moduleSudoersExists = wsl.exe -d $WslInstanceName test -f '/etc/sudoers.d/wsl-iphandler' && 1 || 0
+        if ($moduleSudoersExists -eq '1') { $status.ModuleSudoers = $true }
+        else { $status.ModuleSudoers = $false }
+    }
 
     if (-not $isRunningOnStart) { wsl.exe -t $WslInstanceName }
     $status
@@ -1955,7 +2049,7 @@ function Update-WslIpHandlerModule {
     #>
     [CmdletBinding(DefaultParameterSetName = 'Git')]
     param(
-        [Parameter(ParameterSetName = 'Git')]
+        [Parameter(ParameterSetName = 'Git', Position = 0)]
         [ValidateScript({ Test-Path $_ -PathType Leaf -Include 'git.exe' })]
         [Alias('Git')]
         [string]$GitExePath,
@@ -2071,16 +2165,32 @@ function Invoke-WslExe {
 
     $DebugPreferenceOriginal = $DebugPreference
 
-    Test-ModuleOnNetworkShareAndWarn
+    if ('-AutoFix' -in $argsCopy -or '-AutoFixWslConfig' -in $argsCopy) {
+        $AutoFix = $true
+        $argsCopy = ($argsCopy | Where-Object { $_ -notlike '-AutoFix' }) ?? @()
+        $argsCopy = ($argsCopy | Where-Object { $_ -notlike '-AutoFixWslConfig' }) ?? @()
+    }
+    else {
+        $AutoFix = $false
+    }
+
+    if ('-NoNetworkShareCheck' -in $argsCopy) {
+        $argsCopy = ($argsCopy | Where-Object { $_ -notlike '-NoNetworkShareCheck' }) ?? @()
+    }
+    else {
+        Test-ModuleOnNetworkShareAndPrompt
+    }
 
     if ('-NoSwapCheck' -in $argsCopy) {
         $argsCopy = ($argsCopy | Where-Object { $_ -notlike '-NoSwapCheck' }) ?? @()
     }
     else {
         $configModified = $false
-        Test-SwapAndWarn -Modified ([ref]$configModified)
+        Test-SwapAndPrompt -Modified ([ref]$configModified) -AutoFix:$AutoFix
         if ($configModified) { Write-WslConfig }
     }
+
+    Test-EtcWslConfAndPrompt -WslInstanceName $WslInstanceName -AutoFix:$AutoFix
 
     if ('-timeout' -in $argsCopy) {
         $timeoutIndex = $argsCopy.IndexOf('-timeout')
@@ -2420,6 +2530,107 @@ function Wait-ForExpression {
     }
 }
 
+function Test-EtcWslConfAndPrompt {
+    param (
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [Alias('Name')]
+        [string]$WslInstanceName,
+
+        [Parameter()]
+        [switch]$AutoFix
+    )
+    $instanceStatus = Get-WslInstanceStatus -WslInstanceName $WslInstanceName -WslConf
+    $promptParams = @{
+        Text         = 'This setting must be enabled for Wsl-IpHandler to work. Please confirm if you want to continue:'
+        FirstOption  = 'Fix'
+        FirstHelp    = 'Fix: Recommended settings will be enabled in /etc/wsl.conf and operation will continue.'
+        SecondOption = 'No'
+        SecondHelp   = 'No: Current operation will be aborted.'
+        ThirdOption  = 'Yes'
+        ThirdHelp    = 'Yes: Operation will continue and the module will NOT work as intended.'
+    }
+    if (-not $instanceStatus.GenerateResolvConf) {
+        $sed = '/^\[network\]$/,/^\[/ s/^\(generateResolvConf\s*=\s*\)false/\1true/'
+
+        if ($AutoFix) {
+            wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+        }
+        else {
+            $promptParams.Title = "Setting 'generateResolvConf' is disabled in /etc/wsl.conf!"
+            switch (PromptForChoice @promptParams) {
+                0 {
+                    wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+                }
+                1 {
+                    Throw "Operation was cancelled by user because Setting 'generateResolvConf' is disabled in /etc/wsl.conf."
+                }
+            }
+        }
+    }
+
+    if (-not $instanceStatus.AutomountEnabled) {
+        $sed = '/^\[automount\]$/,/^\[/ s/^\(enabled\s*=\s*\)false/\1true/'
+
+        if ($AutoFix) {
+            wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+        }
+        else {
+            $promptParams.Title = 'Automount settings section is disabled in /etc/wsl.conf!'
+
+            switch (PromptForChoice @promptParams) {
+                0 {
+                    wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+                }
+                1 {
+                    Throw 'Operation was cancelled by user because Automount settings section is disabled in /etc/wsl.conf.'
+                }
+            }
+        }
+    }
+
+    if (-not $instanceStatus.InteropEnabled) {
+        $sed = '/^\[interop\]$/,/^\[/ s/^\(enabled\s*=\s*\)false/\1true/'
+
+        if ($AutoFix) {
+            wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+        }
+        else {
+            $promptParams.Title = 'Interop settings section is disabled in /etc/wsl.conf!'
+
+            switch (PromptForChoice @promptParams) {
+                0 {
+                    wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+                    $instanceStatus.InteropEnabled = $true
+                }
+                1 {
+                    Throw 'Operation was cancelled by user because Automount settings section is disabled in /etc/wsl.conf.'
+                }
+            }
+        }
+    }
+
+    if ($instanceStatus.InteropEnabled -and -not $instanceStatus.AppendWindowsPath) {
+        $sed = '/^\[interop\]$/,/^\[/ s/^\(appendWindowsPath\s*=\s*\)false/\1true/'
+
+        if ($AutoFix) {
+            wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+        }
+        else {
+            $promptParams.Title = "Settings 'appendWindowsPath' in [interop] section is disabled in /etc/wsl.conf!"
+
+            switch (PromptForChoice @promptParams) {
+                0 {
+                    wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+                }
+                1 {
+                    Throw "Operation was cancelled by user because Settings 'appendWindowsPath' in [interop] section is disabled in /etc/wsl.conf."
+                }
+            }
+        }
+    }
+}
+
 function Test-NtfsCompressionEnabled {
     param ([Parameter(Mandatory)][ValidateNotNullOrEmpty()][string]$Path)
     if ($Path -match '%[^=\s]+%') {
@@ -2440,24 +2651,36 @@ function Test-NtfsCompressionEnabled {
     }
 }
 
-function Test-SwapAndWarn {
-    param([Parameter()][ref]$Modified)
-    $status = Get-WslStatus -WslSwapEnabled -WslSwapFileCompressed -PassThru -InformationAction SilentlyContinue
+function Test-SwapAndPrompt {
+    param(
+        [Parameter(Mandatory)]
+        [ref]$Modified,
+
+        [Parameter()]
+        [switch]$AutoFix
+    )
+    $status = Get-WslStatus -WslSwapEnabled -WslSwapFileCompressed -PassThru -InformationAction Ignore
+
     if ($status.WslSwapEnabled -and $status.WslSwapFileCompressed) {
-        $promptParams = @{
-            Title        = 'WSL2 swap is enabled and swap file is compressed!'
-            Text         = "This is a known issue causing linux network interface (eth0) to be in DOWN state.`nIt is recommended to either disable compression of swap file or disable swap by adding to .wslconfig:`n[wsl2]`nswap=0`nPlease confirm if you want to continue:"
-            FirstOption  = 'Fix'
-            FirstHelp    = 'Fix: Recommended settings will be added to .wslconfig and operation will continue.'
-            SecondOption = 'No'
-            SecondHelp   = 'No: Current operation will be aborted.'
-            ThirdOption  = 'Yes'
-            ThirdHelp    = 'Yes: Operation will continue and the module will NOT work as intended.'
+        if ($AutoFix) {
+            Set-WslConfigSwapSize -Value 0 -Modified $Modified
         }
-        switch (PromptForChoice @promptParams) {
-            0 { Set-WslConfigSwapSize -Value 0 -Modified $Modified }
-            1 {
-                Throw 'Operation was cancelled by user because WSL2 swap is enabled and swap file is compressed.'
+        else {
+            $promptParams = @{
+                Title        = 'WSL2 swap is enabled and swap file is compressed!'
+                Text         = "This is a known issue causing linux network interface (eth0) to be in DOWN state.`nIt is recommended to either disable compression of swap file or disable swap by adding to .wslconfig:`n[wsl2]`nswap=0`nPlease confirm if you want to continue:"
+                FirstOption  = 'Fix'
+                FirstHelp    = 'Fix: Recommended settings will be added to .wslconfig and operation will continue.'
+                SecondOption = 'No'
+                SecondHelp   = 'No: Current operation will be aborted.'
+                ThirdOption  = 'Yes'
+                ThirdHelp    = 'Yes: Operation will continue and the module will NOT work as intended.'
+            }
+            switch (PromptForChoice @promptParams) {
+                0 { Set-WslConfigSwapSize -Value 0 -Modified $Modified }
+                1 {
+                    Throw 'Operation was cancelled by user because WSL2 swap is enabled and swap file is compressed.'
+                }
             }
         }
     }
@@ -2480,7 +2703,7 @@ function Test-PathOnNetworkShare {
     $pathStartsWithSlash -or $pathOnMappedDrive
 }
 
-function Test-ModuleOnNetworkShareAndWarn {
+function Test-ModuleOnNetworkShareAndPrompt {
     [CmdletBinding()]param()
     $moduleName = $MyInvocation.MyCommand.ModuleName
     $modulePath = $MyInvocation.MyCommand.Module.ModuleBase
@@ -2507,8 +2730,8 @@ function PromptForChoice {
         [Parameter()][string]$FirstHelp,
         [Parameter(Mandatory)][string]$SecondOption,
         [Parameter()][string]$SecondHelp,
-        [string]$ThirdOption,
-        [string]$ThirdHelp
+        [Parameter()][string]$ThirdOption,
+        [Parameter()][string]$ThirdHelp
     )
     $firstChoice = New-Object System.Management.Automation.Host.ChoiceDescription -ArgumentList "&$FirstOption", $FirstHelp
     $secondChoice = New-Object System.Management.Automation.Host.ChoiceDescription -ArgumentList "&$SecondOption", $SecondHelp

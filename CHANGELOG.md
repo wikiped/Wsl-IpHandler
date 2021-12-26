@@ -2,6 +2,55 @@
 
 [Back to Overview](./README.md)
 
+## `0.13.0`
+
+- Wsl-IpHandler module requires default configuration settings in windows `~/.wslconfig` and in linux `/etc/wsl.conf` files. When these files are modified by the user the module might not work correctly.
+
+  For these reasons additional validation of WSL configuration both on windows side and linux side was added.
+
+  Specifically the following settings are checked:
+
+  - in /.wslconfig:
+
+    ```ini
+    [wsl2]
+    swap = 0  # 0 -> Disables swap and this is NOT default setting.
+    ```
+
+  - in /etc/wsl.conf:
+
+    ```ini
+    [interop]
+    enabled = true
+    appendWindowsPath = true
+    [automount]
+    enabled = true
+    [network]
+    generateResolvConf = true
+    ```
+
+  - Additionally there is a check for this module's installation location. WSL2 does not yet support windows network shares within linux so when the module is installed on a network share it will NOT be working correctly.
+
+- If, for some reason, it is desireable to disable the checks during installation there are new parameters added to `Install-Wsl-IpHandler`:
+
+  - `-NoSwapCheck`
+
+    When this parameter is present there will be checking of whether WSL2 is configured to use swap file which is compressed.
+
+  - `-NoNetworkShareCheck`
+
+    When this parameter is present there will be no checking of whether Wsl-IpHandler module is installed on a network share.
+
+  - `-AutoFixWslConfig`
+
+    When this parameter is present any misconfiguration that will cause the module to NOT work correctly will be automatically fixed (i.e. default settings will be restored). Without this parameter when the module identifies misconfiguration it prompts the user to:
+
+    - Fix the misconfigured parameter (default choice)
+
+    - Continue and face the errors to come.
+
+    - Abort
+
 ## `0.12.0`
 
 - Added `Get-WslStatus` and `Get-WslInstanceStatus` commands:

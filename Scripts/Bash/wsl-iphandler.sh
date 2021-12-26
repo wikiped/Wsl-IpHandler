@@ -131,10 +131,10 @@ get_config_in_section() {
 	if [[ -n "$value" ]]; then
 		echo "$value"
 	else
-		if [[ "$#" -eq 2 ]]; then
-			error "${LINENO}" "${caller}: Could not find Key '$key' in /etc/wsl.conf" 11
-		else
+		if [[ "$#" -gt 2 ]]; then
 			echo "$default"
+		else
+			error "${LINENO}" "${caller}: Could not find Key '$key' in /etc/wsl.conf" 11
 		fi
 	fi
 }
@@ -308,10 +308,8 @@ run_powershell_script_to_edit_windows_hosts() {
 	# Use PowerShellCore if installed, otherwise fallback to Windows Powershell
 	local psexe
 	psexe="$(type -p pwsh.exe || type -p powershell.exe)"
-	# psexe="/mnt/c/Program Files/PowerShell/7/pwsh.exe"
 	test $? = 0 -o -z "$psexe" || error 'Could not locate PowerShell executable.' 18
 
-	#echo "${psexe}" "${ps_script}" "${ip_address%/*}" "${wsl_host}"
 	"${psexe}" "${ps_script}" "${ip_address}" "${wsl_host}"
 	test $? = 0 || error "${LINENO}" "Error executing ${ps_script} ${ip_address} ${wsl_host}" 19
 
@@ -321,19 +319,21 @@ run_powershell_script_to_edit_windows_hosts() {
 check_wsl_conf_settings() {
 	local section
 	local key
-	local expected_value
+	local expected
+	local default
 
 	section="${1:?"Arg #1: 'Section' cannot be empty in check_wsl_conf_settings"}"
 	key="${2:?"Arg #2: 'Key' cannot be empty in check_wsl_conf_settings"}"
-	expected_value="${3:?"Arg #3: 'Expected_Value' cannot be empty in check_wsl_conf_settings"}"
+	expected="${3:?"Arg #3: 'Expected' value cannot be empty in check_wsl_conf_settings"}"
+	default="${4}"
 
-	echo_verbose "Checking if /etc/wsl.conf has '$key = $expected_value' in section: [$section]..."
+	echo_verbose "Checking if /etc/wsl.conf has '$key = $expected' in section: [$section]..."
 	local value
-	value="$(get_config_in_section "$section" "$key" '')"
+	value="$(get_config_in_section "$section" "$key" "$default")"
 	echo_debug "actual value of $key in $section: '$value'"
-	if [[ "$value" != "$expected_value" ]]
+	if [[ "$value" != "$expected" ]]
 	then
-		error "${LINENO}" "For WSL IpHandler to operate correctly /etc/wsl.conf must have '$key=$expected_value' in section: [$section]!"
+		error "${LINENO}" "For WSL IpHandler to operate correctly /etc/wsl.conf must have '$key = $expected' in section: [$section], current setting: '$key = $value'!"
 	fi
 }
 
@@ -344,8 +344,10 @@ main() {
 		echo_log "Wsl-IpHandler cannot operate when $dev link state is DOWN!"
 		error ${LINENO} "$dev link state is DOWN" 99
 	fi
-	check_wsl_conf_settings 'network' 'generateResolvConf' 'true'
-	check_wsl_conf_settings 'automount' 'enabled' 'true'
+	check_wsl_conf_settings 'network' 'generateResolvConf' 'true' 'true'
+	check_wsl_conf_settings 'automount' 'enabled' 'true' 'true'
+	check_wsl_conf_settings 'interop' 'enabled' 'true' 'true'
+	check_wsl_conf_settings 'interop' 'appendWindowsPath' 'true' 'true'
 
 	# Process Local IP and Host
 	local ip_address

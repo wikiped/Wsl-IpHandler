@@ -23,7 +23,7 @@ Describe 'Install & Uninstall WSL IP Handler' -ForEach @(
             BeforeAll {
                 Set-WslNetworkAdapter -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength
                 Remove-WslNetworkAdapter
-                Install-WslIpHandler -WslInstanceName $WslInstanceName -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -WslInstanceIpAddress $WslInstanceIpAddress -DontModifyPsProfile:$DontModifyPsProfile
+                Install-WslIpHandler -WslInstanceName $WslInstanceName -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -WslInstanceIpAddress $WslInstanceIpAddress -DontModifyPsProfile:$DontModifyPsProfile -AutoFixWslConfig
             }
             It ' Created WSL Adapter with required parameters' {
                 $wslId = Get-HnsNetworkId -Name $wsl
