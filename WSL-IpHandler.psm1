@@ -2175,22 +2175,20 @@ function Invoke-WslExe {
     }
 
     if ('-NoNetworkShareCheck' -in $argsCopy) {
+        $networkShareCheck = $false
         $argsCopy = ($argsCopy | Where-Object { $_ -notlike '-NoNetworkShareCheck' }) ?? @()
     }
     else {
-        Test-ModuleOnNetworkShareAndPrompt
+        $networkShareCheck = $true
     }
 
     if ('-NoSwapCheck' -in $argsCopy) {
+        $swapCheck = $false
         $argsCopy = ($argsCopy | Where-Object { $_ -notlike '-NoSwapCheck' }) ?? @()
     }
     else {
-        $configModified = $false
-        Test-SwapAndPrompt -Modified ([ref]$configModified) -AutoFix:$AutoFix
-        if ($configModified) { Write-WslConfig }
+        $swapCheck = $true
     }
-
-    Test-EtcWslConfAndPrompt -WslInstanceName $WslInstanceName -AutoFix:$AutoFix
 
     if ('-timeout' -in $argsCopy) {
         $timeoutIndex = $argsCopy.IndexOf('-timeout')
@@ -2218,30 +2216,51 @@ function Invoke-WslExe {
         Write-Debug "$(_@) `$args: $argsCopy"
         Write-Debug "$(_@) Passed arguments require Setting WSL Network Adapter."
 
+        if ($networkShareCheck) { Test-ModuleOnNetworkShareAndPrompt }
+
+        if ($swapCheck) {
+            $configModified = $false
+            Test-SwapAndPrompt -Modified ([ref]$configModified) -AutoFix:$AutoFix
+            if ($configModified) { Write-WslConfig }
+        }
+
+        if ('-d' -in $argsCopy -or '--distribution' -in $argsCopy) {
+            $nameIndex = [Math]::Max($argsCopy.IndexOf('-d'), $argsCopy.IndexOf('--distribution')) + 1
+            if ($nameIndex -lt $argsCopy.Count) { $WslInstanceName = $argsCopy[$nameIndex] }
+            else {
+                return & wsl.exe @argsCopy @PSBoundParameters
+            }
+        }
+        else { $WslInstanceName = Get-DefaultWslInstanceName }
+
+        Test-EtcWslConfAndPrompt -WslInstanceName $WslInstanceName -AutoFix:$AutoFix
+
         Set-WslNetworkAdapter @setWslAdapterParams -WaitForWslNetworkConnection -Timeout $Timeout
+
+        $GetWslNetworkConnection = { Get-NetIPAddress -InterfaceAlias $vEthernetWsl -AddressFamily IPv4 -ErrorAction SilentlyContinue }
+        $GetWslNetworkStatus = { if ($null -eq (& $GetWslNetworkConnection)) { $false } else { $true } }
+
+        $waitingMessage = ''
+        $eventLabel = "$vEthernetWsl Network Connection Setup"
+        $waitingParams = @{
+            ValidationScript = $GetWslNetworkStatus
+            EventLabel       = $eventLabel
+            MessageVariable  = ([ref]$waitingMessage)
+            Timeout          = $Timeout
+        }
+        Write-Debug "$(_@) Waiting Params: $(& {$args} @waitingParams)"
+
+        if (Wait-ForExpressionTimeout @waitingParams) {
+            if ($waitingMessage) { Write-Verbose "$waitingMessage" }
+        }
+        else {
+            if ($waitingMessage) { Write-Error "$waitingMessage" }
+            else { Write-Error "Error waiting for $eventLabel - operation timed out." }
+        }
     }
 
-    $GetWslNetworkConnection = { Get-NetIPAddress -InterfaceAlias $vEthernetWsl -AddressFamily IPv4 -ErrorAction SilentlyContinue }
-    $GetWslNetworkStatus = { if ($null -eq (& $GetWslNetworkConnection)) { $false } else { $true } }
+    & wsl.exe @argsCopy @PSBoundParameters
 
-    $waitingMessage = ''
-    $eventLabel = "$vEthernetWsl Network Connection Setup"
-    $waitingParams = @{
-        ValidationScript = $GetWslNetworkStatus
-        EventLabel       = $eventLabel
-        MessageVariable  = ([ref]$waitingMessage)
-        Timeout          = $Timeout
-    }
-    Write-Debug "$(_@) Waiting Params: $(& {$args} @waitingParams)"
-
-    if (Wait-ForExpressionTimeout @waitingParams) {
-        if ($waitingMessage) { Write-Verbose "$waitingMessage" }
-        & wsl.exe @argsCopy @PSBoundParameters
-    }
-    else {
-        if ($waitingMessage) { Write-Error "$waitingMessage" }
-        else { Write-Error "Error waiting for $eventLabel - operation timed out." }
-    }
     $DebugPreference = $DebugPreferenceOriginal
 }
 

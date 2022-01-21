@@ -1,6 +1,12 @@
 function Get-WslInstancesNames {
     wsl.exe -l | ConvertFrom-UTF16toUTF8 | Select-Object -Skip 1 |
         ForEach-Object { $_ -split ' ' | Select-Object -First 1 }
+    }
+
+function Get-DefaultWslInstanceName {
+    wsl.exe -l | ConvertFrom-UTF16toUTF8 | Select-Object -Skip 1 |
+        Where-Object { ($_ -split ' ' | Measure-Object).Count -eq 2 } |
+        ForEach-Object { $_ -split ' ' | Select-Object -First 1 }
 }
 
 function WslNameCompleter {
