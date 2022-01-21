@@ -23,6 +23,10 @@ function _@ {
 }
 #endregion Debug Functions
 
+class WslNamesGenerator : System.Management.Automation.IValidateSetValuesGenerator {
+    [string[]] GetValidValues() { return Get-WslInstancesNames }
+}
+
 function Install-WslIpHandler {
     <#
     .SYNOPSIS
@@ -144,6 +148,8 @@ function Install-WslIpHandler {
     #>
     param (
         [Parameter(Mandatory, Position = 0)]
+        [ValidateSet([WslNamesGenerator],
+            ErrorMessage = "'{0}' is not one of the installed distributions: {1}" )]
         [Parameter(ParameterSetName = 'Dynamic')]
         [Parameter(ParameterSetName = 'Static')]
         [Alias('Name')]
@@ -313,7 +319,8 @@ function Uninstall-WslIpHandler {
     #>
     param (
         [Parameter(Mandatory)]
-        [ValidateNotNullOrEmpty()]
+        [ValidateSet([WslNamesGenerator],
+            ErrorMessage = "'{0}' is not one of the installed distributions: {1}" )]
         [Alias('Name')]
         [string]$WslInstanceName,
 
@@ -406,6 +413,8 @@ function Install-WslBashScripts {
     #>
     param(
         [Parameter(Mandatory, Position = 0)]
+        [ValidateSet([WslNamesGenerator],
+            ErrorMessage = "'{0}' is not one of the installed distributions: {1}" )]
         [Alias('Name')]
         [string]$WslInstanceName,
 
@@ -516,7 +525,8 @@ function Uninstall-WslBashScripts {
     #>
     param(
         [Parameter(Mandatory)]
-        [ValidateNotNullOrEmpty()]
+        [ValidateSet([WslNamesGenerator],
+            ErrorMessage = "'{0}' is not one of the installed distributions: {1}" )]
         [Alias('Name')]
         [string]$WslInstanceName,
 
@@ -599,6 +609,8 @@ function Update-WslBashScripts {
     #>
     param(
         [Parameter(Mandatory, Position = 0, ParameterSetName = 'Single')]
+        [ValidateSet([WslNamesGenerator],
+            ErrorMessage = "'{0}' is not one of the installed distributions: {1}" )]
         [Alias('Name')]
         [string]$WslInstanceName,
 
@@ -840,6 +852,8 @@ function Set-WslInstanceStaticIpAddress {
     #>
     param (
         [Parameter(Mandatory)]
+        [ValidateSet([WslNamesGenerator],
+            ErrorMessage = "'{0}' is not one of the installed distributions: {1}" )]
         [Alias('Name')]
         [string]$WslInstanceName,
 
@@ -912,6 +926,8 @@ function Remove-WslInstanceStaticIpAddress {
     #>
     param (
         [Parameter(Mandatory)]
+        [ValidateSet([WslNamesGenerator],
+            ErrorMessage = "'{0}' is not one of the installed distributions: {1}" )]
         [Alias('Name')]
         [string]$WslInstanceName,
 
@@ -1574,7 +1590,8 @@ function Test-WslInstallation {
     #>
     param (
         [Parameter(Mandatory)]
-        [ValidateNotNullOrEmpty()]
+        [ValidateSet([WslNamesGenerator],
+            ErrorMessage = "'{0}' is not one of the installed distributions: {1}" )]
         [Alias('Name')]
         [string]$WslInstanceName,
 
@@ -1936,7 +1953,8 @@ function Get-WslInstanceStatus {
     [CmdletBinding(DefaultParameterSetName = 'All')]
     param (
         [Parameter(Mandatory, Position = 0)]
-        [ValidateNotNullOrEmpty()]
+        [ValidateSet([WslNamesGenerator],
+            ErrorMessage = "'{0}' is not one of the installed distributions: {1}" )]
         [Alias('Name')]
         [string]$WslInstanceName,
 
@@ -2552,7 +2570,8 @@ function Wait-ForExpression {
 function Test-EtcWslConfAndPrompt {
     param (
         [Parameter(Mandatory)]
-        [ValidateNotNullOrEmpty()]
+        [ValidateSet([WslNamesGenerator],
+            ErrorMessage = "'{0}' is not one of the installed distributions: {1}" )]
         [Alias('Name')]
         [string]$WslInstanceName,
 

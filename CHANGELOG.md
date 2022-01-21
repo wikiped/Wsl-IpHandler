@@ -2,6 +2,10 @@
 
 [Back to Overview](./README.md)
 
+## `0.14.0`
+
+- Validation of `WslInstanceName` parameter was added to all commands accepting this parameter.
+
 ## `0.13.0`
 
 - Wsl-IpHandler module requires default configuration settings in windows `~/.wslconfig` and in linux `/etc/wsl.conf` files. When these files are modified by the user the module might not work correctly.
