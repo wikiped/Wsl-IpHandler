@@ -75,7 +75,7 @@ function Write-HostsFileContent {
         . (Join-Path $PSScriptRoot 'FunctionsPSElevation.ps1' -Resolve) | Out-Null
     }
 
-    Write-Debug "$(_@) Setting $FilePath with $($Records.Count) records."
+    Write-Debug "$(_@) Setting $FilePath with $(($Records | Measure-Object).Count) records."
 
     if (-not (IsElevated)) {
         Write-Debug "$(_@) Invoking Elevated Permissions ..."
@@ -251,7 +251,7 @@ function Remove-HostFromRecords {
     if (!(Test-Path variable:Records)) { $Records = @() }
     if ($null -eq $Records) { $Records = @() }
 
-    Write-Debug "$(_@) Before processing: `$Records.Count=$($Records.Count)"
+    Write-Debug "$(_@) Before processing: `$Records.Count=$(($Records | Measure-Object).Count)"
 
     $Records = $Records | ForEach-Object {
         if (Test-RecordIsComment $_) {
@@ -277,7 +277,7 @@ function Remove-HostFromRecords {
             }
         }
     }
-    Write-Debug "$(_@) After processing: `$Records.Count=$($Records.Count)"
+    Write-Debug "$(_@) After processing: `$Records.Count=$(($Records | Measure-Object).Count)"
     Write-Debug "$(_@) After processing: `$Modified=$($Modified.Value)"
     $Records
 }
