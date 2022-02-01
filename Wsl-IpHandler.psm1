@@ -2179,7 +2179,7 @@ function Invoke-WslExe {
         $allArgsAreExec
     }
     $argsCopy = $args.Clone()
-    $setWslAdapterParams = @{}
+    $setWslAdapterParams = @{ GatewayIpAddress = Get-WslConfigGatewayIpAddress }
 
     $DebugPreferenceOriginal = $DebugPreference
 
@@ -2253,27 +2253,29 @@ function Invoke-WslExe {
 
         Test-EtcWslConfAndPrompt -WslInstanceName $WslInstanceName -AutoFix:$AutoFix
 
-        Set-WslNetworkAdapter @setWslAdapterParams -WaitForWslNetworkConnection -Timeout $Timeout
+        if ($setWslAdapterParams.GatewayIpAddress) {
+            Set-WslNetworkAdapter @setWslAdapterParams -WaitForWslNetworkConnection -Timeout $Timeout
 
-        $GetWslNetworkConnection = { Get-NetIPAddress -InterfaceAlias $vEthernetWsl -AddressFamily IPv4 -ErrorAction SilentlyContinue }
-        $GetWslNetworkStatus = { if ($null -eq (& $GetWslNetworkConnection)) { $false } else { $true } }
+            $GetWslNetworkConnection = { Get-NetIPAddress -InterfaceAlias $vEthernetWsl -AddressFamily IPv4 -ErrorAction SilentlyContinue }
+            $GetWslNetworkStatus = { if ($null -eq (& $GetWslNetworkConnection)) { $false } else { $true } }
 
-        $waitingMessage = ''
-        $eventLabel = "$vEthernetWsl Network Connection Setup"
-        $waitingParams = @{
-            ValidationScript = $GetWslNetworkStatus
-            EventLabel       = $eventLabel
-            MessageVariable  = ([ref]$waitingMessage)
-            Timeout          = $Timeout
-        }
-        Write-Debug "$(_@) Waiting Params: $(& {$args} @waitingParams)"
+            $waitingMessage = ''
+            $eventLabel = "$vEthernetWsl Network Connection Setup"
+            $waitingParams = @{
+                ValidationScript = $GetWslNetworkStatus
+                EventLabel       = $eventLabel
+                MessageVariable  = ([ref]$waitingMessage)
+                Timeout          = $Timeout
+            }
+            Write-Debug "$(_@) Waiting Params: $(& {$args} @waitingParams)"
 
-        if (Wait-ForExpressionTimeout @waitingParams) {
-            if ($waitingMessage) { Write-Verbose "$waitingMessage" }
-        }
-        else {
-            if ($waitingMessage) { Write-Error "$waitingMessage" }
-            else { Write-Error "Error waiting for $eventLabel - operation timed out." }
+            if (Wait-ForExpressionTimeout @waitingParams) {
+                if ($waitingMessage) { Write-Verbose "$waitingMessage" }
+            }
+            else {
+                if ($waitingMessage) { Write-Error "$waitingMessage" }
+                else { Write-Error "Error waiting for $eventLabel - operation timed out." }
+            }
         }
     }
 
