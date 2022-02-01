@@ -222,7 +222,7 @@ function Update-WithGit {
     Push-Location $ModuleFolderPath
     if ($RepoUri) {
         Push-Location ..
-        Remove-Item $ModuleFolderPath -Recurse -Force
+        Remove-Item (Join-Path $ModuleFolderPath '*') -Recurse -Force
         . $GitExePath clone "`"$RepoUri`""
         Pop-Location
     }
@@ -262,9 +262,9 @@ function Update-WithWebRequest {
 
     Expand-Archive -Path $outputPath -DestinationPath $outputDir
 
-    Remove-Item -Path "$ModuleFolderPath\*" -Recurse -Force
+    Remove-Item -Path (Join-Path $ModuleFolderPath '*') -Recurse -Force
 
-    Move-Item -Path (Join-Path $outputDir $outputName '\*') -Destination $ModuleFolderPath -Force
+    Move-Item -Path (Join-Path $outputDir $outputName '*') -Destination $ModuleFolderPath -Force
 
     Remove-Item -Path $outputDir -Recurse -Force
 }

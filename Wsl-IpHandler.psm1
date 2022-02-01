@@ -2102,7 +2102,7 @@ function Update-WslIpHandlerModule {
     $result = Update-ModuleFromGithub @params @commonParameters
 
     switch ($result.Status) {
-        'Updated' { Write-Warning 'Wsl-IpHandler module has been updated and needs to be re-imported. I' }
+        'Updated' { Write-Warning "Wsl-IpHandler module has been updated and needs to be re-imported with:`nImport-Module `"$modulePath`" -Force" }
         'UpToDate' { return }
         'Error' { Write-Error -ErrorRecord $_ }
         Default { Write-Error "Unknown Error occurred while updating '$($MyInvocation.MyCommand.ModuleName)'!" }
