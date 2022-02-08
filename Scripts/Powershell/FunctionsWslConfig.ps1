@@ -388,7 +388,7 @@ function Test-IsValidStaticIpAddress {
             $warnMsg += 'within currently Unknown WSL SubNet that will be set by Windows OS and might have different SubNet!'
         }
         else {
-            $GatewayIpObject = (Get-IpNet -IpAddress $GatewayIpAddress.IPAddressToString -PrefixLength $PrefixLength)
+            $GatewayIpObject = (Get-IpNet -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength)
             if ($GatewayIpObject.Contains($IpAddress)) {
                 Write-Debug "$(_@) $IpAddress is within $($GatewayIpObject.CIDR) when `$usingWslConfig=$usingWslConfig"
                 if ($usingWslConfig) {
@@ -414,7 +414,7 @@ function Test-IsValidStaticIpAddress {
     else {
         Write-Debug "$(_@) `$GatewayIpAddress=$GatewayIpAddress of type: $($GatewayIpAddress.Gettype())"
         Write-Debug "$(_@) `$PrefixLength=$PrefixLength"
-        $GatewayIPObject = (Get-IpNet -IpAddress $GatewayIpAddress.IPAddressToString -PrefixLength $PrefixLength)
+        $GatewayIPObject = (Get-IpNet -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength)
         Write-Debug "$(_@) `$GatewayIPObject: $($GatewayIPObject | Out-String)"
         if ($GatewayIPObject.Contains($IpAddress)) {
             Write-Debug "$(_@) $IpAddress is VALID and is within $($GatewayIPObject.CIDR) SubNet."
@@ -729,7 +729,8 @@ function Get-WslConfigGatewayIpAddress {
 
 function Set-WslConfigGatewayIpAddress {
     param(
-        [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory)]
+        [ValidateScript({ Test-IsValidIpAddress $_ })]
         [ipaddress]$Value,
 
         [Parameter()]

@@ -241,9 +241,7 @@ $AddMethod = {
         [int]$Add,
         [ValidateRange(0, 32)][int]$PrefixLength = $This.PrefixLength
     )
-    Get-IpNet `
-        -IPAddress ([IPAddress]([String]($This.Decimal + $Add))).IPAddressToString `
-        -PrefixLength $PrefixLength
+    Get-IpNet -IPAddress "$($This.Decimal + $Add)" -PrefixLength $PrefixLength
 }
 
 $ContainsMethod = {

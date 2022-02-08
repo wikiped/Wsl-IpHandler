@@ -233,8 +233,8 @@ function Install-WslIpHandler {
         }
         Set-WslNetworkAdapter @setParams -Verbose:$($VerbosePreference -eq 'Continue')
 
-        Write-Verbose "Setting Static IP Address: $($WslInstanceIpAddress.IPAddressToString) for $WslInstanceName."
-        Set-WslInstanceStaticIpAddress -WslInstanceName $WslInstanceName -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -WslInstanceIpAddress $WslInstanceIpAddress.IPAddressToString -Modified ([ref]$configModified)
+        Write-Verbose "Setting Static IP Address: $WslInstanceIpAddress for $WslInstanceName."
+        Set-WslInstanceStaticIpAddress -WslInstanceName $WslInstanceName -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -WslInstanceIpAddress $WslInstanceIpAddress -Modified ([ref]$configModified)
 
         if ($UseScheduledTaskOnUserLogOn) {
             Write-Verbose 'Registering Wsl-IpHandler scheduled task...'
