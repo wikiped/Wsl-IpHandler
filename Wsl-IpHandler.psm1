@@ -2094,7 +2094,7 @@ function Update-WslIpHandlerModule {
     Write-Debug "$(_@) `$updaterModulePath: $updaterModulePath"
     Import-Module $updaterModulePath -Force -Verbose:$false -Debug:$false
 
-    $commonParameters = @{ ErrorAction = 'Continue' }
+    $commonParameters = @{ ErrorAction = 'SilentlyContinue' }
     if ($VerbosePreference -eq 'Continue') { $commonParameters.Verbose = $true }
     if ($DebugPreference -eq 'Continue') { $commonParameters.Debug = $true }
 
@@ -2104,7 +2104,7 @@ function Update-WslIpHandlerModule {
     switch ($result.Status) {
         'Updated' { Write-Warning "Wsl-IpHandler module has been updated and needs to be re-imported with:`nImport-Module `"$modulePath`" -Force" }
         'UpToDate' { return }
-        'Error' { Write-Error -ErrorRecord $_ }
+        'Error' { Write-Error -ErrorRecord $result.Error }
         Default { Write-Error "Unknown Error occurred while updating '$($MyInvocation.MyCommand.ModuleName)'!" }
     }
 }

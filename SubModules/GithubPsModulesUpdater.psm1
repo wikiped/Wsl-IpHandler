@@ -99,6 +99,24 @@ function Get-PsdUri {
     "https://raw.githubusercontent.com/${GithubUserName}/${RepoName}/${Branch}/${RepoName}.psd1"
 }
 
+function Test-UriIsAccessible {
+    param(
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
+        [uri]$Uri
+    )
+    if (-not (Test-Connection -ComputerName $Uri.Host -Quiet)) {
+        $errorMessage = "Cannot connect to $($uri.Host). Either the site is down or there is no internet connection."
+        $PSCmdlet.ThrowTerminatingError(
+            [System.Management.Automation.ErrorRecord]::new(
+                ([System.ApplicationException]$errorMessage),
+                'WSLIpHandler.UriIsNotAccessible',
+                [System.Management.Automation.ErrorCategory]::ConnectionError,
+                $Uri
+            )
+        )
+    }
+}
+
 function Get-RepoVersion {
     param (
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
@@ -111,6 +129,8 @@ function Get-RepoVersion {
         [switch]$ThrowOnError
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
+
+    Test-UriIsAccessible $PsdUri
 
     try {
         $webResponse = Invoke-WebRequest -Uri $psdUri
@@ -408,7 +428,11 @@ function Update-ModuleFromGithub {
                 $params.Uri = Get-ZipUri -RepoName $ModuleName -GithubUserName $GithubUserName -Branch $Branch
                 Write-Debug "$(_@) Invoking Update-WithWebRequest with parameters: $($params | Out-String)"
                 Write-Verbose 'Updating via HTTP protocol...'
+
+                Test-UriIsAccessible $params.Uri
+
                 Update-WithWebRequest @params
+
                 $result.Status = 'Updated'
             }
             else {
@@ -419,7 +443,11 @@ function Update-ModuleFromGithub {
                 }
                 Write-Debug "$(_@) Invoking Update-WithGit with parameters: $($params | Out-String)"
                 Write-Verbose 'Updating with git.exe ...'
+
+                Test-UriIsAccessible $params.RepoUri
+
                 Update-WithGit @params
+
                 $result.Status = 'Updated'
             }
             # Remove-Module $ModuleName -Force -ErrorAction SilentlyContinue -Verbose:$false -Debug:$false
