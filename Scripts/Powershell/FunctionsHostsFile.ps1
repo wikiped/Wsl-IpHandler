@@ -94,7 +94,11 @@ function Test-RecordIsComment {
         [Parameter(Mandatory)][AllowEmptyString()][ValidateNotNull()]
         [string]$Record
     )
-    [string]::IsNullOrWhiteSpace($Record) -or $Record -match '^\s*#'
+    $startsWithComment = '^\s*#'
+    $hasNoSpace = '^[^\s]+$'
+    $hasNoDigit = '^[^\d]+'
+
+    [string]::IsNullOrWhiteSpace($Record) -or $Record -match $startsWithComment -or $Record -match $hasNoSpace -or $Record -match $hasNoDigit
 }
 
 function Test-RecordContainsIpAddress {
