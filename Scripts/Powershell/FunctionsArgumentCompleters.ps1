@@ -1,16 +1,16 @@
 function Get-WslInstancesNames {
-    wsl.exe -l | ConvertFrom-UTF16toUTF8 | Select-Object -Skip 1 |
+    wsl.exe -l | Convert-CommandOutput | Select-Object -Skip 1 |
         ForEach-Object { $_ -split ' ' | Select-Object -First 1 }
     }
 
-function Get-DefaultWslInstanceName {
-    wsl.exe -l | ConvertFrom-UTF16toUTF8 | Select-Object -Skip 1 |
-        Where-Object { ($_ -split ' ' | Measure-Object).Count -eq 2 } |
-        ForEach-Object { $_ -split ' ' | Select-Object -First 1 }
-}
+    function Get-DefaultWslInstanceName {
+        wsl.exe -l | Convert-CommandOutput | Select-Object -Skip 1 |
+            Where-Object { ($_ -split ' ' | Measure-Object).Count -eq 2 } |
+            ForEach-Object { $_ -split ' ' | Select-Object -First 1 }
+        }
 
-function WslNameCompleter {
-    <#
+        function WslNameCompleter {
+            <#
     .SYNOPSIS
     Completes WSL name
 
@@ -37,10 +37,10 @@ function WslNameCompleter {
     With Register-ArgumentCompleter Command (works even for functions in .psm1 files):
     Register-ArgumentCompleter -CommandName SomeCommand -ParameterName SomeParameter -ScriptBlock $Function:WslNameCompleter
     #>
-    param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameter)
-    Get-WslInstancesNames |
-        Where-Object { $_ -like "*${wordToComplete}*" } |
-        ForEach-Object { New-Object System.Management.Automation.CompletionResult ($_) }
+            param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameter)
+            Get-WslInstancesNames |
+                Where-Object { $_ -like "*${wordToComplete}*" } |
+                ForEach-Object { New-Object System.Management.Automation.CompletionResult ($_) }
 }
 
 function Test-WslInstanceIsRunning {
@@ -51,7 +51,7 @@ function Test-WslInstanceIsRunning {
         [string]$WslInstanceName
     )
     (wsl.exe -l --running |
-        ConvertFrom-UTF16toUTF8 |
+        Convert-CommandOutput |
         Select-Object -Skip 1 |
         ForEach-Object { $_ -split ' ' | Select-Object -First 1 } |
         Where-Object { $_ -eq $WslInstanceName } |
@@ -81,11 +81,17 @@ function Get-CommandOutputInUTF16AsUTF8 {
     }
 }
 
-function ConvertFrom-UTF16toUTF8 {
+function Convert-CommandOutput {
     param(
         [Parameter(Mandatory, ValueFromPipeline)]
         [AllowEmptyString()][AllowNull()]
         [string[]]$CommandOutput,
+
+        [Parameter()]
+        [string]$SourceEncoding = 'utf-16',
+
+        [Parameter()]
+        [string]$DestinationEncoding = 'utf-8',
 
         [Parameter()]
         [switch]$IncludeEmptyLines
@@ -94,10 +100,12 @@ function ConvertFrom-UTF16toUTF8 {
     if ($array.Count) { $CommandOutput = $array }
     if (!(Test-Path variable:CommandOutput)) { $CommandOutput = @() }
 
-    $utf8 = [System.Text.Encoding]::GetEncoding('utf-8')
-    $utf16 = [System.Text.Encoding]::GetEncoding('utf-16')
+    $srcEncoding = [System.Text.Encoding]::GetEncoding($SourceEncoding)
+    $dstEncoding = [System.Text.Encoding]::GetEncoding($DestinationEncoding)
 
-    $output = $utf8.GetString([System.Text.Encoding]::Convert($utf16, $utf8, $utf8.GetBytes($CommandOutput -join "`n"))) -split "`n"
+    $output = $dstEncoding.GetString([System.Text.Encoding]::Convert(
+            $srcEncoding, $dstEncoding, $dstEncoding.GetBytes($CommandOutput -join "`n")
+            )) -split "`n"
     if ($IncludeEmptyLines) { $output }
     else { $output | Where-Object { $_.Length -gt 0 } }
 }
