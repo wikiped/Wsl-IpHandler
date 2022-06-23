@@ -1,16 +1,20 @@
+class EncodingNamesGenerator : System.Management.Automation.IValidateSetValuesGenerator {
+    [string[]] GetValidValues() { return [System.Text.Encoding]::GetEncodings().Name }
+}
+
 function Get-WslInstancesNames {
     wsl.exe -l | Convert-CommandOutput | Select-Object -Skip 1 |
         ForEach-Object { $_ -split ' ' | Select-Object -First 1 }
     }
 
-    function Get-DefaultWslInstanceName {
-        wsl.exe -l | Convert-CommandOutput | Select-Object -Skip 1 |
-            Where-Object { ($_ -split ' ' | Measure-Object).Count -eq 2 } |
-            ForEach-Object { $_ -split ' ' | Select-Object -First 1 }
-        }
+function Get-DefaultWslInstanceName {
+    wsl.exe -l | Convert-CommandOutput | Select-Object -Skip 1 |
+        Where-Object { ($_ -split ' ' | Measure-Object).Count -eq 2 } |
+        ForEach-Object { $_ -split ' ' | Select-Object -First 1 }
+    }
 
-        function WslNameCompleter {
-            <#
+function WslNameCompleter {
+    <#
     .SYNOPSIS
     Completes WSL name
 
@@ -37,10 +41,10 @@ function Get-WslInstancesNames {
     With Register-ArgumentCompleter Command (works even for functions in .psm1 files):
     Register-ArgumentCompleter -CommandName SomeCommand -ParameterName SomeParameter -ScriptBlock $Function:WslNameCompleter
     #>
-            param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameter)
-            Get-WslInstancesNames |
-                Where-Object { $_ -like "*${wordToComplete}*" } |
-                ForEach-Object { New-Object System.Management.Automation.CompletionResult ($_) }
+    param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameter)
+    Get-WslInstancesNames |
+        Where-Object { $_ -like "*${wordToComplete}*" } |
+        ForEach-Object { New-Object System.Management.Automation.CompletionResult ($_) }
 }
 
 function Test-WslInstanceIsRunning {
@@ -88,10 +92,14 @@ function Convert-CommandOutput {
         [string[]]$CommandOutput,
 
         [Parameter()]
-        [string]$SourceEncoding = 'utf-16',
+        [ValidateSet([EncodingNamesGenerator],
+            ErrorMessage = "'{0}' is not one of the allowed encodings: {1}" )]
+        [string]$SourceEncodingName = 'utf-16',
 
         [Parameter()]
-        [string]$DestinationEncoding = 'utf-8',
+        [ValidateSet([EncodingNamesGenerator],
+            ErrorMessage = "'{0}' is not one of the allowed encodings: {1}" )]
+        [string]$DestinationEncodingName = [System.Console]::OutputEncoding.WebName,
 
         [Parameter()]
         [switch]$IncludeEmptyLines
@@ -100,8 +108,8 @@ function Convert-CommandOutput {
     if ($array.Count) { $CommandOutput = $array }
     if (!(Test-Path variable:CommandOutput)) { $CommandOutput = @() }
 
-    $srcEncoding = [System.Text.Encoding]::GetEncoding($SourceEncoding)
-    $dstEncoding = [System.Text.Encoding]::GetEncoding($DestinationEncoding)
+    $srcEncoding = [System.Text.Encoding]::GetEncoding($SourceEncodingName)
+    $dstEncoding = [System.Text.Encoding]::GetEncoding($DestinationEncodingName)
 
     $output = $dstEncoding.GetString([System.Text.Encoding]::Convert(
             $srcEncoding, $dstEncoding, $dstEncoding.GetBytes($CommandOutput -join "`n")
