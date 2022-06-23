@@ -452,7 +452,7 @@ function Update-ModuleFromGithub {
             }
             # Remove-Module $ModuleName -Force -ErrorAction SilentlyContinue -Verbose:$false -Debug:$false
             # Import-Module $ModulePath -Force -Verbose:$false -Debug:$false
-            Write-Information "$ModuleName module was successfully updated!"
+            Write-Information "$ModuleName module was successfully updated from version: $($moduleInfo.Version) to: $remoteVersion!"
             $result
         }
         else {
