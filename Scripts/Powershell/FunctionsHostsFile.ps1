@@ -91,7 +91,7 @@ function Write-HostsFileContent {
 function Test-RecordIsComment {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)][AllowEmptyString()][ValidateNotNull()]
+        [Parameter(Mandatory)][AllowEmptyString()][AllowNull()]
         [string]$Record
     )
     $startsWithComment = '^\s*#'
@@ -103,7 +103,14 @@ function Test-RecordIsComment {
 
 function Test-RecordContainsIpAddress {
     [CmdLetBinding()]
-    param ([string]$Record, [ipaddress]$IpAddress)
+    param (
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Record,
+
+        [ValidateNotNull()]
+        [ipaddress]$IpAddress
+    )
     $Record -match "^\s*$([regex]::Escape("$IpAddress"))\b"
 }
 
@@ -130,31 +137,41 @@ function Test-RecordContainsIpAddressAndHost {
 
 function Get-IpAddressHostsCommentTuple {
     [CmdLetBinding()]
-    param($Record)
+    param(
+        [AllowEmptyString()]
+        [AllowNull()]
+        [string]$Record
+    )
     if (Test-RecordIsComment $Record) { return }
     $Ip, $rest = $Record.Trim() -split ' ', 2
     $Hosts, $Comment = $rest.Trim() -split '#', 2
-    $Ip.Trim(), $Hosts.Trim(), ('#' + $Comment)
+    if ($Comment) { $Comment = '#' + $Comment }
+    $Ip.Trim(), $Hosts.Trim(), ($Comment)
 }
 
 function Get-HostsCount {
     [CmdLetBinding()]
-    param([Parameter(Mandatory)][string]$Hosts)
-    ($Hosts -split ' ').Count
+    param(
+        [AllowNull()]
+        [AllowEmptyString()]
+        [Parameter(Mandatory)][string]$Hosts
+    )
+    if ($Hosts) { ($Hosts -split ' ' | Where-Object { $_.Length -gt 0 }).Count }
+    else { 0 }
 }
 
 function Get-HostsCountFromRecord {
     [CmdLetBinding()]
     param(
-        [Parameter(Mandatory)][ValidateNotNull()][AllowEmptyString()]
+        [Parameter(Mandatory)][AllowNull()][AllowEmptyString()]
         [string]$Record
     )
     $_, $hosts, $_ = Get-IpAddressHostsCommentTuple $Record
-    if ($null -eq $hosts) {
-        0
+    if ($hosts) {
+        ($hosts -split ' ' | Where-Object { $_.Length -gt 0 } ).Count
     }
     else {
-        ($hosts -split ' ').Count
+        0
     }
 }
 
@@ -216,7 +233,7 @@ function Add-HostToRecord {
     Write-Debug "$(_@) `$Record: $($Record.GetType())"
     $existingIp, $existingHosts, $comment = Get-IpAddressHostsCommentTuple $Record
 
-    if (Test-RecordContainsHost $_ $HostName) {
+    if (Test-RecordContainsHost $Record $HostName) {
         if ((Get-HostsCount $existingHosts) -gt 1 -and $ReplaceExistingHosts) {
             $Modified.Value = $true
             New-IpAddressHostRecord $existingIp $HostName $comment
@@ -267,9 +284,9 @@ function Remove-HostFromRecords {
             if (Test-RecordContainsHost $existingHosts $HostName) {
                 # Host is used for another IP - Remove host from this record
                 $hostsArray = $existingHosts -split ' '
-                $Modified.Value = $true  # host in use - we need to remove this host / record
 
                 if ($hostsArray.Count -gt 1) {
+                    $Modified.Value = $true
                     # It is NOT the only host -> modify record
                     $newHosts = $hostsArray | Where-Object { -not (Test-RecordContainsHost $_ $HostName) }
                     New-IpAddressHostRecord $existingIp ($newHosts -join ' ') $comment
