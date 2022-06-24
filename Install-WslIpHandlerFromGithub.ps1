@@ -92,5 +92,13 @@ else {
     Rename-Item -Path "${ModuleName}-master" -NewName $ModuleName
 }
 
+$psdFile = "$ModuleName.psd1"
+if (Test-Path (Join-Path $targetDirectory $psdFile) -PathType Leaf) {
+    $version = Import-LocalizedData -BaseDirectory $targetDirectory -FileName $psdFile | Select-Object -ExpandProperty ModuleVersion
+}
+else {
+    $version = ""
+}
+if ($version) { $version = "version: $version " }
+Write-Host "Wsl-IpHandler ${version}was installed in: '$targetDirectory'"
 Pop-Location
-Write-Host "Wsl-IpHandler was installed in: '$targetDirectory'"
