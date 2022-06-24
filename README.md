@@ -40,6 +40,8 @@
 
 [How to completely remove this module?](#how-to-completely-remove-this-module)
 
+[How to enable Unicode UTF-8 support on Windows?](#how-to-enable-unicode-utf-8-support-on-windows)
+
 [Getting help](#getting-help)
 
 [Credits](#credits)
@@ -87,6 +89,12 @@ In other words what WSL should have been doing out-of-the-box.
     [How to install Powershell Core.](https://docs.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.1)
 
 1. [WSL 2](https://github.com/microsoft/WSL) (This module has not been tested with WSL 1)
+
+1. Administrative access on the windows machine, where the module will be used.
+
+1. Ubuntu or Fedora family os on WSL instance.
+
+1. Unicode UTF-8 support enabled in Windows Settings.
 
 To download and copy the module to Modules folder of Powershell profile for Current User run the following commands from Powershell prompt:
 
@@ -470,6 +478,20 @@ Or execute from Powershell prompt:
 Import-Module Wsl-IpHandler
 Uninstall-WslIpHandlerModule
 ```
+
+---
+
+## How to enable Unicode UTF-8 support on Windows
+
+Run / Execute command:
+
+```powershell
+control international
+```
+
+Then in the opened window select tab: <kbd>Administrative</kbd> -> <kbd>Change system locale...</kbd>.
+
+Select option `Beta: Use Unicode UTF-8 for worldwide language support` in the opened window.
 
 ---
 
