@@ -82,15 +82,15 @@ install_packages() {
 	local wsl_os
 	wsl_os="$(grep ^ID= /etc/os-release | cut -d= -f2)"
 	case "$wsl_os" in
-		"ubuntu" )
+		*ubuntu* )
 			type ip &>/dev/null || sudo_run apt -y -q install net-tools
 			;;
-		"fedora" )
+		*fedora* )
 			type ip &>/dev/null || sudo_run yum -y -q install iproute
 			type ping &>/dev/null || sudo_run yum -y -q install iputils
 			;;
 		*)
-			error ${LINENO} "Only Ubuntu and Fedora are supported. Terminating..." 6
+			error ${LINENO} "Only Ubuntu and Fedora Families are are supported, not '$wsl_os'. Terminating..." 6
 			;;
 	esac
 	# if (! type ip &>/dev/null) || (! type ping &>/dev/null)
