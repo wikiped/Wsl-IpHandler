@@ -471,7 +471,25 @@ function Update-ModuleFromGithub {
         $InformationPreference = 'Continue'
     }
 
-    $moduleInfo = Get-ModuleInfoFromNameOrPath $ModuleName
+    $result = [PSCustomObject]@{
+        Module     = $null
+        ModulePath = $null
+        Method     = $null
+        Status     = $null
+        Error      = $null
+        PSTypeName = 'UpdateModuleResult'
+    }
+
+    $moduleInfo = Get-ModuleInfoFromNameOrPath $ModuleNameOrPath
+
+    if ($moduleInfo) {
+        $result.Module = $moduleInfo.Name
+        $result.ModulePath = $moduleInfo.ModuleBase
+    }
+    else {
+        Write-Error "Cannot get PSModuleInfo from: $ModuleNameOrPath"
+        return $result
+    }
 
     if ($PSCmdlet.ParameterSetName -eq 'Git') {
         if (-not $GitExePath) {
@@ -480,14 +498,6 @@ function Update-ModuleFromGithub {
         }
     }
 
-    $result = [PSCustomObject]@{
-        Module     = $moduleInfo.Name
-        ModulePath = $moduleInfo.ModuleBase
-        Method     = $null
-        Status     = $null
-        Error      = $null
-        PSTypeName = 'UpdateModuleResult'
-    }
     if ($Force) {
         $updateIsNeeded = $true
     }

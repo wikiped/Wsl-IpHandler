@@ -2055,6 +2055,9 @@ function Update-WslIpHandlerModule {
     .PARAMETER Force
     If given will update module even if there is version mismatch between installed version and version in repository.
 
+    .PARAMETER TimeoutSec
+    Timeout in seconds to wait for response from github.com
+
     .EXAMPLE
     Update-WslIpHandlerModule
 
@@ -2076,15 +2079,19 @@ function Update-WslIpHandlerModule {
         [switch]$NoGit,
 
         [Parameter()]
-        [switch]$Force
+        [switch]$Force,
+
+        [Parameter()]
+        [int]$TimeoutSec = 15
     )
     $modulePath = $MyInvocation.MyCommand.Module.ModuleBase
 
     $params = @{
-        ModulePath     = $modulePath
+        ModuleNameOrPath     = $modulePath
         GithubUserName = $MyInvocation.MyCommand.Module.Author
         Branch         = 'master'
         Force          = $Force
+        TimeoutSec = $TimeoutSec
     }
     if ($NoGit) { $params.NoGit = $NoGit }
     else { if ($GitExePath) { $params.GitExePath = $GitExePath } }
@@ -2804,10 +2811,10 @@ foreach ($command in $functionsForWslNameCompleter) {
 $modulesUpdaterPath = Join-Path $PSScriptRoot 'SubModules' 'GithubPsModulesUpdater.psm1'
 if (Test-Path $modulesUpdaterPath -PathType Leaf) {
     $moduleName = Split-Path $PSScriptRoot -LeafBase
-    Import-Module $modulesUpdaterPath
+    Import-Module $modulesUpdaterPath -Verbose:$false -Debug:$false
 
     Write-Verbose "Checking if there is a new version of '$moduleName' available..."
-    if (Test-NewModuleVersionIsAvailable -ModuleNameOrPath $PSScriptRoot -Timeout 5 -ErrorAction Ignore) {
+    if (Test-NewModuleVersionIsAvailable -ModuleNameOrPath $PSScriptRoot -TimeoutSec 5 -ErrorAction Ignore) {
         $msg = "New version of '$moduleName' is available. Command to update:`n"
         $msg += "Update-WslIpHandlerModule"
         Write-Warning $msg
