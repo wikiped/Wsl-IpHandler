@@ -300,10 +300,10 @@ function Update-WithWebRequest {
     Remove-Item -Path $outputDir -Recurse -Force
 }
 
-function Test-NewModuleVersionIsAvailable {
+function Get-ModuleVersions {
     <#
     .SYNOPSIS
-    Checks if newer version of Powershell module's is available at github.com.
+    Returns PSCustomObject with two Properties: LocalVersion and RemoteVersion of Powershell module. Where RemoteVersion is version of the module available at github.com.
 
     .DESCRIPTION
     Uses psd1 file at github repository to query for latest version at a specified branch (defaults to master).
@@ -329,10 +329,10 @@ function Test-NewModuleVersionIsAvailable {
     Timeout in seconds to wait for response from github.com
 
     .EXAMPLE
-    Test-NewModuleVersionIsAvailable 'C:\Documents\My Modules\SomeModuleToBeUpdated' -GithubUserName theusername
+    Get-ModuleVersions 'C:\Documents\My Modules\SomeModuleToBeUpdated' -GithubUserName theusername
 
     .EXAMPLE
-    Test-NewModuleVersionIsAvailable SomeModuleToBeUpdated githubuser
+    Get-ModuleVersions SomeModuleToBeUpdated githubuser
     #>
     [CmdletBinding(DefaultParameterSetName = 'ModuleInfo')]
     param(
@@ -358,12 +358,13 @@ function Test-NewModuleVersionIsAvailable {
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
-    if (-not $PSBoundParameters.ContainsKey('InformationAction')) {
-        $InformationPreference = 'Continue'
-    }
-
     if ($PSCmdlet.ParameterSetName -eq 'NameOrPath') {
         $ModuleInfo = Get-ModuleInfoFromNameOrPath $ModuleNameOrPath
+    }
+
+    $result = [PSCustomObject]@{
+        LocalVersion  = $ModuleInfo.Version
+        RemoteVersion = $null
     }
 
     if (-not $GithubUserName) { $GithubUserName = $ModuleInfo.Author }
@@ -380,7 +381,8 @@ function Test-NewModuleVersionIsAvailable {
     $remoteVersion = Get-ModuleVersionFromGithub $psdUri -DefaultVersion $ModuleInfo.Version -TimeoutSec $TimeoutSec
     Write-Debug "$(_@) Installed version: $($ModuleInfo.Version)"
     Write-Debug "$(_@) Github version:    $remoteVersion"
-    $ModuleInfo.Version -lt $remoteVersion
+    $result.RemoteVersion = $remoteVersion
+    $result
 }
 
 function Update-ModuleFromGithub {
@@ -498,11 +500,13 @@ function Update-ModuleFromGithub {
         }
     }
 
+    $versions = Get-ModuleVersions -ModuleInfo $moduleInfo -GithubUserName $GithubUserName -Branch $Branch -TimeoutSec $TimeoutSec
+
     if ($Force) {
         $updateIsNeeded = $true
     }
     else {
-        $updateIsNeeded = Test-NewModuleVersionIsAvailable -ModuleInfo $moduleInfo -GithubUserName $GithubUserName -Branch $Branch -TimeoutSec $TimeoutSec
+        $updateIsNeeded = $versions.LocalVersion -lt $versions.RemoteVersion
     }
     Write-Debug "$(_@) `$updateIsNeeded: $updateIsNeeded"
 
@@ -540,7 +544,7 @@ function Update-ModuleFromGithub {
             # The user has to Import-Module ... -Force manually!
             # Remove-Module $moduleInfo.Name -Force -ErrorAction SilentlyContinue -Verbose:$false -Debug:$false
             # Import-Module $moduleInfo.ModuleBase -Force -Verbose:$false -Debug:$false
-            Write-Information "$($moduleInfo.Name) was successfully updated from version: $($moduleInfo.Version) to: $remoteVersion!"
+            Write-Information "$($moduleInfo.Name) was successfully updated from version: $($moduleInfo.Version) to: $($versions.RemoteVersion)!"
             $result
         }
         else {
@@ -559,7 +563,7 @@ function Update-ModuleFromGithub {
 
 $functionsToExport = @(
     'Update-ModuleFromGithub'
-    'Test-NewModuleVersionIsAvailable'
+    'Get-ModuleVersions'
     'Get-ModuleInfoFromNameOrPath'
     # 'Get-ModuleVersionFromGithub'
     # 'Get-PsdUri'

@@ -2814,13 +2814,15 @@ if (Test-Path $modulesUpdaterPath -PathType Leaf) {
     Import-Module $modulesUpdaterPath -Verbose:$false -Debug:$false
 
     Write-Verbose "Checking if there is a new version of '$moduleName' available..."
-    if (Test-NewModuleVersionIsAvailable -ModuleNameOrPath $PSScriptRoot -TimeoutSec 5 -ErrorAction Ignore) {
+    $versions = Get-ModuleVersions -ModuleNameOrPath $PSScriptRoot -TimeoutSec 5 -ErrorAction Ignore
+    if ($versions.LocalVersion -lt $versions.RemoteVersion) {
         $msg = "New version of '$moduleName' is available. Command to update:`n"
         $msg += "Update-WslIpHandlerModule"
         Write-Warning $msg
         Remove-Variable msg
     }
     Remove-Variable moduleName
+    Remove-Variable versions
     Remove-Module (Split-Path $modulesUpdaterPath -LeafBase) -Force -ErrorAction Ignore
 }
 Remove-Variable modulesUpdaterPath
