@@ -125,6 +125,9 @@ function Get-ModuleVersionFromGithub {
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
         [uri]$PsdUri,
 
+        [Parameter()]
+        [int]$TimeoutSec = 10,
+
         [Parameter()][ValidateNotNullOrEmpty()]
         [version]$DefaultVersion = '0.0'
     )
@@ -133,7 +136,7 @@ function Get-ModuleVersionFromGithub {
     Test-UriIsAccessible $PsdUri
 
     try {
-        $webResponse = Invoke-WebRequest -Uri $psdUri -ErrorAction Stop
+        $webResponse = Invoke-WebRequest -Uri $psdUri -TimeoutSec $TimeoutSec -ErrorAction Stop
     }
     catch {
         if ($response = $_.Exception.Response) {
@@ -322,6 +325,9 @@ function Test-NewModuleVersionIsAvailable {
     .PARAMETER Branch
     Branch name. Defaults to master.
 
+    .PARAMETER TimeoutSec
+    Timeout in seconds to wait for response from github.com
+
     .EXAMPLE
     Test-NewModuleVersionIsAvailable 'C:\Documents\My Modules\SomeModuleToBeUpdated' -GithubUserName theusername
 
@@ -345,7 +351,10 @@ function Test-NewModuleVersionIsAvailable {
 
         [Parameter()]
         [ValidateNotNullOrEmpty()]
-        [string]$Branch = 'master'
+        [string]$Branch = 'master',
+
+        [Parameter()]
+        [int]$TimeoutSec = 10
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
@@ -368,7 +377,7 @@ function Test-NewModuleVersionIsAvailable {
     $psdUri = Get-PsdUri @uriParams
     Write-Debug "$(_@) Get-PsdUri $( &{ $args } @uriParams )"
     Write-Debug "$(_@) `$psdUri: $psdUri"
-    $remoteVersion = Get-ModuleVersionFromGithub $psdUri -DefaultVersion $ModuleInfo.Version
+    $remoteVersion = Get-ModuleVersionFromGithub $psdUri -DefaultVersion $ModuleInfo.Version -TimeoutSec $TimeoutSec
     Write-Debug "$(_@) Installed version: $($ModuleInfo.Version)"
     Write-Debug "$(_@) Github version:    $remoteVersion"
     $ModuleInfo.Version -lt $remoteVersion
@@ -409,6 +418,9 @@ function Update-ModuleFromGithub {
     .PARAMETER Force
     If given will update module even if there is version mismatch between installed version and version in repository.
 
+    .PARAMETER TimeoutSec
+    Timeout in seconds to wait for response from github.com
+
     .EXAMPLE
     Update-ModuleFromGithub 'C:\Documents\My Modules\SomeModuleToBeUpdated' -GithubUserName theusername
 
@@ -448,7 +460,10 @@ function Update-ModuleFromGithub {
         [switch]$NoGit,
 
         [Parameter()]
-        [switch]$Force
+        [switch]$Force,
+
+        [Parameter()]
+        [int]$TimeoutSec = 10
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
@@ -477,7 +492,7 @@ function Update-ModuleFromGithub {
         $updateIsNeeded = $true
     }
     else {
-        $updateIsNeeded = Test-NewModuleVersionIsAvailable -ModuleInfo $moduleInfo -GithubUserName $GithubUserName -Branch $Branch
+        $updateIsNeeded = Test-NewModuleVersionIsAvailable -ModuleInfo $moduleInfo -GithubUserName $GithubUserName -Branch $Branch -TimeoutSec $TimeoutSec
     }
     Write-Debug "$(_@) `$updateIsNeeded: $updateIsNeeded"
 

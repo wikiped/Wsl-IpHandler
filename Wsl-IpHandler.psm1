@@ -2807,7 +2807,7 @@ if (Test-Path $modulesUpdaterPath -PathType Leaf) {
     Import-Module $modulesUpdaterPath
 
     Write-Verbose "Checking if there is a new version of '$moduleName' available..."
-    if (Test-NewModuleVersionIsAvailable -ModuleNameOrPath $PSScriptRoot -ErrorAction Ignore) {
+    if (Test-NewModuleVersionIsAvailable -ModuleNameOrPath $PSScriptRoot -Timeout 5 -ErrorAction Ignore) {
         $msg = "New version of '$moduleName' is available. Command to update:`n"
         $msg += "Update-WslIpHandlerModule"
         Write-Warning $msg
