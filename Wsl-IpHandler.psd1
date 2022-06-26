@@ -9,7 +9,7 @@
     RootModule        = 'Wsl-IpHandler'
 
     # Version number of this module.
-    ModuleVersion     = '0.14.17'
+    ModuleVersion     = '0.15.0'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -116,14 +116,15 @@
 
     # List of all files packaged with this module
     FileList          = @(
-        'functions.sh'
-        'install-wsl-iphandler.sh'
-        'uninstall-wsl-iphandler.sh'
-        'update-wsl-iphandler.sh'
-        'wsl-iphandler.sh'
-        'README.md'
-        'RELEASES.md'
-        'LICENSE.txt'
+        '.\Scripts\Bash\functions.sh'
+        '.\Scripts\Bash\install-wsl-iphandler.sh'
+        '.\Scripts\Bash\uninstall-wsl-iphandler.sh'
+        '.\Scripts\Bash\update-wsl-iphandler.sh'
+        '.\Scripts\Bash\wsl-iphandler.sh'
+        '.\Install-WslIpHandlerFromGithub.ps1'
+        '.\README.md'
+        '.\CHANGELOG.md'
+        '.\LICENSE.txt'
     )
 
     # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.

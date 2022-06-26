@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD033 -->
 # WSL IP Handler
 
 <details>
@@ -92,9 +93,9 @@ In other words what WSL should have been doing out-of-the-box.
 
 1. Administrative access on the windows machine, where the module will be used.
 
-1. Ubuntu or Fedora family os on WSL instance.
+1. Ubuntu or Fedora family OS as WSL instance.
 
-1. Unicode UTF-8 support enabled in Windows Settings.
+1. Unicode UTF-8 support [enabled](#how-to-enable-unicode-utf-8-support-on-windows) in Windows Settings.
 
 To download and copy the module to Modules folder of Powershell profile for Current User run the following commands from Powershell prompt:
 
@@ -489,7 +490,7 @@ Run / Execute command:
 control international
 ```
 
-Then in the opened window select tab: <kbd>Administrative</kbd> -> <kbd>Change system locale...</kbd>.
+Then in the opened window select tab: <kbd>Administrative</kbd> -> <kbd>Change system locale...</kbd>
 
 Select option `Beta: Use Unicode UTF-8 for worldwide language support` in the opened window.
 

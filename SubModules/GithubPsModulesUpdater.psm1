@@ -26,7 +26,7 @@ function Write-ModuleNameNotFoundError {
         [string]$ModuleName
     )
     # $modulePaths = ($env:PSModulePath -split ';') -join "`n"
-    Write-Error "Powershell cannot find module '$ModuleName' in any of the standard locations in :`$env:PSModulePath."
+    Write-Error "Powershell cannot find module '$ModuleName' in any of the locations listed in `$env:PSModulePath."
 }
 
 function Write-ModulePathInvalidError {
@@ -41,8 +41,11 @@ function Write-ModulePathInvalidError {
     elseif (Test-Path $ModulePath -PathType Container) {
         Write-Error "'$ModulePath' is NOT a valid path, because no valid module file was found in that directory."
     }
-    elseif (Test-Path $ModulePath -PathType Leaf -Include '*.psm1', '*.psd1') {
-        Write-Error "'$ModulePath' cannot be loaded, because it is NOT a valid module file."
+    elseif (Test-Path $ModulePath -PathType Leaf -Include '*.psd1') {
+        Write-Error "'$ModulePath' is NOT valid here or is malformed."
+    }
+    elseif (Test-Path $ModulePath -PathType Leaf -Include '*.psm1') {
+        Write-Error "PSM1 file: '$ModulePath' is NOT valid here."
     }
     else {
         Write-Error "'$ModulePath' is NOT a valid module path."
@@ -117,64 +120,60 @@ function Test-UriIsAccessible {
     }
 }
 
-function Get-RepoVersion {
+function Get-ModuleVersionFromGithub {
     param (
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
         [uri]$PsdUri,
 
         [Parameter()][ValidateNotNullOrEmpty()]
-        [version]$DefaultVersion = '0.0',
-
-        [Parameter()]
-        [switch]$ThrowOnError
+        [version]$DefaultVersion = '0.0'
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
     Test-UriIsAccessible $PsdUri
 
     try {
-        $webResponse = Invoke-WebRequest -Uri $psdUri
+        $webResponse = Invoke-WebRequest -Uri $psdUri -ErrorAction Stop
     }
     catch {
-        $response = $_.Exception.Response
-        $errMsg = "Error $($response.StatusCode.value__): $($response.ReasonPhrase) - While trying to get version from psd file at: '$($response.RequestMessage.RequestUri.AbsoluteUri)'."
+        if ($response = $_.Exception.Response) {
+            $errMsg = "Error $($response.StatusCode.value__): $($response.ReasonPhrase) - While trying to get version from psd file at: '$($response.RequestMessage.RequestUri.AbsoluteUri)'."
 
-        if ($response.StatusCode.value__ -eq 404) {
-            $errMsg += ' Check case of Repository Name (it is used as the name of psd file) - file names at GitHub are case sensitive!'
-        }
-        if ($ThrowOnError) {
-            Write-Error "$errMsg"
+            if ($response.StatusCode.value__ -eq 404) {
+                $errMsg += "`nCheck spelling and / or case (file names at GitHub are case sensitive) of repository name (it is used as the name of psd file)!"
+            }
         }
         else {
-            $errMsg += " Using default version: $DefaultVersion"
-            Write-Error "$errMsg" -ErrorAction 'Continue'
-            return $DefaultVersion
+            $errMsg = $_.Exception.Message
         }
+
+        Write-Error "$errMsg"
+        Write-Debug "$(_@) Using default version: $DefaultVersion"
+        return $DefaultVersion
     }
 
-    $psdData = Invoke-Expression $webResponse.Content -ErrorAction SilentlyContinue
+    try {
+        $psdData = Invoke-Expression $webResponse.Content -ErrorAction Stop
+    }
+    catch {
+        Write-Error "$($_.Exception.Message)"
+        Write-Debug "$(_@) Using default version: '$DefaultVersion'."
+        return $DefaultVersion
+    }
 
     if (-not $psdData) {
-        $errMsg = "Cannot parse content of psd at: $PsdUri."
-        if ($ThrowOnError) { Write-Error "$errMsg" }
-        else {
-            $errMsg += " Using default version: '$DefaultVersion'."
-            Write-Error "$errMsg" -ErrorAction 'Continue'
-            return $DefaultVersion
-        }
+        Write-Error "Cannot parse content of psd file at: '$PsdUri'"
+        Write-Debug "$(_@) Using default version: '$DefaultVersion'."
+        return $DefaultVersion
     }
 
     if ($psdData.ModuleVersion) {
         [version]($psdData.ModuleVersion)
     }
     else {
-        $errMsg = "ModuleVersion is not specified in PSD Document at: $PsdUri."
-        if ($ThrowOnError) { Write-Error "$errMsg" }
-        else {
-            $errMsg += " Using default version: $DefaultVersion"
-            Write-Error "$errMsg" -ErrorAction 'Continue'
-            $DefaultVersion
-        }
+        Write-Error "ModuleVersion is not specified in PSD file: '$PsdUri'"
+        Write-Debug "$(_@) Using default version: '$DefaultVersion'."
+        $DefaultVersion
     }
 }
 
@@ -189,16 +188,25 @@ function Get-ModuleInfoFromNameOrPath {
 
     $moduleInfo = @{}
 
-    if (Test-Path $ModuleNameOrPath) {
-        $moduleInfo = Import-Module $ModulePath -PassThru -ErrorAction SilentlyContinue -Verbose:$false -Debug:$false
+    if (Test-Path $ModuleNameOrPath -PathType Container) {
+        $moduleInfo = Test-ModuleManifest (Join-Path $ModuleNameOrPath ((Split-Path $ModuleNameOrPath -Leaf) + '.psd1')) -ErrorAction SilentlyContinue -Verbose:$false -Debug:$false
         if (-not $moduleInfo) {
-            Write-ModulePathInvalidError $ModulePath
+            Write-ModulePathInvalidError $ModuleNameOrPath
         }
     }
-    else {
-        $moduleInfo = Get-Module -Name $ModuleName -ListAvailable -ErrorAction SilentlyContinue
+    elseif (Test-Path $ModuleNameOrPath -PathType Leaf -Include '*.psd1') {
+        $moduleInfo = Test-ModuleManifest $ModuleNameOrPath -ErrorAction SilentlyContinue -Verbose:$false -Debug:$false
         if (-not $moduleInfo) {
-            Write-ModuleNameNotFoundError "$ModuleName"
+            Write-ModulePathInvalidError $ModuleNameOrPath
+        }
+    }
+    elseif (Test-Path $ModuleNameOrPath -PathType Leaf -Include '*.psm1') {
+        Write-ModulePathInvalidError $ModuleNameOrPath
+    }
+    else {
+        $moduleInfo = Get-Module -Name $ModuleNameOrPath -ListAvailable -ErrorAction SilentlyContinue
+        if (-not $moduleInfo) {
+            Write-ModuleNameNotFoundError "$ModuleNameOrPath"
         }
     }
     $moduleInfo
@@ -289,6 +297,83 @@ function Update-WithWebRequest {
     Remove-Item -Path $outputDir -Recurse -Force
 }
 
+function Test-NewModuleVersionIsAvailable {
+    <#
+    .SYNOPSIS
+    Checks if newer version of Powershell module's is available at github.com.
+
+    .DESCRIPTION
+    Uses psd1 file at github repository to query for latest version at a specified branch (defaults to master).
+    It is assumed that the modules repository has main module's files (.psd1 and .psm1) located at the root of the repository.
+
+    .PARAMETER ModuleInfo
+    PSModuleInfo object from Get-Module or Import-Module -PassThru or Test-ModuleManifest commands
+
+    .PARAMETER ModuleNameOrPath
+    Name of the module to be check as it appears in github address uri to repository. It is case sensitive since it is used as the name for PSD file to get latest version information.
+
+    Path to folder where module is located or to the module manifest file. i.e:
+    'C:\Documents\My Modules\SomeModuleToBeUpdated'
+    'C:\Documents\My Modules\SomeModuleToBeUpdated\SomeModuleToBeUpdated.psd1'
+
+    .PARAMETER GithubUserName
+    User name as it appears in GitHub address uri to repository. Case insensitive.
+
+    .PARAMETER Branch
+    Branch name. Defaults to master.
+
+    .EXAMPLE
+    Test-NewModuleVersionIsAvailable 'C:\Documents\My Modules\SomeModuleToBeUpdated' -GithubUserName theusername
+
+    .EXAMPLE
+    Test-NewModuleVersionIsAvailable SomeModuleToBeUpdated githubuser
+    #>
+    [CmdletBinding(DefaultParameterSetName = 'ModuleInfo')]
+    param(
+        [Parameter(Mandatory, Position = 0, ParameterSetName = 'ModuleInfo')]
+        [ValidateNotNull()]
+        [PSModuleInfo]$ModuleInfo,
+
+        [Parameter(Mandatory, Position = 0, ParameterSetName = 'NameOrPath')]
+        [ValidateNotNullOrEmpty()]
+        [string]$ModuleNameOrPath,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [Alias('User')]
+        [string]$GithubUserName,
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$Branch = 'master'
+    )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
+
+    if (-not $PSBoundParameters.ContainsKey('InformationAction')) {
+        $InformationPreference = 'Continue'
+    }
+
+    if ($PSCmdlet.ParameterSetName -eq 'NameOrPath') {
+        $ModuleInfo = Get-ModuleInfoFromNameOrPath $ModuleNameOrPath
+    }
+
+    if (-not $GithubUserName) { $GithubUserName = $ModuleInfo.Author }
+
+    $uriParams = @{
+        RepoName       = $ModuleInfo.Name
+        GithubUserName = $GithubUserName
+        Branch         = $Branch
+    }
+
+    $psdUri = Get-PsdUri @uriParams
+    Write-Debug "$(_@) Get-PsdUri $( &{ $args } @uriParams )"
+    Write-Debug "$(_@) `$psdUri: $psdUri"
+    $remoteVersion = Get-ModuleVersionFromGithub $psdUri -DefaultVersion $ModuleInfo.Version
+    Write-Debug "$(_@) Installed version: $($ModuleInfo.Version)"
+    Write-Debug "$(_@) Github version:    $remoteVersion"
+    $ModuleInfo.Version -lt $remoteVersion
+}
+
 function Update-ModuleFromGithub {
     <#
     .SYNOPSIS
@@ -300,9 +385,10 @@ function Update-ModuleFromGithub {
     For this command to work Powershell module to be updated should have been installed (or pulled / cloned) from Github in a first place. Regular Powershell modules (which are installed with Install-Module command) ARE NOT supported and command will fail!
     It is also assumed that the modules repository has main module's files (.psd1 and .psm1) located at the root of the repository.
 
-    .PARAMETER ModuleNameOrPath
+    .PARAMETER ModuleName
     Name of the module to be update as it appears in github address uri to repository. It is case sensitive since it is used a name for PSD file to get latest version information.
 
+    .PARAMETER ModulePath
     Path to folder where module is located or to the module file. i.e:
     'C:\Documents\My Modules\SomeModuleToBeUpdated'
     'C:\Documents\My Modules\SomeModuleToBeUpdated\SomeModuleToBeUpdated.psm1'
@@ -338,57 +424,41 @@ function Update-ModuleFromGithub {
     Adding -GitExePath parameter will allow to use git.exe that is not on PATH.
     All files in this Module's folder will be removed before update!
     #>
-    [CmdletBinding(DefaultParameterSetName = 'Name+Git')]
+    [CmdletBinding(DefaultParameterSetName = 'Git')]
     param(
-        [Parameter(Mandatory, ParameterSetName = 'Name+Git', Position = 0)]
-        [Parameter(Mandatory, ParameterSetName = 'Name+Http', Position = 0)]
+        [Parameter(Mandatory, Position = 0)]
         [ValidateNotNullOrEmpty()]
-        [string]$ModuleName,
+        [string]$ModuleNameOrPath,
 
-        [Parameter(Mandatory, ParameterSetName = 'Path+Git', Position = 0)]
-        [Parameter(Mandatory, ParameterSetName = 'Path+Http', Position = 0)]
-        [ValidateScript({ Test-Path $_ -PathType Container })]
-        [string]$ModulePath,
-
-        [Parameter(Mandatory)]
+        [Parameter(Mandatory, Position = 1)]
         [ValidateNotNullOrEmpty()]
         [Alias('User')]
         [string]$GithubUserName,
 
-        [Parameter()]
+        [Parameter(Position = 2)]
         [ValidateNotNullOrEmpty()]
         [string]$Branch = 'master',
 
-        [Parameter(ParameterSetName = 'Name+Git')]
-        [Parameter(ParameterSetName = 'Path+Git')]
+        [Parameter(ParameterSetName = 'Git')]
         [ValidateScript({ Test-Path $_ -PathType Leaf -Include 'git.exe' })]
         [Alias('Git')]
         [string]$GitExePath,
 
-        [Parameter(Mandatory, ParameterSetName = 'Name+Http', Position = 0)]
-        [Parameter(Mandatory, ParameterSetName = 'Path+Http', Position = 0)]
+        [Parameter(Mandatory, ParameterSetName = 'Http')]
         [switch]$NoGit,
 
         [Parameter()]
-        [switch]$Force,
-
-        [Parameter()]
-        [switch]$ThrowOnError
+        [switch]$Force
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
     if (-not $PSBoundParameters.ContainsKey('InformationAction')) {
         $InformationPreference = 'Continue'
     }
-    if ($PSCmdlet.ParameterSetName -like 'Name*') {
-        $moduleInfo = Get-ModuleInfoFromNameOrPath $ModuleName
-        $ModulePath = $moduleInfo.ModuleBase
-    }
-    else {
-        $moduleInfo = Get-ModuleInfoFromNameOrPath $ModulePath
-        $ModuleName = $moduleInfo.Name
-    }
-    if ($PSCmdlet.ParameterSetName -like '*Git') {
+
+    $moduleInfo = Get-ModuleInfoFromNameOrPath $ModuleName
+
+    if ($PSCmdlet.ParameterSetName -eq 'Git') {
         if (-not $GitExePath) {
             $GitExePath = Get-GitExePath
             if (-not $GitExePath) { $NoGit = $true }
@@ -396,36 +466,27 @@ function Update-ModuleFromGithub {
     }
 
     $result = [PSCustomObject]@{
-        Module     = $ModuleName
-        ModulePath = $ModulePath
+        Module     = $moduleInfo.Name
+        ModulePath = $moduleInfo.ModuleBase
         Method     = $null
         Status     = $null
         Error      = $null
         PSTypeName = 'UpdateModuleResult'
     }
+    if ($Force) {
+        $updateIsNeeded = $true
+    }
+    else {
+        $updateIsNeeded = Test-NewModuleVersionIsAvailable -ModuleInfo $moduleInfo -GithubUserName $GithubUserName -Branch $Branch
+    }
+    Write-Debug "$(_@) `$updateIsNeeded: $updateIsNeeded"
 
     try {
-        if ($Force) {
-            $updateIsNeeded = $true
-        }
-        else {
-            $uriParams = @{
-                RepoName       = $ModuleName
-                GithubUserName = $GithubUserName
-                Branch         = $Branch
-            }
-            $psdUri = Get-PsdUri @uriParams
-            $remoteVersion = Get-RepoVersion $psdUri -ThrowOnError:$ThrowOnError
-            Write-Debug "$(_@) `$remoteVersion: $remoteVersion"
-            $updateIsNeeded = $moduleInfo.Version -lt $remoteVersion
-        }
-        Write-Debug "$(_@) `$updateIsNeeded: $updateIsNeeded"
-
         if ($updateIsNeeded) {
-            $params = @{ModuleFolderPath = $ModulePath }
+            $params = @{ModuleFolderPath = $moduleInfo.ModuleBase }
             if ($NoGit) {
                 $result.Method = 'http'
-                $params.Uri = Get-ZipUri -RepoName $ModuleName -GithubUserName $GithubUserName -Branch $Branch
+                $params.Uri = Get-ZipUri -RepoName $moduleInfo.Name -GithubUserName $GithubUserName -Branch $Branch
                 Write-Debug "$(_@) Invoking Update-WithWebRequest with parameters: $($params | Out-String)"
                 Write-Verbose 'Updating via HTTP protocol...'
 
@@ -438,8 +499,8 @@ function Update-ModuleFromGithub {
             else {
                 $result.Method = 'git'
                 $params.GitExePath = $GitExePath
-                if (-not (Test-DirectoryIsGitRepository $ModulePath $GitExePath)) {
-                    $params.RepoUri = Get-RepoUri -RepoName $ModuleName -GithubUserName $GithubUserName
+                if (-not (Test-DirectoryIsGitRepository $moduleInfo.ModuleBase $GitExePath)) {
+                    $params.RepoUri = Get-RepoUri -RepoName $moduleInfo.Name -GithubUserName $GithubUserName
                 }
                 Write-Debug "$(_@) Invoking Update-WithGit with parameters: $($params | Out-String)"
                 Write-Verbose 'Updating with git.exe ...'
@@ -450,28 +511,32 @@ function Update-ModuleFromGithub {
 
                 $result.Status = 'Updated'
             }
-            # Remove-Module $ModuleName -Force -ErrorAction SilentlyContinue -Verbose:$false -Debug:$false
-            # Import-Module $ModulePath -Force -Verbose:$false -Debug:$false
-            Write-Information "$ModuleName module was successfully updated from version: $($moduleInfo.Version) to: $remoteVersion!"
+            # Attempting to Remove-Module followed by Import-Module will fail.
+            # The user has to Import-Module ... -Force manually!
+            # Remove-Module $moduleInfo.Name -Force -ErrorAction SilentlyContinue -Verbose:$false -Debug:$false
+            # Import-Module $moduleInfo.ModuleBase -Force -Verbose:$false -Debug:$false
+            Write-Information "$($moduleInfo.Name) was successfully updated from version: $($moduleInfo.Version) to: $remoteVersion!"
             $result
         }
         else {
             $result.Status = 'UpToDate'
-            Write-Information "The latest version of '$ModuleName' is already installed: $($moduleInfo.Version)"
+            Write-Information "The latest version of '$($moduleInfo.Name)' is already installed: $($moduleInfo.Version)"
             $result
         }
     }
     catch {
         $result.Status = 'Error'
         $result.Error = $_
-        Write-Error "There was an error while updating $ModuleName Module: $($_.Exception.Message)"
+        Write-Error "There was an error while updating '$($moduleInfo.Name)': $($_.Exception.Message)"
         return $result
     }
 }
 
 $functionsToExport = @(
     'Update-ModuleFromGithub'
-    # 'Get-RepoVersion'
+    'Test-NewModuleVersionIsAvailable'
+    'Get-ModuleInfoFromNameOrPath'
+    # 'Get-ModuleVersionFromGithub'
     # 'Get-PsdUri'
 )
 

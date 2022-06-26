@@ -2800,3 +2800,20 @@ $functionsForWslNameCompleter = @(
 foreach ($command in $functionsForWslNameCompleter) {
     Register-ArgumentCompleter -CommandName $command -ParameterName WslInstanceName -ScriptBlock $Function:WslNameCompleter
 }
+
+$modulesUpdaterPath = Join-Path $PSScriptRoot 'SubModules' 'GithubPsModulesUpdater.psm1'
+if (Test-Path $modulesUpdaterPath -PathType Leaf) {
+    $moduleName = Split-Path $PSScriptRoot -LeafBase
+    Import-Module $modulesUpdaterPath
+
+    Write-Verbose "Checking if there is a new version of '$moduleName' available..."
+    if (Test-NewModuleVersionIsAvailable -ModuleNameOrPath $PSScriptRoot -ErrorAction Ignore) {
+        $msg = "New version of '$moduleName' is available. Command to update:`n"
+        $msg += "Update-WslIpHandlerModule"
+        Write-Warning $msg
+        Remove-Variable msg
+    }
+    Remove-Variable moduleName
+    Remove-Module (Split-Path $modulesUpdaterPath -LeafBase) -Force -ErrorAction Ignore
+}
+Remove-Variable modulesUpdaterPath
