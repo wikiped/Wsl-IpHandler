@@ -2052,6 +2052,9 @@ function Update-WslIpHandlerModule {
     .PARAMETER DoNotUseGit
     If given will update module using Invoke-WebRequest command (built-in in Powershell) even if git.exe is on PATH.
 
+    .PARAMETER Branch
+    Branch name of github repository. Defaults to 'master'.
+
     .PARAMETER Force
     If given will update module even if there is version mismatch between installed version and version in repository.
 
@@ -2079,6 +2082,9 @@ function Update-WslIpHandlerModule {
         [switch]$NoGit,
 
         [Parameter()]
+        [string]$Branch = 'master',
+
+        [Parameter()]
         [switch]$Force,
 
         [Parameter()]
@@ -2089,7 +2095,7 @@ function Update-WslIpHandlerModule {
     $params = @{
         ModuleNameOrPath     = $modulePath
         GithubUserName = $MyInvocation.MyCommand.Module.Author
-        Branch         = 'master'
+        Branch         = $Branch
         Force          = $Force
         TimeoutSec = $TimeoutSec
     }
@@ -2109,7 +2115,7 @@ function Update-WslIpHandlerModule {
     $result = Update-ModuleFromGithub @params @commonParameters
 
     switch ($result.Status) {
-        'Updated' { Write-Warning "Wsl-IpHandler module has been updated and needs to be re-imported with:`nImport-Module `"$modulePath`" -Force" }
+        'Updated' { Write-Warning "$($MyInvocation.MyCommand.ModuleName) has been updated and needs to be re-imported:`nImport-Module `"$modulePath`" -Force" }
         'UpToDate' { return }
         'Error' { Write-Error -ErrorRecord $result.Error }
         Default { Write-Error "Unknown Error occurred while updating '$($MyInvocation.MyCommand.ModuleName)'!" }
