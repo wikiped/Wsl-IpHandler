@@ -150,29 +150,27 @@ function Get-IpAddressHostsCommentTuple {
 }
 
 function Get-HostsCount {
-    [CmdLetBinding()]
     param(
         [AllowNull()]
         [AllowEmptyString()]
         [Parameter(Mandatory)][string]$Hosts
     )
-    if ($Hosts) { ($Hosts -split ' ' | Where-Object { $_.Length -gt 0 }).Count }
+    if ($Hosts) {
+        $Hosts -split ' ' |
+            Where-Object { $_.Length -gt 0 } |
+            Measure-Object |
+            Select-Object -ExpandProperty Count
+        }
     else { 0 }
 }
 
 function Get-HostsCountFromRecord {
-    [CmdLetBinding()]
     param(
         [Parameter(Mandatory)][AllowNull()][AllowEmptyString()]
         [string]$Record
     )
     $_, $hosts, $_ = Get-IpAddressHostsCommentTuple $Record
-    if ($hosts) {
-        ($hosts -split ' ' | Where-Object { $_.Length -gt 0 } ).Count
-    }
-    else {
-        0
-    }
+    Get-HostsCount $hosts
 }
 
 function Get-HostForIpAddress {
