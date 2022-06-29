@@ -1609,18 +1609,18 @@ function Test-WslInstallation {
 
     $error_message = @()
 
-    $bashTestCommand = "ping -c1 $WindowsHostName 2>&1"
+    $bashTestCommand = "ping -c1 $WindowsHostName 1>/dev/null && echo 1"
     Write-Verbose "Testing Ping from WSL instance ${WslInstanceName}: `"$bashTestCommand`" ..."
-    $wslTest = (Invoke-WslExe -NoSwapCheck -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$bashTestCommand`") -join "`n"
+    $wslTest = Invoke-WslExe -NoSwapCheck -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$bashTestCommand`"
 
     Write-Debug "$(_@) `$wslTest: $wslTest"
 
-    if ($wslTest -notmatch ', 0% packet loss') {
-        Write-Verbose "Ping from WSL Instance $WslInstanceName failed:`n$wslTest"
-        Write-Debug "$(_@) TypeOf `$wslTest: $($wslTest.Gettype())"
+    if ($wslTest -eq 1) {
+        $pingError = "Pinging $WindowsHostName from WSL Instance: $WslInstanceName failed:`n$wslTest"
+        Write-Verbose "$pingError"
 
         $failed = $true
-        $error_message += "Pinging $WindowsHostName from $WslInstanceName failed:`n$wslTest"
+        $error_message += "$pingError"
     }
 
     Write-Debug "$(_@) Starting WSL instance $WslInstanceName for testing ping from Windows."
@@ -1629,21 +1629,22 @@ function Test-WslInstallation {
     Start-Sleep -Seconds 7  # let WSL startup before pinging
 
     Write-Verbose "Testing Ping from Windows to WSL instance ${WslInstanceName} ..."
-    $windowsTest = $(ping -n 1 $WslHostName) -join "`n"
+    $windowsTest = Test-Connection $WslHostName -IPv4 -Count 1 -Quiet -TimeoutSeconds 10
 
     Write-Debug "$(_@) `$windowsTest result: $windowsTest"
 
-    if ($windowsTest -notmatch 'Lost = 0 \(0% loss\)') {
-        Write-Verbose "Ping from Windows to WSL instance ${WslInstanceName} failed:`n$windowsTest"
+    if (-not $windowsTest) {
+        $pingError = "Pinging $WslHostName (WSL instance ${WslInstanceName}) from Windows failed."
+        Write-Verbose "$pingError"
         $failed = $true
-        $error_message += "`nPinging $WslHostName from Windows failed:`n$windowsTest"
+        $error_message += "$pingError"
     }
 
     $wslJob.StopJob()
     $wslJob.Dispose()
 
     if ($failed) {
-        Write-Verbose "$($MyInvocation.MyCommand.Name) on $WslInstanceName Failed!"
+        Write-Host "$($MyInvocation.MyCommand.Name) on $WslInstanceName Failed!" -ForegroundColor Red
         Write-Error ($error_message -join "`n") -ErrorAction Stop
     }
     else {
