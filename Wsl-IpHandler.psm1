@@ -1612,10 +1612,10 @@ function Test-WslInstallation {
     $bashTestCommand = "ping -c1 $WindowsHostName 2>&1"
     Write-Verbose "Testing Ping from WSL instance ${WslInstanceName}: `"$bashTestCommand`" ..."
     $wslTest = (Invoke-WslExe -NoSwapCheck -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$bashTestCommand`") -join "`n"
-
+    $pingReturnValue = $LASTEXITCODE
     Write-Debug "$(_@) `$wslTest: $wslTest"
 
-    if ($wslTest -notmatch ', 0% packet loss') {
+    if ($pingReturnValue -ne 0) {
         Write-Verbose "Ping from WSL Instance $WslInstanceName failed:`n$wslTest"
         Write-Debug "$(_@) TypeOf `$wslTest: $($wslTest.Gettype())"
 
@@ -1630,10 +1630,10 @@ function Test-WslInstallation {
 
     Write-Verbose "Testing Ping from Windows to WSL instance ${WslInstanceName} ..."
     $windowsTest = $(ping -n 1 $WslHostName) -join "`n"
-
+    $pingReturnValue = $LASTEXITCODE
     Write-Debug "$(_@) `$windowsTest result: $windowsTest"
 
-    if ($windowsTest -notmatch 'Lost = 0 \(0% loss\)') {
+    if ($pingReturnValue -ne 0) {
         Write-Verbose "Ping from Windows to WSL instance ${WslInstanceName} failed:`n$windowsTest"
         $failed = $true
         $error_message += "`nPinging $WslHostName from Windows failed:`n$windowsTest"
