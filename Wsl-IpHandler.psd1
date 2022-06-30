@@ -9,7 +9,7 @@
     RootModule        = 'Wsl-IpHandler'
 
     # Version number of this module.
-    ModuleVersion     = '0.15.6'
+    ModuleVersion     = '0.15.7'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -129,7 +129,7 @@
 
     # Private data to pass to the module specified in RootModule/ModuleToProcess. This may also contain a PSData hashtable with additional module metadata used by PowerShell.
     PrivateData       = @{
-        ScriptNames     = @{
+        ScriptNames        = @{
             WinHostsEdit  = 'Scripts\Powershell\WSL-WinHostsEdit.ps1'
             BashInstall   = 'Scripts\Bash\install-wsl-iphandler.sh'
             BashUninstall = 'Scripts\Bash\uninstall-wsl-iphandler.sh'
@@ -137,11 +137,12 @@
             BashAutorun   = 'Scripts\Bash\wsl-iphandler.sh'
         }
 
-        ScriptLocations = @{
+        ScriptLocations    = @{
             BashAutorun = '/usr/local/bin'
         }
 
-        WslConfig       = @{
+        WslConfig          = @{
+            FilePath                     = '/etc/wsl.conf'
             GlobalSectionName            = 'wsl2'
             NetworkSectionName           = 'network'
             StaticIpAddressesSectionName = 'static_ips'
@@ -155,19 +156,31 @@
             DynamicAdaptersKeyName       = 'dynamic_adapters'
         }
 
-        ScheduledTask   = @{
+        WslIpHandlerConfig = @{
+            FilePath                     = '~/wsl-iphandler.conf'
+            NetworkSectionName           = 'network'
+            StaticIpAddressesSectionName = 'static_ips'
+            IpOffsetSectionName          = 'ip_offsets'
+            GatewayIpAddressKeyName      = 'gateway_ip'
+            PrefixLengthKeyName          = 'prefix_length'
+            DnsServersKeyName            = 'dns_servers'
+            WindowsHostNameKeyName       = 'windows_host_name'
+            DynamicAdaptersKeyName       = 'dynamic_adapters'
+        }
+
+        ScheduledTask      = @{
             Name        = 'Wsl-IpHandlerTask'
             Path        = '\Wsl-IpHandler\'
             Description = 'Task created by Wsl-IpHandler Powershell module to set Hyper-V Network Adapter WSL to predefined IP Address.'
         }
 
-        ProfileContent  = @(
+        ProfileContent     = @(
             '# Start of Wsl-IpHandler Section'
             'Import-Module Wsl-IpHandler'
             '# End of Wsl-IpHandler Section'
         )
 
-        PSData          = @{
+        PSData             = @{
             # Tags applied to this module. These help with module discovery in online galleries.
             Tags         = @('WSL', 'IP', 'IPAddress', 'Network', 'Subnet')
 

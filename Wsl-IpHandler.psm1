@@ -1615,7 +1615,7 @@ function Test-WslInstallation {
 
     Write-Debug "$(_@) `$wslTest: $wslTest"
 
-    if ($wslTest -eq 1) {
+    if ($wslTest -ne 1) {
         $pingError = "Pinging $WindowsHostName from WSL Instance: $WslInstanceName failed:`n$wslTest"
         Write-Verbose "$pingError"
 

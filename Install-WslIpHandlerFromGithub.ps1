@@ -93,12 +93,7 @@ else {
 }
 
 $psdFile = "$ModuleName.psd1"
-if (Test-Path (Join-Path $targetDirectory $psdFile) -PathType Leaf) {
-    $version = Import-LocalizedData -BaseDirectory $targetDirectory -FileName $psdFile | Select-Object -ExpandProperty ModuleVersion
-}
-else {
-    $version = ""
-}
+$version = (Import-Psd (Join-Path $targetDirectory $psdFile) -ErrorAction Ignore | Select-Object -ExpandProperty ModuleVersion -ErrorAction Ignore) ?? ""
 if ($version) { $version = "version: $version " }
 Write-Host "Wsl-IpHandler ${version}was installed in: '$targetDirectory'"
 Pop-Location

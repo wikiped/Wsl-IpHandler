@@ -207,7 +207,10 @@ function Get-ModuleInfoFromNameOrPath {
         Write-ModulePathInvalidError $ModuleNameOrPath
     }
     else {
-        $moduleInfo = Get-Module -Name $ModuleNameOrPath -ListAvailable -ErrorAction SilentlyContinue
+        $moduleInfo = Get-Module -Name $ModuleNameOrPath -ErrorAction SilentlyContinue
+        if (-not $moduleInfo) {
+            $moduleInfo = Get-Module -Name $ModuleNameOrPath -ListAvailable -ErrorAction SilentlyContinue
+        }
         if (-not $moduleInfo) {
             Write-ModuleNameNotFoundError "$ModuleNameOrPath"
         }

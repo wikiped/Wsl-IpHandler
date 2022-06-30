@@ -14,24 +14,16 @@ $WslPrivateData = $null
 
 function Get-ModuleInfo {
     [CmdletBinding()]
-    param(
-        [Parameter()]
-        [System.Management.Automation.PSModuleInfo]
-        $ModuleInfo,
-
-        [Parameter()]
-        [switch]$Throw
-    )
+    param()
+    $ModuleInfo = $MyInvocation.MyCommand.Module
     if ($null -eq $ModuleInfo) {
-        $ModuleInfo = $MyInvocation.MyCommand.Module
-        Write-Debug "$(_@) Using `$MyInvocation.MyCommand.Module.Name: $($ModuleInfo.Name)"
+        Write-Debug "$(_@) `$MyInvocation: $($MyInvocation | Out-String)"
+        Throw 'ModuleInfo is not available!'
     }
     else {
-        $ModuleInfo = [System.Management.Automation.PSModuleInfo]$ModuleInfo
-        Write-Debug "$(_@) Using passed in ModuleInfo from Module: $($ModuleInfo.Name)"
+        Write-Debug "$(_@) `$MyInvocation.MyCommand.Module.Name: $($ModuleInfo.Name)"
+        $ModuleInfo
     }
-    if ($null -eq $ModuleInfo -and $Throw) { Throw 'ModuleInfo is not available!' }
-    else { $ModuleInfo }
 }
 
 function Get-PrivateData {
@@ -104,7 +96,7 @@ function Get-ScriptLocation {
 function Get-SourcePath {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$ScriptName)
-    $moduleInfo = Get-ModuleInfo -Throw
+    $moduleInfo = Get-ModuleInfo
     Join-Path $moduleInfo.ModuleBase (Get-ScriptName $ScriptName) -Resolve
 }
 
@@ -173,7 +165,7 @@ function Get-DynamicAdaptersKeyName {
 function Get-ProfileContentTemplate {
     [CmdletBinding()]param()
     $content = (Get-PrivateData).ProfileContent
-    $modulePath = (Get-ModuleInfo -Throw).ModuleBase
+    $modulePath = (Get-ModuleInfo).ModuleBase
     Write-Debug "$(_@) modulePath: $modulePath"
 
     # If module was not installed in a standard location replace module name with module's path
@@ -210,5 +202,4 @@ function Get-ScheduledTaskDescription {
     [CmdletBinding()]param()
     (Get-PrivateData).ScheduledTask.Description
 }
-
 #endregion Helper Functions
