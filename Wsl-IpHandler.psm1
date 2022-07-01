@@ -1,15 +1,18 @@
 #Requires -Version 7.1
 
 $scriptsToImport = @(
-    'Scripts\Powershell\FunctionsArgumentCompleters.ps1'
-    'Scripts\Powershell\FunctionsWslConfig.ps1'
-    'Scripts\Powershell\FunctionsHostsFile.ps1'
-    'Scripts\Powershell\FunctionsPrivateData.ps1'
-    'Scripts\Powershell\FunctionsPSElevation.ps1'
-    'Scripts\Powershell\Ini-In.ps1'
-    'Scripts\Powershell\Ini-Out.ps1'
+    'FunctionsArgumentCompleters.ps1'
+    'FunctionsWslConfig.ps1'
+    'FunctionsHostsFile.ps1'
+    'FunctionsPrivateData.ps1'
+    'FunctionsPSElevation.ps1'
+    'Ini-In.ps1'
+    'Ini-Out.ps1'
 )
-$scriptsToImport | ForEach-Object { . (Join-Path $PSScriptRoot $_ -Resolve) | Out-Null }
+$scriptsToImport | ForEach-Object {
+    . (Join-Path $PSScriptRoot 'Scripts\Powershell' $_ -Resolve) | Out-Null
+}
+Remove-Variable scriptsToImport
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -1960,6 +1963,9 @@ function Get-WslInstanceStatus {
         [string]$WslInstanceName,
 
         [Parameter(ParameterSetName = 'Part')]
+        [switch]$WslIpHandlerConf,
+
+        [Parameter(ParameterSetName = 'Part')]
         [switch]$WslConf,
 
         [Parameter(ParameterSetName = 'Part')]
@@ -1988,9 +1994,17 @@ function Get-WslInstanceStatus {
     $isRunningOnStart = Test-WslInstanceIsRunning $WslInstanceName
 
     if ($PSCmdlet.ParameterSetName -eq 'All') {
+        $WslIpHandlerConf = $true
         $WslConf = $true
         $ModuleScript = $true
         $ModuleSudoers = $true
+    }
+
+    if ($WslConf) {
+        Get-PrivateData
+        $wslConfData = wsl.exe -d $WslInstanceName cat /etc/wsl.conf | ConvertFrom-IniContent
+        Write-Debug "$(_@) wslConf:`n$($wslConfData | Out-String)"
+
     }
 
     if ($WslConf) {
