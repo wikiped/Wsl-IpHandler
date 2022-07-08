@@ -87,7 +87,7 @@ if ($chooseGit -eq 0) {
 else {
     $outFile = "$ModuleName.zip"
     Invoke-WebRequest -Uri https://codeload.github.com/wikiped/Wsl-IpHandler/zip/refs/heads/master -OutFile $outFile
-    Expand-Archive -Path $outFile -DestinationPath '.'
+    Expand-Archive -Path $outFile -DestinationPath '.' -Force
     Remove-Item -Path $outFile
     Rename-Item -Path "${ModuleName}-master" -NewName $ModuleName -Force
 }
