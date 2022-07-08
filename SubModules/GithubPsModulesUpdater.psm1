@@ -294,10 +294,13 @@ function Update-WithWebRequest {
         Write-Error "$errMsg"
     }
 
+    Write-Debug "$(_@) Expand-Archive -Path $outputPath -DestinationPath $outputDir"
     Expand-Archive -Path $outputPath -DestinationPath $outputDir
 
+    Write-Debug "$(_@) Remove-Item -Path $(Join-Path $ModuleFolderPath '*') -Recurse -Force"
     Remove-Item -Path (Join-Path $ModuleFolderPath '*') -Recurse -Force
 
+    Write-Debug "$(_@) Move-Item -Path $(Join-Path $outputDir $outputName '*') -Destination $ModuleFolderPath -Force"
     Move-Item -Path (Join-Path $outputDir $outputName '*') -Destination $ModuleFolderPath -Force
 
     Remove-Item -Path $outputDir -Recurse -Force
