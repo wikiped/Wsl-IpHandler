@@ -40,7 +40,7 @@ if ($targetDirectory -eq $ModulesDirectory) {
 
 Push-Location $ModulesDirectory
 
-$targetDirectoryExistsAndNotEmpty = (Test-Path $targetDirectory -PathType Container) -and (Get-ChildItem $targetDirectory -ErrorAction SilentlyContinue).Count
+$targetDirectoryExistsAndNotEmpty = (Test-Path $targetDirectory -PathType Container) -and ((Get-ChildItem $targetDirectory -ErrorAction SilentlyContinue) | Select-Object -ExpandProperty Count)
 
 if ($targetDirectoryExistsAndNotEmpty) {
     $targetDeletePromptParams = @{
