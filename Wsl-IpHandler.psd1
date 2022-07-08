@@ -9,7 +9,7 @@
     RootModule        = 'Wsl-IpHandler'
 
     # Version number of this module.
-    ModuleVersion     = '0.15.10'
+    ModuleVersion     = '0.15.11'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()

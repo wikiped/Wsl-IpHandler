@@ -89,7 +89,7 @@ else {
     Invoke-WebRequest -Uri https://codeload.github.com/wikiped/Wsl-IpHandler/zip/refs/heads/master -OutFile $outFile
     Expand-Archive -Path $outFile -DestinationPath '.'
     Remove-Item -Path $outFile
-    Rename-Item -Path "${ModuleName}-master" -NewName $ModuleName
+    Rename-Item -Path "${ModuleName}-master" -NewName $ModuleName -Force
 }
 
 $psdFile = "$ModuleName.psd1"
