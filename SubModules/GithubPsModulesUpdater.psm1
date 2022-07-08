@@ -277,7 +277,7 @@ function Update-WithWebRequest {
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
     $outputDir = New-TemporaryDirectory
-    $outputName = 'Wsl-IpHandler-master'
+    $outputName = Split-Path $ModuleFolderPath -Leaf
     $outputPath = Join-Path $outputDir "${outputName}.zip"
 
     try {
@@ -297,11 +297,12 @@ function Update-WithWebRequest {
     Write-Debug "$(_@) Expand-Archive -Path $outputPath -DestinationPath $outputDir"
     Expand-Archive -Path $outputPath -DestinationPath $outputDir
 
+    $expandedDirectory = $outputDir.GetDirectories() | Select-Object -First 1 -ExpandProperty FullName
     Write-Debug "$(_@) Remove-Item -Path $(Join-Path $ModuleFolderPath '*') -Recurse -Force"
     Remove-Item -Path (Join-Path $ModuleFolderPath '*') -Recurse -Force
 
-    Write-Debug "$(_@) Move-Item -Path $(Join-Path $outputDir $outputName '*') -Destination $ModuleFolderPath -Force"
-    Move-Item -Path (Join-Path $outputDir $outputName '*') -Destination $ModuleFolderPath -Force
+    Write-Debug "$(_@) Move-Item -Path $(Join-Path $expandedDirectory '*') -Destination $ModuleFolderPath -Force"
+    Move-Item -Path (Join-Path $expandedDirectory '*') -Destination $ModuleFolderPath -Force
 
     Remove-Item -Path $outputDir -Recurse -Force
 }
