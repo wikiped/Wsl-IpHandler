@@ -242,6 +242,10 @@ function Update-WithGit {
         [Parameter(Mandatory, ParameterSetName = 'Clone')]
         [string]$RepoUri,
 
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$Branch = 'master',
+
         [Parameter(Mandatory)]
         [ValidateScript({ Test-Path $_ -PathType Leaf -Include 'git.exe' })]
         [Alias('Git')]
@@ -257,11 +261,11 @@ function Update-WithGit {
     if ($RepoUri) {
         Push-Location ..
         Remove-Item (Join-Path $ModuleFolderPath '*') -Recurse -Force
-        . $GitExePath clone "`"$RepoUri`""
+        . $GitExePath clone --branch $Branch "`"$RepoUri`""
         Pop-Location
     }
     else {
-        . $GitExePath pull origin master
+        . $GitExePath pull origin $Branch
     }
     Pop-Location
 }
@@ -543,7 +547,7 @@ function Update-ModuleFromGithub {
 
                 Test-UriIsAccessible $params.RepoUri
 
-                Update-WithGit @params
+                Update-WithGit -Branch $Branch @params
 
                 $result.Status = 'Updated'
             }
