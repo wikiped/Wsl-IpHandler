@@ -62,6 +62,9 @@ if ($targetDirectoryExistsAndNotEmpty) {
         Default { Throw "Strange choice: '$_', can't help with that!" }
     }
 }
+else {
+    Remove-Item $targetDirectory -Force -ErrorAction Ignore
+}
 
 $git = Get-Command 'git.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
 
