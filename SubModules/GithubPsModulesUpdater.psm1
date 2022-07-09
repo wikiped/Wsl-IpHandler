@@ -523,7 +523,7 @@ function Update-ModuleFromGithub {
 
     try {
         if ($updateIsNeeded) {
-            $params = @{ModuleFolderPath = $moduleInfo.ModuleBase }
+            $params = @{ ModuleFolderPath = $moduleInfo.ModuleBase }
             if ($NoGit) {
                 $result.Method = 'http'
                 $params.Uri = Get-ZipUri -RepoName $moduleInfo.Name -GithubUserName $GithubUserName -Branch $Branch
@@ -551,10 +551,8 @@ function Update-ModuleFromGithub {
 
                 $result.Status = 'Updated'
             }
-            # Attempting to Remove-Module followed by Import-Module will fail.
+            # Attempting to Import-Module ... -Force here will fail.
             # The user has to Import-Module ... -Force manually!
-            # Remove-Module $moduleInfo.Name -Force -ErrorAction SilentlyContinue -Verbose:$false -Debug:$false
-            # Import-Module $moduleInfo.ModuleBase -Force -Verbose:$false -Debug:$false
             Write-Information "$($moduleInfo.Name) was successfully updated from version: $($moduleInfo.Version) to: $($versions.RemoteVersion)!"
             $result
         }
