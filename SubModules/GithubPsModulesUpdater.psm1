@@ -586,7 +586,7 @@ function Update-ModuleFromGithub {
             if ($PostUpdateCommand) {
                 $pwsh = Get-Command 'pwsh' -ErrorAction Ignore | Select-Object -ExpandProperty Source
                 if ($pwsh) {
-                    $argsArray = @('-NoProfile')
+                    $argsArray = @('-NoLogo', '-NoProfile')
                     if ($DebugPreference -eq 'Continue') { $argsArray += '-NoExit' }
                     $argsString = "`"$($moduleInfo.ModuleBase)`" $($versions.LocalVersion) $($versions.RemoteVersion)"
                     try {
