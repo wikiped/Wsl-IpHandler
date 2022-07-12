@@ -568,37 +568,6 @@ function Update-ModuleFromGithub {
                 Test-UriIsAccessible $params.Uri
 
                 Update-WithWebRequest @params
-
-                if ($PostUpdateCommand) {
-                    $pwsh = Get-Command 'pwsh' -ErrorAction Ignore | Select-Object -ExpandProperty Source
-                    if ($pwsh) {
-                        $argsArray = @('-NoProfile')
-                        if ($DebugPreference -eq 'Continue') { $argsArray.Add('-NoExit') }
-                        $argsString = "`"$($moduleInfo.ModuleBase)`" $($versions.LocalVersion) $($versions.RemoteVersion)"
-                        try {
-                            if (Test-Path $PostUpdateCommand -PathType Leaf) {
-                                $argsArray.Add("-File `"$PostUpdateCommand`" $argsString")
-                            }
-                            elseif ($content = Get-FileContentFromGithub $PostUpdateCommand -ErrorAction Ignore) {
-                                if ($content) {
-                                    $argsArray.Add("-Command `"& { $content } $argsString`"")
-                                }
-                            }
-                            else {
-                                $argsArray.Add("-Command `"& { $PostUpdateCommand } $argsString`"")
-                            }
-                            $argsArrayString = $argsArray -join ' '
-                            Write-Debug "$(_@) Post Update Command: $pwsh $argsArrayString"
-                            Start-Process -FilePath $pwsh -ArgumentList $argsArrayString
-                        }
-                        catch {
-                            Write-Error "Error executing Post Update Command: $($_.Exception.Message)"
-                        }
-                    }
-                    else {
-                        Write-Error 'Cannot execute Post Update Command: Powershell Core (pwsh.exe) not found.'
-                    }
-                }
             }
             else {
                 $result.Method = 'git'
@@ -614,6 +583,36 @@ function Update-ModuleFromGithub {
                 Update-WithGit -Branch $Branch @params
             }
             $result.Status = 'Updated'
+            if ($PostUpdateCommand) {
+                $pwsh = Get-Command 'pwsh' -ErrorAction Ignore | Select-Object -ExpandProperty Source
+                if ($pwsh) {
+                    $argsArray = @('-NoProfile')
+                    if ($DebugPreference -eq 'Continue') { $argsArray.Add('-NoExit') }
+                    $argsString = "`"$($moduleInfo.ModuleBase)`" $($versions.LocalVersion) $($versions.RemoteVersion)"
+                    try {
+                        if (Test-Path $PostUpdateCommand -PathType Leaf) {
+                            $argsArray += "-File `"$PostUpdateCommand`" $argsString"
+                        }
+                        elseif ($content = Get-FileContentFromGithub $PostUpdateCommand -ErrorAction Ignore) {
+                            if ($content) {
+                                $argsArray += "-Command `"& { $content } $argsString`""
+                            }
+                        }
+                        else {
+                            $argsArray += "-Command `"& { $PostUpdateCommand } $argsString`""
+                        }
+                        $argsArrayString = $argsArray -join ' '
+                        Write-Debug "$(_@) Post Update Command: $pwsh $argsArrayString"
+                        Start-Process -FilePath $pwsh -ArgumentList $argsArrayString
+                    }
+                    catch {
+                        Write-Error "Error executing Post Update Command: $($_.Exception.Message)"
+                    }
+                }
+                else {
+                    Write-Error 'Cannot execute Post Update Command: Powershell Core (pwsh.exe) not found.'
+                }
+            }
             # Attempting to Import-Module ... -Force here will fail.
             # The user has to Import-Module ... -Force manually!
             Write-Information "$($moduleInfo.Name) was successfully updated from version: $($moduleInfo.Version) to: $($versions.RemoteVersion)!"
