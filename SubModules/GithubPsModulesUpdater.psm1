@@ -587,7 +587,7 @@ function Update-ModuleFromGithub {
                 $pwsh = Get-Command 'pwsh' -ErrorAction Ignore | Select-Object -ExpandProperty Source
                 if ($pwsh) {
                     $argsArray = @('-NoProfile')
-                    if ($DebugPreference -eq 'Continue') { $argsArray.Add('-NoExit') }
+                    if ($DebugPreference -eq 'Continue') { $argsArray += '-NoExit' }
                     $argsString = "`"$($moduleInfo.ModuleBase)`" $($versions.LocalVersion) $($versions.RemoteVersion)"
                     try {
                         if (Test-Path $PostUpdateCommand -PathType Leaf) {
