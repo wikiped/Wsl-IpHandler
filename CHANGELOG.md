@@ -2,6 +2,10 @@
 
 [Back to Overview](./README.md)
 
+## `0.16.0`
+
+- Added parameter -PostUpdateCommand to command Update-ModuleFromGithub in GithubPsModulesUpdater.psm1 submodule.
+
 ## `0.15.0`
 
 - Added new version check during import of the module. If new version is found - the warning is shown with command that can be executed by the use to update the module.

@@ -2131,11 +2131,7 @@ function Update-WslIpHandlerModule {
     $result = Update-ModuleFromGithub @params @commonParameters
 
     switch ($result.Status) {
-        'Updated' {
-            $psModulePathMatches = $env:PSModulePath -split ';' | Where-Object { $modulePath.ToLower() -match [regex]::Escape($_.ToLower()) } | Measure-Object | Select-Object -ExpandProperty Count
-            $moduleToImport = $psModulePathMatches -eq 0 ? "`"$modulePath`"" : $moduleName
-            Write-Warning "$moduleName has been updated and needs to be re-imported:`nImport-Module $moduleToImport -Force"
-        }
+        'Updated' { return }
         'UpToDate' { return }
         'Error' { Write-Error -ErrorRecord $result.Error }
         Default { Write-Error "Unknown Error occurred while updating '$moduleName'!" }

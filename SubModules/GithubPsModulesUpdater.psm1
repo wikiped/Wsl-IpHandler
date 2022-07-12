@@ -120,6 +120,35 @@ function Test-UriIsAccessible {
     }
 }
 
+function Get-FileContentFromGithub {
+    param (
+        [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
+        [uri]$Uri,
+
+        [Parameter()]
+        [int]$TimeoutSec = 10
+    )
+    Test-UriIsAccessible $Uri
+
+    try {
+        $webResponse = Invoke-WebRequest -Uri $Uri -TimeoutSec $TimeoutSec -ErrorAction Stop
+        $webResponse.Content
+    }
+    catch {
+        if ($response = $_.Exception.Response) {
+            $errMsg = "Error $($response.StatusCode.value__): $($response.ReasonPhrase) - While getting content of file at: '$($response.RequestMessage.RequestUri.AbsoluteUri)'"
+
+            if ($response.StatusCode.value__ -eq 404) {
+                $errMsg += "`nCheck spelling and / or case of repository name (if it is used as the name of the file), because file names at GitHub are case sensitive!"
+            }
+            Write-Error $errMsg
+        }
+        else {
+            Write-Error $_.Exception.Message
+        }
+    }
+}
+
 function Get-ModuleVersionFromGithub {
     param (
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
@@ -133,30 +162,17 @@ function Get-ModuleVersionFromGithub {
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
-    Test-UriIsAccessible $PsdUri
-
     try {
-        $webResponse = Invoke-WebRequest -Uri $psdUri -TimeoutSec $TimeoutSec -ErrorAction Stop
+        $psdContent = Get-FileContentFromGithub -Uri $PsdUri -TimeoutSec $TimeoutSec
     }
     catch {
-        if ($response = $_.Exception.Response) {
-            $errMsg = "Error $($response.StatusCode.value__): $($response.ReasonPhrase) - While trying to get version from psd file at: '$($response.RequestMessage.RequestUri.AbsoluteUri)'."
-
-            if ($response.StatusCode.value__ -eq 404) {
-                $errMsg += "`nCheck spelling and / or case (file names at GitHub are case sensitive) of repository name (it is used as the name of psd file)!"
-            }
-        }
-        else {
-            $errMsg = $_.Exception.Message
-        }
-
-        Write-Error "$errMsg"
+        Write-Error "$($_.Exception.Message)"
         Write-Debug "$(_@) Using default version: $DefaultVersion"
         return $DefaultVersion
     }
 
     try {
-        $psdData = Invoke-Expression $webResponse.Content -ErrorAction Stop
+        $psdData = Invoke-Expression $psdContent -ErrorAction Stop
     }
     catch {
         Write-Error "$($_.Exception.Message)"
@@ -396,6 +412,15 @@ function Get-ModuleVersions {
     $result
 }
 
+function Get-ModuleQualifiedName {
+    param([Parameter()][System.Management.Automation.PSModuleInfo]$ModuleInfo)
+    $psModulePathMatches = $env:PSModulePath -split ';' |
+        Where-Object { $ModuleInfo.ModuleBase.ToLower() -match [regex]::Escape($_.ToLower()) } |
+        Measure-Object |
+        Select-Object -ExpandProperty Count
+    $psModulePathMatches -eq 0 ? "`"$($ModuleInfo.ModuleBase)`"" : $($ModuleInfo.Name)
+}
+
 function Update-ModuleFromGithub {
     <#
     .SYNOPSIS
@@ -433,6 +458,12 @@ function Update-ModuleFromGithub {
 
     .PARAMETER TimeoutSec
     Timeout in seconds to wait for response from github.com
+
+    .PARAMETER PostUpdateCommand
+    Specifies Command to execute after the module has been updated.
+    PostUpdateCommand can take almost the same types as pwsh.exe parameters: -File and -Command, except for '-'. Standard input is not supported.
+    PostUpdateCommand can be a web address to a valid powershell script file (i.e. ps1 file in github repository).
+    The following arguments will be passed to the specified command: $PathToModule, $VersionBeforeUpdate, $VersionAfterUpdate.
 
     .EXAMPLE
     Update-ModuleFromGithub 'C:\Documents\My Modules\SomeModuleToBeUpdated' -GithubUserName theusername
@@ -476,7 +507,10 @@ function Update-ModuleFromGithub {
         [switch]$Force,
 
         [Parameter()]
-        [int]$TimeoutSec = 10
+        [int]$TimeoutSec = 10,
+
+        [Parameter()]
+        [object]$PostUpdateCommand = $null
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
@@ -523,6 +557,7 @@ function Update-ModuleFromGithub {
 
     try {
         if ($updateIsNeeded) {
+            $moduleToImport = Get-ModuleQualifiedName -ModuleInfo $moduleInfo
             $params = @{ ModuleFolderPath = $moduleInfo.ModuleBase }
             if ($NoGit) {
                 $result.Method = 'http'
@@ -534,7 +569,36 @@ function Update-ModuleFromGithub {
 
                 Update-WithWebRequest @params
 
-                $result.Status = 'Updated'
+                if ($PostUpdateCommand) {
+                    $pwsh = Get-Command 'pwsh' -ErrorAction Ignore | Select-Object -ExpandProperty Source
+                    if ($pwsh) {
+                        $argsArray = @('-NoProfile')
+                        if ($DebugPreference -eq 'Continue') { $argsArray.Add('-NoExit') }
+                        $argsString = "`"$($moduleInfo.ModuleBase)`" $($versions.LocalVersion) $($versions.RemoteVersion)"
+                        try {
+                            if (Test-Path $PostUpdateCommand -PathType Leaf) {
+                                $argsArray.Add("-File `"$PostUpdateCommand`" $argsString")
+                            }
+                            elseif ($content = Get-FileContentFromGithub $PostUpdateCommand -ErrorAction Ignore) {
+                                if ($content) {
+                                    $argsArray.Add("-Command `"& { $content } $argsString`"")
+                                }
+                            }
+                            else {
+                                $argsArray.Add("-Command `"& { $PostUpdateCommand } $argsString`"")
+                            }
+                            $argsArrayString = $argsArray -join ' '
+                            Write-Debug "$(_@) Post Update Command: $pwsh $argsArrayString"
+                            Start-Process -FilePath $pwsh -ArgumentList $argsArrayString
+                        }
+                        catch {
+                            Write-Error "Error executing Post Update Command: $($_.Exception.Message)"
+                        }
+                    }
+                    else {
+                        Write-Error 'Cannot execute Post Update Command: Powershell Core (pwsh.exe) not found.'
+                    }
+                }
             }
             else {
                 $result.Method = 'git'
@@ -548,12 +612,12 @@ function Update-ModuleFromGithub {
                 Test-UriIsAccessible $params.RepoUri
 
                 Update-WithGit -Branch $Branch @params
-
-                $result.Status = 'Updated'
             }
+            $result.Status = 'Updated'
             # Attempting to Import-Module ... -Force here will fail.
             # The user has to Import-Module ... -Force manually!
             Write-Information "$($moduleInfo.Name) was successfully updated from version: $($moduleInfo.Version) to: $($versions.RemoteVersion)!"
+            Write-Warning "To use updated version of $($moduleInfo.Name) in current session execute:`nImport-Module $moduleToImport -Force"
             $result
         }
         else {
