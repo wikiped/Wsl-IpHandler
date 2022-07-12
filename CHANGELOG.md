@@ -2,9 +2,15 @@
 
 [Back to Overview](./README.md)
 
-## `0.16.0`
+## `0.16.1`
 
-- Added parameter -PostUpdateCommand to command Update-ModuleFromGithub in GithubPsModulesUpdater.psm1 submodule.
+- Added parameter `-PostUpdateCommand` to command `Update-WslIpHandlerModule`.
+
+  Execute the following for usage:
+
+  ```powershell
+  Get-Help Update-WslIpHandlerModule -Parameter PostUpdateCommand
+  ```
 
 ## `0.15.0`
 

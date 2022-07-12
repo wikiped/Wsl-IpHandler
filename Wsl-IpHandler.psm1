@@ -2076,6 +2076,13 @@ function Update-WslIpHandlerModule {
     .PARAMETER TimeoutSec
     Timeout in seconds to wait for response from github.com
 
+    .PARAMETER PostUpdateCommand
+    Specifies Command to execute after the module has been updated.
+    PostUpdateCommand can take almost the same types as pwsh.exe parameters: -File and -Command, except for '-'. Standard input is not supported.
+    PostUpdateCommand can be a web address to a valid powershell script file (i.e. ps1 file in github repository).
+    The following arguments will be passed to the specified command: $PathToModule, $VersionBeforeUpdate, $VersionAfterUpdate.
+    Defaults to $PSScriptRoot\PostUpdateScript.ps1
+
     .EXAMPLE
     Update-WslIpHandlerModule
 
@@ -2103,17 +2110,21 @@ function Update-WslIpHandlerModule {
         [switch]$Force,
 
         [Parameter()]
-        [int]$TimeoutSec = 15
+        [int]$TimeoutSec = 15,
+
+        [Parameter()]
+        [object]$PostUpdateCommand = "$PSScriptRoot\PostUpdateScript.ps1"
     )
     $moduleName = $MyInvocation.MyCommand.ModuleName
     $modulePath = $MyInvocation.MyCommand.Module.ModuleBase
 
     $params = @{
-        ModuleNameOrPath     = $modulePath
-        GithubUserName = $MyInvocation.MyCommand.Module.Author
-        Branch         = $Branch
-        Force          = $Force
-        TimeoutSec = $TimeoutSec
+        ModuleNameOrPath  = $modulePath
+        GithubUserName    = $MyInvocation.MyCommand.Module.Author
+        Branch            = $Branch
+        Force             = $Force
+        TimeoutSec        = $TimeoutSec
+        PostUpdateCommand = $PostUpdateCommand
     }
     if ($NoGit) { $params.NoGit = $NoGit }
     else { if ($GitExePath) { $params.GitExePath = $GitExePath } }
@@ -2839,7 +2850,7 @@ if (Test-Path $modulesUpdaterPath -PathType Leaf) {
     $versions = Get-ModuleVersions -ModuleNameOrPath $PSScriptRoot -TimeoutSec 5 -ErrorAction Ignore
     if ($versions.LocalVersion -lt $versions.RemoteVersion) {
         $msg = "New version of '$moduleName' is available. Command to update:`n"
-        $msg += "Update-WslIpHandlerModule"
+        $msg += 'Update-WslIpHandlerModule'
         Write-Warning $msg
         Remove-Variable msg
     }
