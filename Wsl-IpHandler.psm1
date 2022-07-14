@@ -2001,13 +2001,6 @@ function Get-WslInstanceStatus {
     }
 
     if ($WslConf) {
-        Get-PrivateData
-        $wslConfData = wsl.exe -d $WslInstanceName cat /etc/wsl.conf | ConvertFrom-IniContent
-        Write-Debug "$(_@) wslConf:`n$($wslConfData | Out-String)"
-
-    }
-
-    if ($WslConf) {
         $wslConfData = wsl.exe -d $WslInstanceName cat /etc/wsl.conf | ConvertFrom-IniContent
         Write-Debug "$(_@) wslConf:`n$($wslConfData | Out-String)"
 
