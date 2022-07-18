@@ -22,6 +22,8 @@ source "$(resolve functions.sh)"
 
 echo_verbose "Bash Uninstalling Wsl-IpHandler..."
 
+# Config Files Paths
+
 # Prcess Incoming Arguments
 echo_debug "Starting '$0' with User ID: $EUID"
 echo_debug "$0 Processing Incoming Arguments:" ${LINENO}
@@ -29,17 +31,29 @@ echo_debug "$*" ${LINENO}
 echo_debug "Current Directory: '$(pwd)'" ${LINENO}
 echo_debug "DEBUG=${DEBUG:-}" ${LINENO}
 echo_debug "VERBOSE=${VERBOSE:-}" ${LINENO}
-script_name="$1"
+
+readonly script_name="$1"
 script_target="${2:-'/usr/local/bin'}"
 script_target="${script_target%/}/${script_name##*/}"
+readonly config="${3:-"/etc/wsl-iphandler.conf"}"
 
-# Remove Config options in /etc/wsl.conf
-echo_verbose "Removing Config Options in /etc/wsl.conf..."
-remove_config 'windows_host' || error ${LINENO} "remove_config 'windows_host'"
-remove_config 'wsl_host' || error ${LINENO} "remove_config 'wsl_host'"
-remove_config 'static_ip' || error ${LINENO} "remove_config 'static_ip'"
-remove_config 'ip_offset' || error ${LINENO} "set_config 'ip_offset'"
-echo_verbose "Finished Removing Config Options in /etc/wsl.conf."
+echo_debug "script_name:                 $script_name" ${LINENO}
+echo_debug "script_target:               $script_target" ${LINENO}
+echo_debug "config:                      $config" ${LINENO}
+echo_verbose "Finished Processing Incoming Arguments."
+
+# Remove Config Options
+# echo_verbose "Removing Config Options in $config"
+# remove_config 'windows_host' "$config" || error ${LINENO} "remove_config 'windows_host'"
+# remove_config 'wsl_host' "$config" || error ${LINENO} "remove_config 'wsl_host'"
+# remove_config 'static_ip' "$config" || error ${LINENO} "remove_config 'static_ip'"
+# remove_config 'ip_offset' "$config" || error ${LINENO} "set_config 'ip_offset'"
+# echo_verbose "Finished Removing Config Options in $config"
+
+# Remove Config File
+echo_verbose "Removing config file: $config"
+rm -f "$config" || error ${LINENO} "rm -f $config"
+echo_verbose "Finished Removing config file: $config"
 
 # Remove Autorun Script
 echo_verbose "Removing Autorun Script: $script_target"

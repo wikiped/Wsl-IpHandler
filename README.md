@@ -144,7 +144,7 @@ When `Import-Module SomeModule` command is executed, Powershell looks for `SomeM
 
 ## How does it work?
 
-When WSL IP Handler is activated (with `Install-WslIpHandler` command) it stores required network configuration in `.wslconfig` file. This configuration is then used by Powershell scripts on Windows host and Bash scripts on WSL Instance where it has been activated to ensure IP Addresses determinism.
+When WSL IP Handler is activated (with `Install-WslIpHandler` command) it stores required network configuration in `~\.wsl-iphandler-config` file. This configuration is then used by Powershell scripts on Windows host and Bash scripts on WSL Instance where it has been activated to ensure IP Addresses determinism.
 
 There are two ways how IP Address persistance of WSL Hyper-V Network Adapter can be achieved with this module:
 
@@ -164,7 +164,7 @@ WSL uses two configuration files:
 
 - `/etc/wsl.conf` on Linux
 
-Wsl-IpHandler module requires default configuration of some of the settings in linux `/etc/wsl.conf` to work correctly (settings below do not have to be present in the file!):
+Wsl-IpHandler module requires default configuration of some of the settings of `/etc/wsl.conf` to work correctly (settings below do not have to be present in the file!):
 
   ```ini
   [interop]
@@ -176,7 +176,7 @@ Wsl-IpHandler module requires default configuration of some of the settings in l
   generateResolvConf = true
   ```
 
-On Windows side in `/.wslconfig` there is one setting which has side effect on WSL2 networking and which affects this module operation:
+On Windows side in `~\.wslconfig` there is one setting which has side effect on WSL2 networking and which affects this module operation:
 
   ```ini
   [wsl2]
@@ -199,7 +199,8 @@ For these reasons the module validates WSL configuration both on windows side an
 
 ### Files created or modified on Windows Host (outside of modules directory)
 
-- File modified during module activation: `~\.wslconfig`
+- File modified during module activation: `~\.wsl-iphandler-config`
+- File modified (if necessary) during module activation: `~\.wslconfig`
 - File modified (optionally) during module activation: `$Profile.CurrentUserAllHosts` (Powershell Profile file)
 - File modified (if necessary) during startup of WSL Instance: `%WINDOWS%\System32\Drivers\etc\hosts`
 
@@ -210,15 +211,16 @@ For these reasons the module validates WSL configuration both on windows side an
 - New file created during module activation: `/usr/local/bin/wsl-iphandler.sh`
 - New file created during module activation: `/etc/profile.d/run-wsl-iphandler.sh`
 - New file created during module activation: `/etc/sudoers.d/wsl-iphandler`
-- File modified during module activation: `/etc/wsl.conf`
+- New file created during module activation: `/etc/wsl-iphandler.conf`
+- File modified (if necessary) during module activation: `/etc/wsl.conf`
 - File modified (if necessary) during startup of WSL Instance: `/etc/hosts`
 
 ---
 
 ### Files modified during [Module Activation](#module-activation)
 
-- Bash scripts are copied to the specified WSL Instance and `wsl.conf` file is modified to save Windows host name.
-- Network configuration parameters are saved to `.wslconfig` on Windows host:
+- Bash scripts are copied to the specified WSL Instance and `/etc/wsl-iphandler.conf` file is used to save Windows host name.
+- Network configuration parameters are saved to `~\.wsl-iphandler-config` on Windows host:
   - In [Static Mode](#how-to-use-this-module) if WSL Instance IP address is not specified - the first available IP address will be selected automatically;
   - In [Dynamic Mode](#how-to-use-this-module) IP address offset (1-254) will be selected automatically based on those already used (if any) or 1;
 - Powershell profile file is modified (if not opted out) to ensure on demand availability of WSL Hyper-V Network Adapter with required configuration.
@@ -234,7 +236,7 @@ When `wsl` [alias](#powershell-profile-modification) is executed from Powershell
   - If present:
     - `wsl.exe` is executed with all arguments passed 'as is'.
   - Otherwise:
-    - ~/.wslconfig is checked for Gateway IP Address:
+    - `~\.wsl-iphandler-config` is checked for Gateway IP Address:
       - If found - Static Mode detected:
         - If WSL Hyper-V Adapter is present - it is checked to have network properties matching those saved during activation. If there is a mismatch - adapter is removed and new one created.
         - If adapter is not present - it is created.
@@ -286,7 +288,7 @@ Regardless of whether the module operates in On-Demand or On-Logon mode there a 
 
 1. If the adapter does not exist yet or is mis-configured - it is removed (`wsl --shutdown` is executed beforehand).
 
-1. Check if there are any other network connections having IP network configuration that overlaps (conflicts) with the one specified for WSL adater (through parameters or from `.wslconfig` file).
+1. Check if there are any other network connections having IP network configuration that overlaps (conflicts) with the one specified for WSL adater (through parameters or from `~\.wsl-iphandler-config` file).
 
 1. If there are conflicts and overlapping network is from one of Hyper-V adapters (`Ethernet` or `Default Switch`) - conflicting adapter will be recreated to take IP network subnet that does not conflict with WSL Adapter.
 

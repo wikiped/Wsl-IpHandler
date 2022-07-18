@@ -1,4 +1,4 @@
-Describe 'Editing Network settings in wslconfig' -ForEach @(
+Describe 'Editing Network settings in wsl-iphandler-config' -ForEach @(
     @{
         GatewayIpAddress = '172.16.0.1'
         PrefixLength     = '24'
@@ -14,11 +14,9 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
     }
 ) {
     BeforeAll {
-        $ModuleName = 'Wsl-IpHandler'
-        $ModulePath = Join-Path (Split-Path $PSScriptRoot) "$ModuleName"
+        $ModulePath = $PSScriptRoot | Split-Path
         Import-Module $ModulePath -Force
-        Set-Variable ConfigPath 'TestDrive:\test.wslconfig'
-        $sectionName = InModuleScope Wsl-IpHandler { Get-NetworkSectionName }
+        $sectionName = InModuleScope Wsl-IpHandler { Get-NetworkSectionName WslIpHandler }
         $gatewayKeyName = InModuleScope Wsl-IpHandler { Get-GatewayIpAddressKeyName }
         $prefixKeyName = InModuleScope Wsl-IpHandler { Get-PrefixLengthKeyName }
         $dnsKeyName = InModuleScope Wsl-IpHandler { Get-DnsServersKeyName }
@@ -31,18 +29,22 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
             "$prefixKeyName = $PrefixLength"
             "$dnsKeyName = $(if (Test-Path variable:DNSServerList) {$DNSServerList -join ', '} else {$GatewayIpAddress})"
             "$dynamicAdaptersKeyName = $($DynamicAdapters -join ', ')"
+            ''
         ) -join "`r`n"
         Set-Variable Expected $expectedText
-    }
-    BeforeEach {
-        # $ModuleName = 'Wsl-IpHandler'
-        # $ModulePath = Join-Path (Split-Path $PSScriptRoot) "$ModuleName"
-        Import-Module $ModulePath -Force
-        Mock -ModuleName Wsl-IpHandler Get-WslConfigPath {
-            param([switch]$Resolve) return $ConfigPath
-        }
+        Set-Variable WslConfigPath 'TestDrive:\.wslconfig'
+        Set-Variable WslIpHandlerConfigPath 'TestDrive:\.wsl-iphandler-config'
+        Mock -ModuleName Wsl-IpHandler Get-WslConfigPath { $WslConfigPath } -ParameterFilter { $ConfigType -eq 'Wsl' }
+        Mock -ModuleName Wsl-IpHandler Get-WslConfigPath { $WslIpHandlerConfigPath } -ParameterFilter { $ConfigType -eq 'WslIpHandler' }
+
     }
     Context ' With config file that does not exist' {
+        BeforeEach {
+            Remove-Item $WslIpHandlerConfigPath -ErrorAction Ignore -Force
+        }
+        AfterEach {
+            Remove-Item $WslIpHandlerConfigPath -ErrorAction Ignore -Force
+        }
         Context ' Set-WslNetworkConfig' {
             BeforeEach {
                 $params = @{
@@ -56,12 +58,12 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
             }
             It ' Should create file with a record of IP assignment' {
                 try {
-                    $ConfigPath | Should -FileContentMatchMultiline ([regex]::Escape($Expected))
+                    $WslIpHandlerConfigPath | Should -FileContentMatchMultiline ([regex]::Escape($Expected))
                 }
                 catch {
                     Write-Host 'Actual Content:'
                     Write-Host '---------------'
-                    Write-Host "$((Get-Content $ConfigPath) -join "`n")"
+                    Write-Host "$((Get-Content $WslIpHandlerConfigPath) -join "`n")"
                     Write-Host '---------------'
                     Write-Host 'Expected Content:'
                     Write-Host '-----------------'
@@ -73,16 +75,27 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
         }
         Context ' Remove-WslNetworkConfig' {
             BeforeEach {
+                if (Test-Path $WslIpHandlerConfigPath -PathType Leaf) {
+                    Write-Host "File exists when it shouldn't: $WslIpHandlerConfigPath"
+                }
                 Remove-WslNetworkConfig
             }
             It ' Should not have created config file' {
-                $ConfigPath | Should -Not -Exist
+                try {
+                    $WslIpHandlerConfigPath | Should -Not -Exist
+                }
+                catch {
+                    Write-Host "Should not have existed: $WslIpHandlerConfigPath"
+                    Write-Host 'Content of the file:'
+                    Write-Host "$(Get-Content $WslIpHandlerConfigPath)"
+                    Throw
+                }
             }
         }
     }
     Context ' With config file that is empty' {
         BeforeEach {
-            Set-Content $ConfigPath -Value @()
+            Set-Content $WslIpHandlerConfigPath -Value @()
         }
         Context ' Set-WslNetworkConfig' {
             BeforeEach {
@@ -96,7 +109,7 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
                 Set-WslNetworkConfig @params
             }
             It ' Should make a record with IP assignment' {
-                $ConfigPath | Should -FileContentMatchMultiline ([regex]::Escape($Expected))
+                $WslIpHandlerConfigPath | Should -FileContentMatchMultiline ([regex]::Escape($Expected))
             }
         }
         Context ' Remove-WslNetworkConfig' {
@@ -104,13 +117,13 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
                 Remove-WslNetworkConfig
             }
             It ' Should keep config file empty' {
-                Get-Content $ConfigPath | Should -BeNullOrEmpty
+                Get-Content $WslIpHandlerConfigPath | Should -BeNullOrEmpty
             }
         }
     }
     Context ' With config file already having required record' {
         BeforeEach {
-            Set-Content $ConfigPath -Value $Expected
+            Set-Content $WslIpHandlerConfigPath -Value $Expected
         }
         Context ' Set-WslNetworkConfig' {
             BeforeEach {
@@ -124,15 +137,14 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
                 if (Test-Path variable:DNSServerList) { $params.DNSServerList = $DNSServerList }
                 Set-WslNetworkConfig -Modified ([ref]$Modified) @params
             }
-            It ' Should not change existing file' {
+            It ' Should have kept the same content' {
                 try {
-                    $ConfigPath | Should -FileContentMatchMultiline ([regex]::Escape($Expected))
-                    $Modified | Should -BeFalse
+                    $WslIpHandlerConfigPath | Should -FileContentMatchMultiline ([regex]::Escape($Expected))
                 }
                 catch {
                     Write-Host 'Actual Content:'
                     Write-Host '---------------'
-                    Write-Host "$((Get-Content $ConfigPath) -join "`n")"
+                    Write-Host "$((Get-Content $WslIpHandlerConfigPath) -join "`n")"
                     Write-Host '---------------'
                     Write-Host 'Expected Content:'
                     Write-Host '-----------------'
@@ -141,13 +153,16 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
                     Throw
                 }
             }
+            It ' Should not have modified existing file' {
+                $Modified | Should -BeFalse
+            }
         }
         Context ' Remove-WslNetworkConfig' {
             BeforeEach {
                 Remove-WslNetworkConfig
             }
             It ' Should keep config file empty' {
-                $ConfigPath | Should -Not -FileContentMatchMultiline ([regex]::Escape($Expected))
+                $WslIpHandlerConfigPath | Should -Not -FileContentMatchMultiline ([regex]::Escape($Expected))
             }
         }
     }
@@ -158,14 +173,20 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
         BeforeEach {
             $ipObj = Get-IpNet -IpAddress $GatewayIpAddress -PrefixLength $PrefixLength
             $badIp = $ipObj.Add($ipObj.IPcount)
-            # $badRecord = "[network]`r`ngateway_ip = $($badIp.IP)"
-            # $badRecord += "`r`nprefix_length = $PrefixLength"
-            # $badRecord += "`r`ndns_servers = $GatewayIpAddress"
-            $badRecord = $Expected -replace 'gateway_ip = .*', "gateway_ip = $($badIp.IP)"
-            Set-Content $ConfigPath -Value $badRecord
+            $params = @{
+                GatewayIpAddress = $badIp.IP.IPAddressToString
+                PrefixLength     = $PrefixLength
+                WindowsHostName  = $WindowsHostName
+                DynamicAdapters  = $DynamicAdapters
+            }
+            if (Test-Path variable:DNSServerList) { $params.DNSServerList = $DNSServerList }
+            Set-WslNetworkConfig @params -Force
+
+            # $badRecord = $Expected -replace 'gateway_ip = .*', "gateway_ip = $($badIp.IP)"
+            # Set-Content $WslIpHandlerConfigPath -Value $badRecord
         }
         Context ' Set-WslNetworkConfig' {
-            BeforeEach {
+            BeforeAll {
                 $params = @{
                     GatewayIpAddress = $GatewayIpAddress
                     PrefixLength     = $PrefixLength
@@ -176,29 +197,30 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
                 Set-WslNetworkConfig @params
             }
             It ' Should replace existing setting in config file removing bad record' {
+
                 try {
-                    $ConfigPath | Should -Not -FileContentMatchMultiline ([regex]::Escape($badRecord))
+                    $WslIpHandlerConfigPath | Should -Not -FileContentMatchMultiline ([regex]::Escape($badIp.IP.IPAddressToString))
                 }
                 catch {
                     Write-Host 'Actual Content:'
                     Write-Host '---------------'
-                    Write-Host "$((Get-Content $ConfigPath) -join "`n")"
+                    Write-Host "$((Get-Content $WslIpHandlerConfigPath) -join "`n")"
                     Write-Host '---------------'
                     Write-Host 'Expected NOT To Have Content:'
                     Write-Host '-----------------'
-                    Write-Host "$badRecord"
+                    Write-Host "$($badIp.IP.IPAddressToString)"
                     Write-Host '-----------------'
                     Throw
                 }
             }
             It ' Should replace existing setting in config file to required IP address' {
                 try {
-                    $ConfigPath | Should -FileContentMatchMultiline ([regex]::Escape($Expected))
+                    $WslIpHandlerConfigPath | Should -FileContentMatchMultiline ([regex]::Escape($Expected))
                 }
                 catch {
                     Write-Host 'Actual Content:'
                     Write-Host '---------------'
-                    Write-Host "$((Get-Content $ConfigPath) -join "`n")"
+                    Write-Host "$((Get-Content $WslIpHandlerConfigPath) -join "`n")"
                     Write-Host '---------------'
                     Write-Host 'Expected Content:'
                     Write-Host '-----------------'
@@ -214,12 +236,12 @@ Describe 'Editing Network settings in wslconfig' -ForEach @(
             }
             It ' Should remove existing record' {
                 try {
-                    $ConfigPath | Should -Not -FileContentMatchMultiline ([regex]::Escape($badRecord))
+                    $WslIpHandlerConfigPath | Should -Not -FileContentMatchMultiline ([regex]::Escape($badRecord))
                 }
                 catch {
                     Write-Host 'Actual Content:'
                     Write-Host '---------------'
-                    Write-Host "$((Get-Content $ConfigPath) -join "`n")"
+                    Write-Host "$((Get-Content $WslIpHandlerConfigPath) -join "`n")"
                     Write-Host '---------------'
                     Write-Host 'Expected NOT To Have Content:'
                     Write-Host '-----------------'

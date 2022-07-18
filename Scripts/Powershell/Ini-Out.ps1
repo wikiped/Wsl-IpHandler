@@ -64,10 +64,13 @@ Function ConvertTo-IniContent {
         [Switch]$Pretty,
 
         [Parameter()]
-        [string]$NoSection = '_'
+        [string]$NoSection = '_',
+
+        [Parameter()]
+        [switch]$IgnoreEmptySections
     )
     Begin {
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Function started"
+        Write-Debug "$(_@) Function started"
         Write-Debug "$(_@) PsBoundParameters: $(& {$args} @PSBoundParameters)"
 
         function Out-Keys {
@@ -112,29 +115,36 @@ Function ConvertTo-IniContent {
         $extraLF = ''
 
         foreach ($key in $InputObject.get_keys()) {
-            if (!($InputObject[$key].GetType().GetInterface('IDictionary'))) {
-                #Key value pair
-                Write-Verbose "$($MyInvocation.MyCommand.Name): Adding key: $key"
-                $noSectionOutput.Add("$key$delimiter$($InputObject[$key])")
+            if ($InputObject[$key].GetType().GetInterface('IDictionary')) {
+                #Sections
+                Write-Debug "$(_@) Processing Section: [$key]"
+                $seciontIsEmpty = $InputObject[$key].Count -eq 0
+                Write-Debug "$(_@) Section [$key] is empty: $seciontIsEmpty and IgnoreEmptySection = $IgnoreEmptySections"
+
+                if (-not ($seciontIsEmpty -and $IgnoreEmptySections)) {
+                    Write-Debug "$(_@) Adding Section: [$key]"
+
+                    # Only write section, if it is not a dummy ($NoSection)
+                    $sectionsOutput.Add("${extraLF}[$key]")
+                    if ($Pretty) { $extraLF = "`n" }
+
+                    if ($InputObject[$key].Count) {
+                        Out-Keys $InputObject[$key] @sectionsParams -Delimiter $delimiter
+                    }
+
+                }
             }
             elseif ($key -eq $NoSection) {
                 #Key value pair of NoSection
                 Out-Keys $InputObject[$key] @noSectionParams -Delimiter $delimiter
             }
             else {
-                #Sections
-                Write-Verbose "$($MyInvocation.MyCommand.Name): Adding Section: [$key]"
-
-                # Only write section, if it is not a dummy ($NoSection)
-                $sectionsOutput.Add("${extraLF}[$key]")
-                if ($Pretty) { $extraLF = "`n" }
-
-                if ( $InputObject[$key].Count) {
-                    Out-Keys $InputObject[$key] @sectionsParams -Delimiter $delimiter
-                }
+                #Key value pair
+                Write-Debug "$(_@) Adding key: $key"
+                $noSectionOutput.Add("$key$delimiter$($InputObject[$key])")
             }
         }
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Finished adding entries to Ini Content."
+        Write-Debug "$(_@) Finished adding entries to Ini Content."
     }
 
     End {
@@ -147,8 +157,8 @@ Function ConvertTo-IniContent {
 
         $output = $noSectionOutput.ToArray() + $sectionsOutput.ToArray()
         Write-Debug "$(_@) output:`n$($output | Out-String)"
+        Write-Debug "$(_@) Function ended"
         Write-Output $output
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Function ended"
     }
 }
 
@@ -256,6 +266,9 @@ Function Write-IniFile {
         [string]$NoSection = '_',
 
         [Parameter()]
+        [switch]$IgnoreEmptySections,
+
+        [Parameter()]
         [switch]$Append,
 
         [Parameter()]
@@ -269,16 +282,20 @@ Function Write-IniFile {
         [Switch]$PassThru
     )
     Begin {
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Function started"
+        Write-Debug "$(_@) Function started"
         Write-Debug "$(_@) PsBoundParameters: $($PSBoundParameters | Out-String)"
     }
 
     Process {
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Writing to file: $Filepath"
+        Write-Debug "$(_@) Writing to file: $Filepath"
 
-        $InputObject | ConvertTo-IniContent -Loose:$Loose -Pretty:$Pretty -NoSection $NoSection | ForEach-Object { Write-Debug "$(_@) $_"; $_ } | Out-File -FilePath $FilePath -Append:$Append -Encoding $Encoding -Force:$Force
+        $InputObject |
+            ConvertTo-IniContent -Loose:$Loose -Pretty:$Pretty -NoSection $NoSection -IgnoreEmptySections:$IgnoreEmptySections |
+            Select-Object -SkipLast ($Pretty ? 1 : 0) |
+            ForEach-Object { Write-Debug "$(_@) $_"; $_ } |
+            Out-File -FilePath $FilePath -Append:$Append -Encoding $Encoding -Force:$Force
 
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Finished Writing to file: $FilePath"
+        Write-Debug "$(_@) Finished Writing to file: $FilePath"
     }
 
     End {
@@ -286,7 +303,7 @@ Function Write-IniFile {
             Write-Debug "$(_@) PassThru argument passed - Returning FileInfo."
             Get-Item $FilePath
         }
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Function ended"
+        Write-Debug "$(_@) Function ended"
     }
 }
 
@@ -400,7 +417,7 @@ Function Write-IniFile {
     )
 
     Begin {
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Function started"
+        Write-Verbose "$(_@) Function started"
 
         Write-Debug 'PsBoundParameters:'
         $PSBoundParameters.GetEnumerator() | ForEach-Object { Write-Debug "$_" }
@@ -477,11 +494,11 @@ Function Write-IniFile {
 
         if (!(Test-Path $outFile.FullName)) { Throw 'Could not create File' }
 
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Writing to file: $Filepath"
+        Write-Verbose "$(_@) Writing to file: $Filepath"
         foreach ($i in $InputObject.get_keys()) {
             if (!($InputObject[$i].GetType().GetInterface('IDictionary'))) {
                 #Key value pair
-                Write-Verbose "$($MyInvocation.MyCommand.Name): Writing key: $i"
+                Write-Verbose "$(_@) Writing key: $i"
                 "$i$delimiter$($InputObject[$i])" | Out-File -Append @parameters
 
             }
@@ -494,7 +511,7 @@ Function Write-IniFile {
             }
             else {
                 #Sections
-                Write-Verbose "$($MyInvocation.MyCommand.Name): Writing Section: [$i]"
+                Write-Verbose "$(_@) Writing Section: [$i]"
 
                 # Only write section, if it is not a dummy ($NoSection)
                 if ($i -ne $NoSection) { "$extraLF[$i]" | Out-File -Append @parameters }
@@ -510,7 +527,7 @@ Function Write-IniFile {
                 }
             }
         }
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Finished Writing to file: $FilePath"
+        Write-Verbose "$(_@) Finished Writing to file: $FilePath"
     }
 
     End {
@@ -518,7 +535,7 @@ Function Write-IniFile {
             Write-Debug ('Returning file due to PassThru argument.')
             Write-Output (Get-Item $outFile)
         }
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Function ended"
+        Write-Verbose "$(_@) Function ended"
     }
 }
  #>

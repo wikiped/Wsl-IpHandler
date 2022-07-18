@@ -33,17 +33,20 @@ echo_debug "VERBOSE=${VERBOSE:-}" ${LINENO}
 script_source="$(wslpath "$1" 2>/dev/null)"
 test -f "${script_source}" || error ${LINENO} "File Not Found: $script_source"
 
-script_target="${2%/}/${script_source##*/}"  # Only file name from source is needed - remove path
-win_hosts_edit_script_path="$3"
-windows_host=$4
-wsl_host=$5
-wsl_static_ip_or_offset=$6
+readonly script_target="${2%/}/${script_source##*/}"  # Use file name only: ##*/ -> removes path
+readonly win_hosts_edit_script_path="$3"
+readonly config="${4:-'/etc/wsl-iphandler.conf'}"
+readonly windows_host=$5
+readonly wsl_host=$6
+readonly wsl_static_ip_or_offset=$7
 
-echo_debug "script_source:  $script_source" ${LINENO}
-echo_debug "script_target:  $script_target" ${LINENO}
-echo_debug "windows_host:   $windows_host" ${LINENO}
-echo_debug "wsl_host:       $wsl_host" ${LINENO}
-echo_debug "wsl_static_ip_or_offset:  $wsl_static_ip_or_offset" ${LINENO}
+echo_debug "script_source:               $script_source" ${LINENO}
+echo_debug "script_target:               $script_target" ${LINENO}
+echo_debug "config:                      $config" ${LINENO}
+echo_debug "windows_host:                $windows_host" ${LINENO}
+echo_debug "wsl_host:                    $wsl_host" ${LINENO}
+echo_debug "wsl_static_ip_or_offset:     $wsl_static_ip_or_offset" ${LINENO}
+echo_debug "win_hosts_edit_script_path:  $win_hosts_edit_script_path" ${LINENO}
 echo_verbose "Finished Processing Incoming Arguments."
 
 if is_valid_ip_address "$wsl_static_ip_or_offset"
@@ -61,17 +64,17 @@ echo_verbose "Installing Required Packages..."
 install_packages
 echo_verbose "Installed Required Packages."
 
-# Set Config options in /etc/wsl.conf
-echo_verbose "Setting Config Options in /etc/wsl.conf..."
-set_config 'windows_host' "$windows_host" || error ${LINENO} "set_config 'windows_host'"
-set_config 'wsl_host' "$wsl_host" || error ${LINENO} "set_config 'wsl_host'"
+# Set Config options
+echo_verbose "Setting Config Options in $config..."
+set_config 'windows_host' "$windows_host" "$config" || error ${LINENO} "set_config 'windows_host'"
+set_config 'wsl_host' "$wsl_host" "$config" || error ${LINENO} "set_config 'wsl_host'"
 if [[ -n "$wsl_static_ip" ]]
 then
-	set_config 'static_ip' "$wsl_static_ip" || error ${LINENO} "set_config 'static_ip' $wsl_static_ip"
+	set_config 'static_ip' "$wsl_static_ip" "$config" || error ${LINENO} "set_config 'static_ip' $wsl_static_ip"
 else
-	set_config 'ip_offset' "$wsl_ip_offset" || error ${LINENO} "set_config 'ip_offset' $wsl_ip_offset"
+	set_config 'ip_offset' "$wsl_ip_offset" "$config" || error ${LINENO} "set_config 'ip_offset' $wsl_ip_offset"
 fi
-echo_verbose "Finished Setting Config Options in /etc/wsl.conf."
+echo_verbose "Finished Setting Config Options in $config"
 
 # Copy Autorun Script
 echo_verbose "Copying Autorun Script..."
@@ -84,6 +87,13 @@ var_name='win_hosts_edit_script'
 echo_debug "win_hosts_edit_script_path: $win_hosts_edit_script_path" ${LINENO}
 sed -i "s%${var_name}=.*$%${var_name}=\"${win_hosts_edit_script_path//\\/\\\\}\"%" "$script_target"
 echo_verbose "Finished Editing Autorun Script to use actual path to powershell script."
+
+# Edit Autorun Script to use actual path to module's config file
+echo_verbose "Editing Autorun Script to use actual path to module's config file..."
+var_name='config'
+echo_debug "config: $config" ${LINENO}
+sed -i "s%${var_name}=.*$%${var_name}='${config}'%" "$script_target"
+echo_verbose "Finished Editing Autorun Script to use actual path to module's config file."
 
 # Set ownership and permissions for Autorun script
 echo_verbose "Setting Autorun Script permissions..."

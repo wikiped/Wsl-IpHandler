@@ -2,6 +2,16 @@
 
 [Back to Overview](./README.md)
 
+## `0.20`
+
+- This version brings a breaking change to which configuration files are used by the module to store user settings. Previously the module relied on built-in WSL configuration files (`~\.wslconfig` on Windows and `/etc/wsl.conf` on Linux), but this created an issue when under some conditions WSL will ignore some of the settings (see [#19](https://github.com/wikiped/Wsl-IpHandler/issues/19)).
+
+- From this version the module will use it's own config files:
+
+  `~\.wsl-iphandler-config` on Windows
+
+  `/etc/wsl-iphandler.conf` on Linux
+
 ## `0.16.1`
 
 - Added parameter `-PostUpdateCommand` to command `Update-WslIpHandlerModule`.
@@ -12,15 +22,15 @@
   Get-Help Update-WslIpHandlerModule -Parameter PostUpdateCommand
   ```
 
-## `0.15.0`
+## `0.15`
 
 - Added new version check during import of the module. If new version is found - the warning is shown with command that can be executed by the use to update the module.
 
-## `0.14.0`
+## `0.14`
 
 - Validation of `WslInstanceName` parameter was added to all commands accepting this parameter.
 
-## `0.13.0`
+## `0.13`
 
 - Wsl-IpHandler module requires default configuration settings in windows `~/.wslconfig` and in linux `/etc/wsl.conf` files. When these files are modified by the user the module might not work correctly.
 
@@ -69,7 +79,7 @@
 
     - Abort
 
-## `0.12.0`
+## `0.12`
 
 - Added `Get-WslStatus` and `Get-WslInstanceStatus` commands:
 
@@ -100,7 +110,7 @@
 
     When this condition identified by the module the user will be prompted to either about and install the module to a local drive or to continue and face the errors that follow.
 
-## `0.11.0`
+## `0.11`
 
 - Added Toast Notifications feature to the Scheduled Task:
 
@@ -108,7 +118,7 @@
 
   - To control Toasts duration use `-ToastDuration` parameter, which should be set to number of seconds to show Toast Notification (default is 5 seconds).
 
-## `0.10.0`
+## `0.10`
 
 - Added `Set-WslScheduledTask` and `Remove-WslScheduledTask` commands:
 
@@ -122,7 +132,7 @@
 
   - When `AnyUserLogOn` is present - The scheduled task will be set to run when any user logs on. Otherwise (default behavior) - the task will run only when current user (who executed Install-WslIpHandler command) logs on.
 
-## `0.9.0`
+## `0.9`
 
 - Added ability to change existing Hyper-V Network Adapters IP Addresses if they overlap with required IP Address for WSL. This happens automatically and does not require any user interaction.
 

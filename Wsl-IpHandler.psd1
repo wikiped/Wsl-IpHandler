@@ -9,7 +9,7 @@
     RootModule        = 'Wsl-IpHandler'
 
     # Version number of this module.
-    ModuleVersion     = '0.16.5'
+    ModuleVersion     = '0.20.4'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -145,19 +145,20 @@
             FilePath                     = '/etc/wsl.conf'
             GlobalSectionName            = 'wsl2'
             NetworkSectionName           = 'network'
-            StaticIpAddressesSectionName = 'static_ips'
-            IpOffsetSectionName          = 'ip_offsets'
             SwapSizeKeyName              = 'swap'
             SwapFileKeyName              = 'swapFile'
-            GatewayIpAddressKeyName      = 'gateway_ip'
-            PrefixLengthKeyName          = 'prefix_length'
-            DnsServersKeyName            = 'dns_servers'
-            WindowsHostNameKeyName       = 'windows_host_name'
-            DynamicAdaptersKeyName       = 'dynamic_adapters'
+            # StaticIpAddressesSectionName = 'static_ips'
+            # IpOffsetSectionName          = 'ip_offsets'
+            # GatewayIpAddressKeyName      = 'gateway_ip'
+            # PrefixLengthKeyName          = 'prefix_length'
+            # DnsServersKeyName            = 'dns_servers'
+            # WindowsHostNameKeyName       = 'windows_host_name'
+            # DynamicAdaptersKeyName       = 'dynamic_adapters'
         }
 
         WslIpHandlerConfig = @{
-            FilePath                     = '~/wsl-iphandler.conf'
+            FilePath                     = '/etc/wsl-iphandler.conf'
+            GlobalSectionName            = 'wsl-iphandler'
             NetworkSectionName           = 'network'
             StaticIpAddressesSectionName = 'static_ips'
             IpOffsetSectionName          = 'ip_offsets'
