@@ -256,7 +256,12 @@ function Update-WithGit {
         [string]$ModuleFolderPath,
 
         [Parameter(Mandatory, ParameterSetName = 'Clone')]
-        [string]$RepoUri,
+        [ValidateNotNullOrEmpty()]
+        [string]$RepoName,
+
+        [Parameter(Mandatory, ParameterSetName = 'Clone')]
+        [ValidateNotNullOrEmpty()]
+        [string]$GithubUserName,
 
         [Parameter()]
         [ValidateNotNullOrEmpty()]
@@ -269,21 +274,33 @@ function Update-WithGit {
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
-    if (-not $RepoUri -and -not (Test-DirectoryIsGitRepository $_ $GitExePath)) {
-        Write-Error 'Update-WithGit requires -RepoUri parameter with -ModuleFolderPath is not '
-    }
+    $isRepoDirectory = Test-DirectoryIsGitRepository -ModuleFolderPath $ModuleFolderPath -GitExePath $GitExePath
 
     Push-Location $ModuleFolderPath
-    if ($RepoUri) {
+
+    if ($isRepoDirectory) {
+        . $GitExePath pull origin $Branch
+        Pop-Location
+        return
+    }
+
+    if ($PSCmdlet.ParameterSetName -eq 'Clone') {
+        $RepoUri = Get-RepoUri -RepoName $RepoName -GithubUserName $GithubUserName
+
+        Test-UriIsAccessible $RepoUri
+
         Push-Location ..
+
         Remove-Item (Join-Path $ModuleFolderPath '*') -Recurse -Force
+
         . $GitExePath clone --branch $Branch "`"$RepoUri`""
+
+        Pop-Location
         Pop-Location
     }
     else {
-        . $GitExePath pull origin $Branch
+        Write-Error 'Update-WithGit requires parameters -RepoName and -GithubUserName when -ModuleFolderPath parameter is not a git repository' -ErrorAction Stop
     }
-    Pop-Location
 }
 
 function Update-WithWebRequest {
@@ -572,13 +589,11 @@ function Update-ModuleFromGithub {
             else {
                 $result.Method = 'git'
                 $params.GitExePath = $GitExePath
-                if (-not (Test-DirectoryIsGitRepository $moduleInfo.ModuleBase $GitExePath)) {
-                    $params.RepoUri = Get-RepoUri -RepoName $moduleInfo.Name -GithubUserName $GithubUserName
-                }
+                $params.RepoName = $moduleInfo.Name
+                $params.GithubUserName = $GithubUserName
+
                 Write-Debug "$(_@) Invoking Update-WithGit with parameters: $($params | Out-String)"
                 Write-Verbose 'Updating with git.exe ...'
-
-                Test-UriIsAccessible $params.RepoUri
 
                 Update-WithGit -Branch $Branch @params
             }
