@@ -274,7 +274,7 @@ function Update-WithGit {
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
-    $isRepoDirectory = Test-DirectoryIsGitRepository -ModuleFolderPath $ModuleFolderPath -GitExePath $GitExePath
+    $isRepoDirectory = Test-DirectoryIsGitRepository -Path $ModuleFolderPath -GitExePath $GitExePath
 
     Push-Location $ModuleFolderPath
 
