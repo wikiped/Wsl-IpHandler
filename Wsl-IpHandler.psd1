@@ -147,13 +147,13 @@
             NetworkSectionName           = 'network'
             SwapSizeKeyName              = 'swap'
             SwapFileKeyName              = 'swapFile'
-            # StaticIpAddressesSectionName = 'static_ips'
-            # IpOffsetSectionName          = 'ip_offsets'
-            # GatewayIpAddressKeyName      = 'gateway_ip'
-            # PrefixLengthKeyName          = 'prefix_length'
-            # DnsServersKeyName            = 'dns_servers'
-            # WindowsHostNameKeyName       = 'windows_host_name'
-            # DynamicAdaptersKeyName       = 'dynamic_adapters'
+            StaticIpAddressesSectionName = 'static_ips'
+            IpOffsetSectionName          = 'ip_offsets'
+            GatewayIpAddressKeyName      = 'gateway_ip'
+            PrefixLengthKeyName          = 'prefix_length'
+            DnsServersKeyName            = 'dns_servers'
+            WindowsHostNameKeyName       = 'windows_host_name'
+            DynamicAdaptersKeyName       = 'dynamic_adapters'
         }
 
         WslIpHandlerConfig = @{
