@@ -701,6 +701,7 @@ function Update-ModuleFromGithub {
         $result.Error = $_
         Write-Error "There was an error while updating '$($moduleInfo.Name)': $($_.Exception.Message)"
     }
+    Write-Debug "$(_@) `$result: $($result | Out-String)"
     $result
 }
 
