@@ -26,10 +26,15 @@ function Invoke-MigrateWslConfig {
 
     Write-Verbose 'Migrating [network] settings in Windows config file...'
     $gatewayIpAddress = Get-WslConfigGatewayIpAddress -ConfigType Wsl
-    $PrefixLength = Get-WslConfigPrefixLength -ConfigType Wsl
+    Write-Debug "$($MyInvocation.ScriptName): `$gatewayIpAddress: $gatewayIpAddress"
+    $prefixLength = Get-WslConfigPrefixLength -ConfigType Wsl
+    Write-Debug "$($MyInvocation.ScriptName): `$prefixLength: $prefixLength"
     $dnsServerList = Get-WslConfigDnsServers -ConfigType Wsl
+    Write-Debug "$($MyInvocation.ScriptName): `$dnsServerList: $dnsServerList"
     $dynamicAdapters = Get-WslConfigDynamicAdapters -ConfigType Wsl
+    Write-Debug "$($MyInvocation.ScriptName): `$dynamicAdapters: $dynamicAdapters"
     $windowsHostName = Get-WslConfigWindowsHostName -ConfigType Wsl
+    Write-Debug "$($MyInvocation.ScriptName): `$windowsHostName: $windowsHostName"
 
     $modifiedWslConf = $false
     $modifiedModConf = $false
@@ -37,6 +42,8 @@ function Invoke-MigrateWslConfig {
     $modParams = @{ Modified = [ref]$modifiedModConf; ConfigType = 'WslIpHandler' }
 
     if ($gatewayIpAddress) {
+        Write-Verbose "Migrating Network Configuration..."
+        Write-Debug "$($MyInvocation.ScriptName): Invoking Set-WslNetworkConfig..."
         Set-WslNetworkConfig -GatewayIpAddress $gatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $dnsServerList -DynamicAdapters $dynamicAdapters -WindowsHostName $windowsHostName -Modified ([ref]$modifiedModConf)
     }
 
@@ -45,10 +52,9 @@ function Invoke-MigrateWslConfig {
         $WslInstanceName | ForEach-Object {
             #region Migrate WSL Instance Static IP from config file
             $wslIpAddress = Get-WslConfigStaticIpAddress -WslInstanceName $_ -ConfigType Wsl
-            if ($wslIpAddress) {
+            if ($wslIpAddress -and $gatewayIpAddress) {
                 Write-Verbose "Migrating static IP address $wslIpAddress for $_ ..."
-                $gatewayIp = Get-WslConfigGatewayIpAddress @wslParams -ReadOnly
-                Set-WslInstanceStaticIpAddress -WslInstanceName $_ -GatewayIpAddress $gatewayIp -WslInstanceIpAddress $wslIpAddress -Modified ([ref]$modifiedModConf)
+                Set-WslInstanceStaticIpAddress -WslInstanceName $_ -GatewayIpAddress $gatewayIpAddress -WslInstanceIpAddress $wslIpAddress -Modified ([ref]$modifiedModConf)
                 Remove-WslConfigStaticIpAddress -WslInstanceName $_ @wslParams
             }
             #endregion Migrate WSL Instance Static IP from config file
