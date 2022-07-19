@@ -604,6 +604,8 @@ function Update-ModuleFromGithub {
                     $argsArray = @('-NoLogo', '-NoProfile')
                     if ($DebugPreference -eq 'Continue') { $argsArray += '-NoExit' }
                     $argsString = "`"$($moduleInfo.ModuleBase)`" $($versions.LocalVersion) $($versions.RemoteVersion)"
+                    if ($VerbosePreference -eq 'Continue') { $argsString += ' -Verbose' }
+                    if ($DebugPreference -eq 'Continue') { $argsString += ' -Debug' }
                     try {
                         if (Test-Path $PostUpdateCommand -PathType Leaf) {
                             $argsArray += "-File `"$PostUpdateCommand`" $argsString"
