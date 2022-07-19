@@ -141,7 +141,7 @@ function Write-WslConfig {
         $Config = Read-WslConfig -ConfigType $ConfigType
     }
 
-    if ($Backup) { Backup-WslConfigFile $configPath }
+    if ($Backup) { Backup-WslConfigFile -ConfigType $ConfigType }
 
     Write-Debug "$(_@) current config to write: $($config | ConvertTo-Json)"
     Write-Debug "$(_@) target path: $configPath"
