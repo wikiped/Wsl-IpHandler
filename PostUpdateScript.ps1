@@ -13,6 +13,6 @@ if ($VersionBeforeUpdate -lt $VersionToMigrateConfig -and $VersionAfterUpdate -g
         Verbose = $VerbosePreference -eq 'Continue'
         Debug = $DebugPreference -eq 'Continue'
     }
-    Write-Debug "${n}: Invoking '$script'..."
+    Write-Debug "${n}: Invoking: '$script $(& { $args } @PSBoundParameters) $(& { $args } @commonParams)' ..."
     & $script @PSBoundParameters @commonParams
 }
