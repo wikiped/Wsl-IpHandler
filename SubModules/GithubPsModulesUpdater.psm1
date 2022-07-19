@@ -438,6 +438,91 @@ function Get-ModuleQualifiedName {
     $psModulePathMatches -eq 0 ? "`"$($ModuleInfo.ModuleBase)`"" : $($ModuleInfo.Name)
 }
 
+function Invoke-PostUpdateCommand {
+    <#
+    .SYNOPSIS
+    Invokes in a separate process (with Start-Process) specified PostUpdateCommand.
+
+    .DESCRIPTION
+    Invokes in a separate process (with Start-Process) specified PostUpdateCommand.
+    The following arguments will be passed to the specified command: $PathToModule, $VersionBeforeUpdate, $VersionAfterUpdate.
+
+    .PARAMETER ModuleBase
+    Path to the module being updated
+
+    .PARAMETER VersionBefore
+    Version of the module before update
+
+    .PARAMETER VersionAfter
+    Version of the module after update
+
+    .PARAMETER PostUpdateCommand
+    Specifies Command to execute.
+    Can be almost the same types as pwsh.exe parameters: -File and -Command, except for '-' (i.e. standard input is not supported).
+    PostUpdateCommand can be also a web address to a valid powershell script file (i.e. ps1 file in github repository).
+    The following arguments will be passed to the specified command: $PathToModule, $VersionBeforeUpdate, $VersionAfterUpdate.
+    #>
+    param(
+        [Parameter(Mandatory, Position = 0)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ModuleBase,
+
+        [Parameter(Mandatory, Position = 1)]
+        [ValidateNotNullOrEmpty()]
+        [version]$VersionBefore,
+
+        [Parameter(Mandatory, Position = 2)]
+        [ValidateNotNullOrEmpty()]
+        [version]$VersionAfter,
+
+        [Parameter(Position = 3)]
+        [object]$PostUpdateCommand = $null
+    )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
+
+    if (-not $PostUpdateCommand) { return }
+
+    Write-Verbose 'Running Post Update Command...'
+
+    $pwsh = Get-Command 'pwsh' -ErrorAction Ignore | Select-Object -ExpandProperty Source
+
+    if ($pwsh) {
+        $argsArray = @('-NoLogo', '-NoProfile')
+        $argsString = "`"$($ModuleBase)`" $VersionBefore $VersionAfter"
+        if ($VerbosePreference -eq 'Continue') { $argsString += ' -Verbose' }
+        if ($DebugPreference -eq 'Continue') {
+            $argsArray += '-NoExit'
+            $argsString += ' -Debug'
+        }
+        Write-Debug "$(_@) `$argsString: $argsString"
+        try {
+            if (Test-Path $PostUpdateCommand -PathType Leaf) {
+                $argsArray += "-File `"$PostUpdateCommand`" $argsString"
+            }
+            elseif ($content = Get-FileContentFromGithub $PostUpdateCommand -ErrorAction Ignore) {
+                if ($content) {
+                    $argsArray += "-Command `"& { $content } $argsString`""
+                }
+                else {
+                    $argsArray += "-Command `"& { $PostUpdateCommand } $argsString`""
+                }
+            }
+            else {
+                $argsArray += "-Command `"& { $PostUpdateCommand } $argsString`""
+            }
+            $argsArrayString = $argsArray -join ' '
+            Write-Debug "$(_@) Post Update Command: $pwsh $argsArrayString"
+            Start-Process -FilePath $pwsh -ArgumentList $argsArrayString -Wait
+        }
+        catch {
+            Write-Error "Error executing Post Update Command: $($_.Exception.Message)"
+        }
+    }
+    else {
+        Write-Error 'Cannot execute Post Update Command: Powershell Core (pwsh.exe) not found.'
+    }
+}
+
 function Update-ModuleFromGithub {
     <#
     .SYNOPSIS
@@ -598,45 +683,9 @@ function Update-ModuleFromGithub {
                 Update-WithGit -Branch $Branch @params
             }
             $result.Status = 'Updated'
-            if ($PostUpdateCommand) {
-                Write-Verbose "Running Post Update Command..."
-                $pwsh = Get-Command 'pwsh' -ErrorAction Ignore | Select-Object -ExpandProperty Source
-                if ($pwsh) {
-                    $argsArray = @('-NoLogo', '-NoProfile')
-                    $argsString = "`"$($moduleInfo.ModuleBase)`" $($versions.LocalVersion) $($versions.RemoteVersion)"
-                    if ($VerbosePreference -eq 'Continue') { $argsString += ' -Verbose' }
-                    if ($DebugPreference -eq 'Continue') {
-                        $argsArray += '-NoExit'
-                        $argsString += ' -Debug'
-                    }
-                    Write-Debug "$(_@) `$argsString: $argsString"
-                    try {
-                        if (Test-Path $PostUpdateCommand -PathType Leaf) {
-                            $argsArray += "-File `"$PostUpdateCommand`" $argsString"
-                        }
-                        elseif ($content = Get-FileContentFromGithub $PostUpdateCommand -ErrorAction Ignore) {
-                            if ($content) {
-                                $argsArray += "-Command `"& { $content } $argsString`""
-                            }
-                            else {
-                                $argsArray += "-Command `"& { $PostUpdateCommand } $argsString`""
-                            }
-                        }
-                        else {
-                            $argsArray += "-Command `"& { $PostUpdateCommand } $argsString`""
-                        }
-                        $argsArrayString = $argsArray -join ' '
-                        Write-Debug "$(_@) Post Update Command: $pwsh $argsArrayString"
-                        Start-Process -FilePath $pwsh -ArgumentList $argsArrayString -Wait
-                    }
-                    catch {
-                        Write-Error "Error executing Post Update Command: $($_.Exception.Message)"
-                    }
-                }
-                else {
-                    Write-Error 'Cannot execute Post Update Command: Powershell Core (pwsh.exe) not found.'
-                }
-            }
+
+            Invoke-PostUpdateCommand -ModuleBase $moduleInfo.ModuleBase -VersionBefore $versions.LocalVersion -VersionAfter $versions.RemoteVersion -PostUpdateCommand $PostUpdateCommand
+
             # Attempting to Import-Module ... -Force here will fail.
             # The user has to Import-Module ... -Force manually!
             Write-Information "$($moduleInfo.Name) was successfully updated from version: $($moduleInfo.Version) to: $($versions.RemoteVersion)!"
