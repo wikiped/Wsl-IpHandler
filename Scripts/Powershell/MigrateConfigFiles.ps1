@@ -47,7 +47,8 @@ function Invoke-MigrateWslConfig {
             $wslIpAddress = Get-WslConfigStaticIpAddress -WslInstanceName $_ -ConfigType Wsl
             if ($wslIpAddress) {
                 Write-Verbose "Migrating static IP address $wslIpAddress for $_ ..."
-                Set-WslInstanceStaticIpAddress -WslInstanceName $_ -WslInstanceIpAddress $wslIpAddress -Modified ([ref]$modifiedModConf)
+                $gatewayIp = Get-WslConfigGatewayIpAddress @wslParams -ReadOnly
+                Set-WslInstanceStaticIpAddress -WslInstanceName $_ -GatewayIpAddress $gatewayIp -WslInstanceIpAddress $wslIpAddress -Modified ([ref]$modifiedModConf)
                 Remove-WslConfigStaticIpAddress -WslInstanceName $_ @wslParams
             }
             #endregion Migrate WSL Instance Static IP from config file
