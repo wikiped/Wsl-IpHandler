@@ -599,13 +599,16 @@ function Update-ModuleFromGithub {
             }
             $result.Status = 'Updated'
             if ($PostUpdateCommand) {
+                Write-Verbose "Running Post Update Command..."
                 $pwsh = Get-Command 'pwsh' -ErrorAction Ignore | Select-Object -ExpandProperty Source
                 if ($pwsh) {
                     $argsArray = @('-NoLogo', '-NoProfile')
-                    if ($DebugPreference -eq 'Continue') { $argsArray += '-NoExit' }
                     $argsString = "`"$($moduleInfo.ModuleBase)`" $($versions.LocalVersion) $($versions.RemoteVersion)"
                     if ($VerbosePreference -eq 'Continue') { $argsString += ' -Verbose' }
-                    if ($DebugPreference -eq 'Continue') { $argsString += ' -Debug' }
+                    if ($DebugPreference -eq 'Continue') {
+                        $argsArray += '-NoExit'
+                        $argsString += ' -Debug'
+                    }
                     Write-Debug "$(_@) `$argsString: $argsString"
                     try {
                         if (Test-Path $PostUpdateCommand -PathType Leaf) {
@@ -624,7 +627,7 @@ function Update-ModuleFromGithub {
                         }
                         $argsArrayString = $argsArray -join ' '
                         Write-Debug "$(_@) Post Update Command: $pwsh $argsArrayString"
-                        Start-Process -FilePath $pwsh -ArgumentList $argsArrayString
+                        Start-Process -FilePath $pwsh -ArgumentList $argsArrayString -Wait
                     }
                     catch {
                         Write-Error "Error executing Post Update Command: $($_.Exception.Message)"
