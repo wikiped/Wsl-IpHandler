@@ -606,6 +606,7 @@ function Update-ModuleFromGithub {
                     $argsString = "`"$($moduleInfo.ModuleBase)`" $($versions.LocalVersion) $($versions.RemoteVersion)"
                     if ($VerbosePreference -eq 'Continue') { $argsString += ' -Verbose' }
                     if ($DebugPreference -eq 'Continue') { $argsString += ' -Debug' }
+                    Write-Debug "$(_@) `$argsString: $argsString"
                     try {
                         if (Test-Path $PostUpdateCommand -PathType Leaf) {
                             $argsArray += "-File `"$PostUpdateCommand`" $argsString"
@@ -613,6 +614,9 @@ function Update-ModuleFromGithub {
                         elseif ($content = Get-FileContentFromGithub $PostUpdateCommand -ErrorAction Ignore) {
                             if ($content) {
                                 $argsArray += "-Command `"& { $content } $argsString`""
+                            }
+                            else {
+                                $argsArray += "-Command `"& { $PostUpdateCommand } $argsString`""
                             }
                         }
                         else {
