@@ -710,8 +710,7 @@ $functionsToExport = @(
     'Update-ModuleFromGithub'
     'Get-ModuleVersions'
     'Get-ModuleInfoFromNameOrPath'
-    # 'Get-ModuleVersionFromGithub'
-    # 'Get-PsdUri'
+    'Invoke-PostUpdateCommand'
 )
 
 Export-ModuleMember -Function $functionsToExport -Verbose:$false -Debug:$false
