@@ -669,7 +669,7 @@ function Update-ModuleFromGithub {
 
                 Test-UriIsAccessible $params.Uri
 
-                Update-WithWebRequest @params
+                Update-WithWebRequest @params | Out-Null
             }
             else {
                 $result.Method = 'git'
@@ -680,7 +680,7 @@ function Update-ModuleFromGithub {
                 Write-Debug "$(_@) Invoking Update-WithGit with parameters: $($params | Out-String)"
                 Write-Verbose 'Updating with git.exe ...'
 
-                Update-WithGit -Branch $Branch @params
+                Update-WithGit -Branch $Branch @params | Out-Null
             }
             $result.Status = 'Updated'
 
