@@ -9,6 +9,10 @@ $n = Split-Path $PSScriptRoot -Leaf
 
 if ($VersionBeforeUpdate -lt $VersionToMigrateConfig -and $VersionAfterUpdate -ge $VersionToMigrateConfig) {
     $script = Join-Path $PSScriptRoot '.\Scripts\Powershell\MigrateConfigFiles.ps1' -Resolve
+    $commonParams = @{
+        Verbose = $VerbosePreference -eq 'Continue'
+        Debug = $DebugPreference -eq 'Continue'
+    }
     Write-Debug "${n}: Invoking '$script'..."
-    & $script @PSBoundParameters
+    & $script @PSBoundParameters @commonParams
 }
