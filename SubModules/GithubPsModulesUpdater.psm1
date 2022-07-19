@@ -690,20 +690,18 @@ function Update-ModuleFromGithub {
             # The user has to Import-Module ... -Force manually!
             Write-Information "$($moduleInfo.Name) was successfully updated from version: $($moduleInfo.Version) to: $($versions.RemoteVersion)!"
             Write-Warning "To use updated version of $($moduleInfo.Name) in current session execute:`nImport-Module $moduleToImport -Force"
-            $result
         }
         else {
             $result.Status = 'UpToDate'
             Write-Information "The latest version of '$($moduleInfo.Name)' is already installed: $($moduleInfo.Version)"
-            $result
         }
     }
     catch {
         $result.Status = 'Error'
         $result.Error = $_
         Write-Error "There was an error while updating '$($moduleInfo.Name)': $($_.Exception.Message)"
-        return $result
     }
+    $result
 }
 
 $functionsToExport = @(
