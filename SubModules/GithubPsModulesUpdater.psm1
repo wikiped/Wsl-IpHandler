@@ -279,7 +279,7 @@ function Update-WithGit {
     Push-Location $ModuleFolderPath
 
     if ($isRepoDirectory) {
-        . $GitExePath pull origin $Branch
+        & $GitExePath pull origin $Branch
         Pop-Location
         return
     }
@@ -293,7 +293,7 @@ function Update-WithGit {
 
         Remove-Item (Join-Path $ModuleFolderPath '*') -Recurse -Force
 
-        . $GitExePath clone --branch $Branch "`"$RepoUri`""
+        & $GitExePath clone --branch $Branch "`"$RepoUri`""
 
         Pop-Location
         Pop-Location
