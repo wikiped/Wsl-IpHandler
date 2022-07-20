@@ -311,15 +311,13 @@ function Remove-WslConfigSection {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $array = @($input)
     if ($array.Count) { $SectionName = $array }
     if (!(Test-Path Variable:SectionName)) { $SectionName = @() }
     if ($null -eq $SectionName) { $SectionName = @() }
     $config = Read-WslConfig -ConfigType $ConfigType -ForceReadFileFromDisk:$ForceReadFileFromDisk
-    Write-Debug "$(_@) `$SectionName = '$SectionName'"
-    Write-Debug "$(_@) `$OnlyIfEmpty = $OnlyIfEmpty"
-    Write-Debug "$(_@) `$Modified = $($Modified.Value ?? '$null')"
-    Write-Debug "$(_@) `$ForceReadFileFromDisk = $ForceReadFileFromDisk"
+    Write-Debug "$(_@) Input `$Modified = $($Modified.Value ?? '$null')"
 
     $SectionName | ForEach-Object {
         if ($config.Contains($_)) {
@@ -336,7 +334,7 @@ function Remove-WslConfigSection {
             }
         }
     }
-    if ($null -ne $Modified) { Write-Debug "$(_@) Modified: $($Modified.Value)" }
+    if ($null -ne $Modified) { Write-Debug "$(_@) Output Modified: $($Modified.Value)" }
 }
 #endregion Generic Section Getter and Helpers
 
@@ -367,10 +365,7 @@ function Get-WslConfigValue {
         [Parameter()]
         [switch]$ReadOnly
     )
-    Write-Debug "$(_@) SectionName = '$SectionName'"
-    Write-Debug "$(_@) KeyName = '$KeyName'"
-    Write-Debug "$(_@) ConfigType: $ConfigType"
-    Write-Debug "$(_@) DefaultValue = '$DefaultValue'"
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
     if (Test-WslConfigSectionExists -SectionName $SectionName -ConfigType $ConfigType -Force:$ForceReadFileFromDisk) {
         $section = Get-WslConfigSection $SectionName -ConfigType $ConfigType -Force:$ForceReadFileFromDisk -ReadOnly:$ReadOnly
@@ -460,10 +455,8 @@ function Set-WslConfigValue {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
-    Write-Debug "$(_@) SectionName = '$SectionName'"
-    Write-Debug "$(_@) KeyName = '$KeyName'"
-    Write-Debug "$(_@) Value = '$Value'"
-    Write-Debug "$(_@) ConfigType = $ConfigType"
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
+    if ($null -ne $Modified) { Write-Debug "$(_@) Input Modified: $($Modified.Value)" }
 
     # Setting $null or '' does not make sense in .wslconfig context
     if ([string]::IsNullOrWhiteSpace($Value)) {
@@ -508,7 +501,7 @@ function Set-WslConfigValue {
         if ($null -ne $Modified) { $Modified.Value = $true }
     }
     Write-Debug "$(_@) Final Section Content: $($section | Out-String)"
-    if ($null -ne $Modified) { Write-Debug "$(_@) Modified: $($Modified.Value)" }
+    if ($null -ne $Modified) { Write-Debug "$(_@) Output Modified: $($Modified.Value)" }
 }
 
 function Remove-WslConfigValue {
@@ -531,7 +524,6 @@ function Remove-WslConfigValue {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
-
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     if ($null -ne $Modified) { Write-Debug "$(_@) Initial Modified = $($Modified.Value)" }
 
@@ -581,7 +573,7 @@ function Test-IsValidStaticIpAddress {
         [ValidateNotNull()]
         [ConfigType]$ConfigType = [ConfigType]::WslIpHandler
     )
-    Write-Debug "$(_@) `$IpAddress = $IpAddress"
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
     if ($PSCmdlet.ParameterSetName -eq 'Automatic') {
         $warnMsg = "You are setting Static IP Address: $IpAddress "
@@ -590,7 +582,7 @@ function Test-IsValidStaticIpAddress {
 
         $usingWslConfig = $null -ne $GatewayIpAddress
 
-        $PrefixLength = Get-WslConfigValue (Get-NetworkSectionName -ConfigType $ConfigType) (Get-PrefixLengthKeyName) -ConfigType $ConfigType -DefaultValue $PrefixLength -ReadOnly
+        $PrefixLength = Get-WslConfigValue (Get-NetworkSectionName -ConfigType $ConfigType) (Get-PrefixLengthKeyName -ConfigType $ConfigType) -ConfigType $ConfigType -DefaultValue $PrefixLength -ReadOnly
 
         if ($null -eq $GatewayIpAddress) {
             $MSFT_NetIPAddress = Get-NetIPAddress -InterfaceAlias $vEthernetWsl -AddressFamily IPv4 -ErrorAction SilentlyContinue
@@ -660,7 +652,8 @@ function Get-WslConfigStaticIpSection {
 
         [Parameter()][switch]$ReadOnly
     )
-    $sectionName = Get-StaticIpAddressesSectionName
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
+    $sectionName = Get-StaticIpAddressesSectionName -ConfigType $ConfigType
     Get-WslConfigSection -SectionName $sectionName -ConfigType $ConfigType -ReadOnly:$ReadOnly
 }
 
@@ -676,7 +669,8 @@ function Get-WslConfigStaticIpAddress {
         [ValidateNotNull()]
         [ConfigType]$ConfigType = [ConfigType]::WslIpHandler
     )
-    $sectionName = Get-StaticIpAddressesSectionName
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
+    $sectionName = Get-StaticIpAddressesSectionName -ConfigType $ConfigType
     $existingIp = Get-WslConfigValue -SectionName $sectionName -KeyName $WslInstanceName -ConfigType $ConfigType -DefaultValue $null
     [ipaddress]$existingIp
 }
@@ -701,8 +695,9 @@ function Set-WslConfigStaticIpAddress {
         [Parameter()]
         [ref]$Modified
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
-        SectionName = Get-StaticIpAddressesSectionName
+        SectionName = Get-StaticIpAddressesSectionName -ConfigType $ConfigType
         KeyName     = $WslInstanceName
         Value       = $WslInstanceIpAddress.IPAddressToString
         ConfigType  = $ConfigType
@@ -727,8 +722,9 @@ function Remove-WslConfigStaticIpAddress {
         [Parameter()]
         [ref]$Modified
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
-        SectionName = Get-StaticIpAddressesSectionName
+        SectionName = Get-StaticIpAddressesSectionName -ConfigType $ConfigType
         KeyName     = $WslInstanceName
         ConfigType  = $ConfigType
     }
@@ -746,6 +742,7 @@ function Get-WslConfigAvailableStaticIpAddress {
         [ValidateNotNull()]
         [ConfigType]$ConfigType = [ConfigType]::WslIpHandler
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $GatewayIpAddress ??= Get-WslConfigGatewayIpAddress -ConfigType $ConfigType
     $PrefixLength = (Get-WslConfigPrefixLength -ConfigType $ConfigType) ?? 24
 
@@ -764,7 +761,7 @@ function Get-WslConfigAvailableStaticIpAddress {
         Write-Debug "$(_@) `$GatewayIpAddress=$GatewayIpAddress"
         Write-Debug "$(_@) `$PrefixLength=$PrefixLength"
 
-        $SectionName = Get-StaticIpAddressesSectionName
+        $SectionName = Get-StaticIpAddressesSectionName -ConfigType $ConfigType
 
         if ((Get-WslConfigSectionCount $SectionName) -gt 0) {
             $section = Get-WslConfigSection -SectionName $SectionName -ConfigType $ConfigType -ReadOnly
@@ -811,6 +808,7 @@ function Get-WslConfigIpOffsetSection {
         [Parameter()]
         [switch]$ReadOnly
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     if ([string]::IsNullOrWhiteSpace($SectionName)) { $SectionName = Get-IpOffsetSectionName -ConfigType $ConfigType }
     Write-Debug "$(_@) `$SectionName: '$SectionName'"
 
@@ -831,6 +829,7 @@ function Get-WslConfigIpOffset {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $Section = (Get-WslConfigIpOffsetSection -ConfigType $ConfigType -ForceReadFileFromDisk:$ForceReadFileFromDisk)
 
     if ($Section.Contains($WslInstanceName)) {
@@ -858,6 +857,7 @@ function Get-WslConfigAvailableIpOffset {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $Section = (Get-WslConfigIpOffsetSection -ConfigType $ConfigType -ForceReadFileFromDisk:$ForceReadFileFromDisk)
     Write-Debug "$(_@) Initial Section Content: $($Section | Out-String)"
 
@@ -896,6 +896,7 @@ function Set-WslConfigIpOffset {
 
         [switch]$BackupWslConfig
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $Section = (Get-WslConfigIpOffsetSection -ConfigType $ConfigType -ForceReadFileFromDisk:$ForceReadFileFromDisk)
     Write-Debug "$(_@) for $WslInstanceName to: $IpOffset."
     Write-Debug "$(_@) Initial Section Content: $($Section | Out-String)"
@@ -936,9 +937,9 @@ function Remove-WslConfigIpOffset {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
-    Write-Debug "$(_@) `$WslInstanceName: $WslInstanceName"
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
-        SectionName           = Get-IpOffsetSectionName
+        SectionName           = Get-IpOffsetSectionName -ConfigType $ConfigType
         KeyName               = $WslInstanceName
         ConfigType            = $ConfigType
         ForceReadFileFromDisk = $ForceReadFileFromDisk
@@ -966,9 +967,10 @@ function Get-WslConfigWindowsHostName {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-WindowsHostNameKeyName
+        KeyName               = Get-WindowsHostNameKeyName -ConfigType $ConfigType
         ConfigType            = $ConfigType
         DefaultValue          = [string]::IsNullOrWhiteSpace($DefaultValue) ? $null : $DefaultValue.ToString()
         ForceReadFileFromDisk = $ForceReadFileFromDisk
@@ -993,9 +995,10 @@ function Set-WslConfigWindowsHostName {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-WindowsHostNameKeyName
+        KeyName               = Get-WindowsHostNameKeyName -ConfigType $ConfigType
         Value                 = $Value
         ConfigType            = $ConfigType
         ForceReadFileFromDisk = $ForceReadFileFromDisk
@@ -1017,9 +1020,10 @@ function Remove-WslConfigWindowsHostName {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-WindowsHostNameKeyName
+        KeyName               = Get-WindowsHostNameKeyName -ConfigType $ConfigType
         ConfigType            = $ConfigType
         ForceReadFileFromDisk = $ForceReadFileFromDisk
     }
@@ -1046,9 +1050,10 @@ function Get-WslConfigGatewayIpAddress {
         [Parameter()]
         [switch]$ReadOnly
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-GatewayIpAddressKeyName
+        KeyName               = Get-GatewayIpAddressKeyName -ConfigType $ConfigType
         ConfigType            = $ConfigType
         DefaultValue          = $null
         ForceReadFileFromDisk = $ForceReadFileFromDisk
@@ -1075,9 +1080,10 @@ function Set-WslConfigGatewayIpAddress {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-GatewayIpAddressKeyName
+        KeyName               = Get-GatewayIpAddressKeyName -ConfigType $ConfigType
         Value                 = $Value.IPAddressToString
         ConfigType            = $ConfigType
         ForceReadFileFromDisk = $ForceReadFileFromDisk
@@ -1099,9 +1105,10 @@ function Remove-WslConfigGatewayIpAddress {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-GatewayIpAddressKeyName
+        KeyName               = Get-GatewayIpAddressKeyName -ConfigType $ConfigType
         ConfigType            = $ConfigType
         ForceReadFileFromDisk = $ForceReadFileFromDisk
     }
@@ -1129,9 +1136,10 @@ function Get-WslConfigPrefixLength {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $getParams = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-PrefixLengthKeyName
+        KeyName               = Get-PrefixLengthKeyName -ConfigType $ConfigType
         ConfigType            = $ConfigType
         DefaultValue          = $DefaultValue
         ForceReadFileFromDisk = $ForceReadFileFromDisk
@@ -1159,9 +1167,10 @@ function Set-WslConfigPrefixLength {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-PrefixLengthKeyName
+        KeyName               = Get-PrefixLengthKeyName -ConfigType $ConfigType
         Value                 = $Value
         ConfigType            = $ConfigType
         ForceReadFileFromDisk = $ForceReadFileFromDisk
@@ -1183,9 +1192,10 @@ function Remove-WslConfigPrefixLength {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-PrefixLengthKeyName
+        KeyName               = Get-PrefixLengthKeyName -ConfigType $ConfigType
         ConfigType            = $ConfigType
         ForceReadFileFromDisk = $ForceReadFileFromDisk
     }
@@ -1212,9 +1222,10 @@ function Get-WslConfigDnsServers {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $getParams = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-DnsServersKeyName
+        KeyName               = Get-DnsServersKeyName -ConfigType $ConfigType
         ConfigType            = $ConfigType
         DefaultValue          = $DefaultValue ? $DefaultValue : $null
         ForceReadFileFromDisk = $ForceReadFileFromDisk
@@ -1245,6 +1256,7 @@ function Set-WslConfigDnsServers {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     switch ($Value) {
         { $_ -is [string] } { $array = $Value -split ',' }
         { $_ -is [array] } { $array = $Value }
@@ -1253,7 +1265,7 @@ function Set-WslConfigDnsServers {
     $stringValue = $array -replace '^\s+' -replace '\s+$' -replace "^\s*'\s*" -replace '^\s*"\s*' -replace "\s*'\s*$" -replace '\s*"\s*$' -join ', '
     $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-DnsServersKeyName
+        KeyName               = Get-DnsServersKeyName -ConfigType $ConfigType
         Value                 = $stringValue
         ConfigType            = $ConfigType
         ForceReadFileFromDisk = $ForceReadFileFromDisk
@@ -1275,9 +1287,10 @@ function Remove-WslConfigDnsServers {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-DnsServersKeyName
+        KeyName               = Get-DnsServersKeyName -ConfigType $ConfigType
         ConfigType            = $ConfigType
         ForceReadFileFromDisk = $ForceReadFileFromDisk
     }
@@ -1304,9 +1317,10 @@ function Get-WslConfigDynamicAdapters {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $getParams = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-DynamicAdaptersKeyName
+        KeyName               = Get-DynamicAdaptersKeyName -ConfigType $ConfigType
         ConfigType            = $ConfigType
         DefaultValue          = $DefaultValue ? $DefaultValue : $null
         ForceReadFileFromDisk = $ForceReadFileFromDisk
@@ -1337,6 +1351,7 @@ function Set-WslConfigDynamicAdapters {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     switch ($Value) {
         { $_ -is [string] } { $array = $Value -split ',' }
         { $_ -is [array] } { $array = $Value }
@@ -1345,7 +1360,7 @@ function Set-WslConfigDynamicAdapters {
     $stringValue = $array -replace '^\s+' -replace '\s+$' -replace "^\s*'\s*" -replace '^\s*"\s*' -replace "\s*'\s*$" -replace '\s*"\s*$' -join ', '
     $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-DynamicAdaptersKeyName
+        KeyName               = Get-DynamicAdaptersKeyName -ConfigType $ConfigType
         Value                 = $stringValue
         ConfigType            = $ConfigType
         ForceReadFileFromDisk = $ForceReadFileFromDisk
@@ -1367,9 +1382,10 @@ function Remove-WslConfigDynamicAdapters {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
-        KeyName               = Get-DynamicAdaptersKeyName
+        KeyName               = Get-DynamicAdaptersKeyName -ConfigType $ConfigType
         ConfigType            = $ConfigType
         ForceReadFileFromDisk = $ForceReadFileFromDisk
     }
@@ -1449,7 +1465,7 @@ function Remove-WslConfigSwapSize {
         [switch]$ForceReadFileFromDisk
     )
     $params = @{
-        SectionName           = Get-IpOffsetSectionName
+        SectionName           = Get-IpOffsetSectionName -ConfigType $ConfigType
         KeyName               = Get-SwapSizeKeyName
         ConfigType            = $ConfigType
         ForceReadFileFromDisk = $ForceReadFileFromDisk
