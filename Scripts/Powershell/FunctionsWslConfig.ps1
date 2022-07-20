@@ -1137,15 +1137,15 @@ function Get-WslConfigPrefixLength {
         [switch]$ForceReadFileFromDisk
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
-    $getParams = @{
+    $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
         KeyName               = Get-PrefixLengthKeyName -ConfigType $ConfigType
         ConfigType            = $ConfigType
         DefaultValue          = $DefaultValue
         ForceReadFileFromDisk = $ForceReadFileFromDisk
     }
-    if ($Modified) { $getParams.Modified = $Modified }
-    $value = Get-WslConfigValue @getParams
+    if ($Modified) { $params.Modified = $Modified }
+    $value = Get-WslConfigValue @params
     if ($value) { [int]$value }
     else { $DefaultValue }
 }
@@ -1223,15 +1223,15 @@ function Get-WslConfigDnsServers {
         [switch]$ForceReadFileFromDisk
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
-    $getParams = @{
+    $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
         KeyName               = Get-DnsServersKeyName -ConfigType $ConfigType
         ConfigType            = $ConfigType
         DefaultValue          = $DefaultValue ? $DefaultValue : $null
         ForceReadFileFromDisk = $ForceReadFileFromDisk
     }
-    if ($Modified) { $getParams.Modified = $Modified }
-    $value = Get-WslConfigValue @getParams
+    if ($Modified) { $params.Modified = $Modified }
+    $value = Get-WslConfigValue @params
     if ($value) {
         $value -split ',' -replace '^\s+' -replace '\s+$' -replace "^\s*'\s*" -replace '^\s*"\s*' -replace "\s*'\s*$" -replace '\s*"\s*$'
     }
@@ -1318,15 +1318,15 @@ function Get-WslConfigDynamicAdapters {
         [switch]$ForceReadFileFromDisk
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
-    $getParams = @{
+    $params = @{
         SectionName           = Get-NetworkSectionName -ConfigType $ConfigType
         KeyName               = Get-DynamicAdaptersKeyName -ConfigType $ConfigType
         ConfigType            = $ConfigType
         DefaultValue          = $DefaultValue ? $DefaultValue : $null
         ForceReadFileFromDisk = $ForceReadFileFromDisk
     }
-    if ($Modified) { $getParams.Modified = $Modified }
-    $value = Get-WslConfigValue @getParams
+    if ($Modified) { $params.Modified = $Modified }
+    $value = Get-WslConfigValue @params
     if ($value) {
         $value -split ',' -replace '^\s+' -replace '\s+$' -replace "^\s*'\s*" -replace '^\s*"\s*' -replace "\s*'\s*$" -replace '\s*"\s*$'
     }
