@@ -150,11 +150,9 @@ function Install-WslIpHandler {
     To mannerly take control over WSL Network setup use this module's command: Set-WslNetworkConfig
     #>
     param (
-        [Parameter(Mandatory, Position = 0)]
-        [ValidateSet([WslNamesGenerator],
-            ErrorMessage = "'{0}' is not one of the installed distributions: {1}" )]
-        [Parameter(ParameterSetName = 'Dynamic')]
-        [Parameter(ParameterSetName = 'Static')]
+        [Parameter(Mandatory, Position = 0, ParameterSetName = 'Dynamic')]
+        [Parameter(Mandatory, Position = 0, ParameterSetName = 'Static')]
+        [ValidateSet([WslNamesGenerator], ErrorMessage = "'{0}' is not one of the installed distributions: {1}")]
         [Alias('Name')]
         [string]$WslInstanceName,
 
@@ -177,7 +175,8 @@ function Install-WslIpHandler {
         [Parameter()]
         [string]$WindowsHostName = 'windows',
 
-        [Parameter(ParameterSetName = 'Static')]
+        # [Parameter(ParameterSetName = 'Static')]
+        [Parameter()]
         [Alias('NoProfile')]
         [switch]$DontModifyPsProfile,
 
@@ -274,7 +273,7 @@ function Install-WslIpHandler {
     #endregion Bash Scripts Installation
 
     #region Set Content to Powershell Profile
-    if ($PSCmdlet.ParameterSetName -eq 'Static' -and -not $DontModifyPsProfile) {
+    if (-not $DontModifyPsProfile) {
         Write-Verbose "Modifying Powershell Profile: $($profile.CurrentUserAllHosts) ..."
         Set-ProfileContent
     }
