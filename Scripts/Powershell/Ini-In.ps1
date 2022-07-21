@@ -52,7 +52,7 @@ Function ConvertFrom-IniContent {
     [OutputType([System.Collections.Specialized.OrderedDictionary])]
     Param(
         # Specifies input array of strings.
-        [ValidateNotNull()][AllowEmptyCollection()][AllowEmptyString()]
+        [AllowEmptyCollection()][AllowEmptyString()][AllowNull()]
         [Parameter( Mandatory, ValueFromPipeline )]
         [String[]]
         $InputContent,
@@ -73,7 +73,7 @@ Function ConvertFrom-IniContent {
     )
 
     Begin {
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Function started"
+        Write-Debug "$(_@) Function started"
         Write-Debug "$(_@) PsBoundParameters: $($PSBoundParameters | Out-String)"
 
         $commentRegex = "^(?<comment>\s*[$(-join $CommentChar)].*)$"
@@ -89,14 +89,15 @@ Function ConvertFrom-IniContent {
     }
 
     Process {
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Started Processing $($InputContent.Count) Lines of Content."
+        if (-not $InputContent) { return }
+
+        Write-Debug "$(_@) Started Processing $($InputContent.Count) Lines of Content."
 
         switch -regex ($InputContent) {
             $sectionRegex {
                 # Section
                 Write-Debug "$(_@) sectionRegex Matches: $(& {$args} @Matches)"
                 $section = $matches.section
-                Write-Verbose "$($MyInvocation.MyCommand.Name): Adding section : $section"
                 Write-Debug "$(_@) Adding section : $section"
                 $ini[$section] = New-Object System.Collections.Specialized.OrderedDictionary([System.StringComparer]::OrdinalIgnoreCase)
                 $CommentCount = 0
@@ -118,7 +119,7 @@ Function ConvertFrom-IniContent {
                     $CommentCount++
                     Write-Debug "$(_@) Incremented CommentCount is now: $CommentCount"
                     $name = "Comment$CommentCount"
-                    Write-Verbose "$($MyInvocation.MyCommand.Name): Adding $name with value: $value"
+                    Write-Debug "$(_@) Adding $name with value: $value"
                     $ini[$section][$name] = $value
                 }
                 continue
@@ -133,7 +134,7 @@ Function ConvertFrom-IniContent {
                 }
                 $name = $matches.name
                 $value = $matches.value
-                Write-Verbose "$($MyInvocation.MyCommand.Name): Adding key $name with value: $value"
+                Write-Debug "$(_@) Adding key $name with value: $value"
                 if ($ini[$section][$name]) {
                     if ($ini[$section][$name] -is [System.Collections.IList]) {
                         $ini[$section][$name].Add($value) | Out-Null
@@ -151,12 +152,12 @@ Function ConvertFrom-IniContent {
                 continue
             }
         }
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Finished Processing $($InputContent.Count) Lines of Content."
+        Write-Debug "$(_@) Finished Processing $($InputContent.Count) Lines of Content."
     }
 
     End {
+        Write-Debug "$(_@) Function ended"
         Write-Output $ini
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Function ended"
     }
 }
 
@@ -224,26 +225,26 @@ Function Read-IniFile {
         $IgnoreComments
     )
     Begin {
+        Write-Debug "$(_@) Function started"
         Write-Debug "$(_@) PsBoundParameters: $(& {$args} @PSBoundParameters)"
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Function started"
     }
 
     Process {
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Processing file: $Filepath"
+        Write-Debug "$(_@) Processing file: $Filepath"
 
         if (!(Test-Path $Filepath)) {
             Write-Warning ("`"{0}`" was not found." -f $Filepath)
             return New-Object System.Collections.Specialized.OrderedDictionary([System.StringComparer]::OrdinalIgnoreCase)
         }
 
-        $ini = ConvertFrom-IniContent -InputContent (Get-Content $FilePath) -CommentChar $CommentChar -NoSection $NoSection -IgnoreComments:$IgnoreComments
+        $ini = Get-Content $FilePath | ConvertFrom-IniContent -CommentChar $CommentChar -NoSection $NoSection -IgnoreComments:$IgnoreComments
 
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Finished Processing file: $FilePath"
+        Write-Debug "$(_@) Finished Processing file: $FilePath"
         Write-Output $ini
     }
 
     End {
-        Write-Verbose "$($MyInvocation.MyCommand.Name): Function ended"
+        Write-Debug "$(_@) Function ended"
     }
 }
 
