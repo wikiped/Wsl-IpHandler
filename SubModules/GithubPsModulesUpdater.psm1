@@ -276,10 +276,12 @@ function Update-WithGit {
 
     $isRepoDirectory = Test-DirectoryIsGitRepository -Path $ModuleFolderPath -GitExePath $GitExePath
 
+    $currentBranch = . $GitExePath symbolic-ref --short HEAD 2>$null  # v2.22+ (. $GitExePath branch --show-current)
+
     Push-Location $ModuleFolderPath
 
-    if ($isRepoDirectory) {
-        & $GitExePath pull origin $Branch | Out-Null
+    if ($isRepoDirectory -and $Branch -eq $currentBranch) {
+        . $GitExePath pull origin $Branch | Out-Null
         Pop-Location
         return
     }
@@ -293,12 +295,13 @@ function Update-WithGit {
 
         Remove-Item (Join-Path $ModuleFolderPath '*') -Recurse -Force
 
-        & $GitExePath clone --branch $Branch "`"$RepoUri`"" | Out-Null
+        . $GitExePath clone --branch $Branch "`"$RepoUri`"" | Out-Null
 
         Pop-Location
         Pop-Location
     }
     else {
+        Pop-Location
         Write-Error 'Update-WithGit requires parameters -RepoName and -GithubUserName when -ModuleFolderPath parameter is not a git repository' -ErrorAction Stop
     }
 }
