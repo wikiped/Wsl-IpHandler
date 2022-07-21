@@ -482,19 +482,25 @@ function Invoke-PostUpdateCommand {
 
     if (-not $PostUpdateCommand) { return }
 
+    if (-not $PSBoundParameters.ContainsKey('InformationAction')) {
+        $InformationPreference = 'Continue'
+    }
+
     Write-Verbose 'Running Post Update Command...'
 
     $pwsh = Get-Command 'pwsh' -ErrorAction Ignore | Select-Object -ExpandProperty Source
 
     if ($pwsh) {
         $argsArray = @('-NoLogo', '-NoProfile')
+        $noExit = $false
         $argsString = "`"$($ModuleBase)`" $VersionBefore $VersionAfter"
-        if ($VerbosePreference -eq 'Continue') { $argsString += ' -Verbose' }
-        if ($DebugPreference -eq 'Continue') {
-            $argsArray += '-NoExit'
-            $argsString += ' -Debug'
-        }
+
+        if ($VerbosePreference -eq 'Continue') { $argsString += ' -Verbose'; $noExit = $true }
+        if ($DebugPreference -eq 'Continue') { $argsString += ' -Debug'; $noExit = $true }
+        if ($noExit) { $argsArray += '-NoExit' }
+
         Write-Debug "$(_@) `$argsString: $argsString"
+
         try {
             if (Test-Path $PostUpdateCommand -PathType Leaf) {
                 $argsArray += "-File `"$PostUpdateCommand`" $argsString"
@@ -512,6 +518,9 @@ function Invoke-PostUpdateCommand {
             }
             $argsArrayString = $argsArray -join ' '
             Write-Debug "$(_@) Post Update Command: $pwsh $argsArrayString"
+            if ($noExit) {
+                Write-Information "Post Update Command has been started in a new window.`nPlease close the opened window manually to continue..."
+            }
             Start-Process -FilePath $pwsh -ArgumentList $argsArrayString -Wait
         }
         catch {
