@@ -79,6 +79,7 @@ function Read-ConfigFile {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
+    Write-Debug "$(_@) BoundParameters: $(& { $args } @PSBoundParameters)"
     Write-Debug "$(_@) Current Cached Config: $($CacheVariable.Value | Out-String)"
 
     if (($null -eq $CacheVariable.Value) -or $ForceReadFileFromDisk) {
@@ -114,13 +115,13 @@ function Read-WslConfig {
         [Alias('Force')]
         [switch]$ForceReadFileFromDisk
     )
-    Write-Debug "$(_@) $(& { $args } @PSBoundParameters)"
+    Write-Debug "$(_@) PSBoundParameters: $(& { $args } @PSBoundParameters)"
 
     $configPath = Get-WslConfigPath $ConfigType
     Write-Debug "$(_@) configPath: $configPath"
 
     $cacheVar = Get-WslConfigCacheVariable -ConfigType $ConfigType
-    Write-Debug "$(_@) Cache: $($cacheVar.Value)"
+    Write-Debug "$(_@) Cache variable: $($cacheVar.Name)"
     Read-ConfigFile -ConfigPath $configPath -CacheVariable $cacheVar -Force:$ForceReadFileFromDisk
 }
 
@@ -135,27 +136,30 @@ function Write-WslConfig {
         [Parameter()]
         [switch]$Backup
     )
+    Write-Debug "$(_@) BoundParameters: $(& { $args } @PSBoundParameters)"
+
     $configPath = Get-WslConfigPath -ConfigType $ConfigType
 
     if ($null -eq $Config) {
+        Write-Debug "$(_@) No Config passed. Invoke: Read-WslConfig -ConfigType $ConfigType"
         $Config = Read-WslConfig -ConfigType $ConfigType
     }
 
     if ($Backup) { Backup-WslConfigFile -ConfigType $ConfigType }
 
-    Write-Debug "$(_@) current config to write: $($config | ConvertTo-Json)"
-    Write-Debug "$(_@) target path: $configPath"
+    Write-Debug "$(_@) Config path: $configPath"
+    Write-Debug "$(_@) Config to write: $($Config | ConvertTo-Json)"
 
     $outIniParams = @{
         FilePath            = $configPath
-        InputObject         = $config
+        InputObject         = $Config
         Force               = $true
         Loose               = $true
         Pretty              = $true
         IgnoreEmptySections = $true
     }
 
-    Write-Debug "$(_@) Invoking Write-IniFile with Parameters:`n$($outIniParams | Out-String)"
+    Write-Debug "$(_@) Invoking Write-IniFile $(& { $args } @outIniParams)"
     Write-IniFile @outIniParams
 }
 
@@ -539,6 +543,7 @@ function Remove-WslConfigValue {
             }
             $params = @{
                 SectionName = $SectionName
+                ConfigType  = $ConfigType
                 OnlyIfEmpty = $true
             }
             if ($null -ne $Modified) { $params.Modified = $Modified }
@@ -578,7 +583,7 @@ function Test-IsValidStaticIpAddress {
     if ($PSCmdlet.ParameterSetName -eq 'Automatic') {
         $warnMsg = "You are setting Static IP Address: $IpAddress "
 
-        $GatewayIpAddress = Get-WslConfigGatewayIpAddress
+        $GatewayIpAddress = Get-WslConfigGatewayIpAddress -ReadOnly
 
         $usingWslConfig = $null -ne $GatewayIpAddress
 
@@ -965,7 +970,10 @@ function Get-WslConfigWindowsHostName {
 
         [Parameter()]
         [Alias('Force')]
-        [switch]$ForceReadFileFromDisk
+        [switch]$ForceReadFileFromDisk,
+
+        [Parameter()]
+        [switch]$ReadOnly
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
@@ -974,6 +982,7 @@ function Get-WslConfigWindowsHostName {
         ConfigType            = $ConfigType
         DefaultValue          = [string]::IsNullOrWhiteSpace($DefaultValue) ? $null : $DefaultValue.ToString()
         ForceReadFileFromDisk = $ForceReadFileFromDisk
+        ReadOnly              = $ReadOnly
     }
     if ($Modified) { $params.Modified = $Modified }
     Get-WslConfigValue @params
@@ -1134,7 +1143,10 @@ function Get-WslConfigPrefixLength {
 
         [Parameter()]
         [Alias('Force')]
-        [switch]$ForceReadFileFromDisk
+        [switch]$ForceReadFileFromDisk,
+
+        [Parameter()]
+        [switch]$ReadOnly
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
@@ -1143,11 +1155,12 @@ function Get-WslConfigPrefixLength {
         ConfigType            = $ConfigType
         DefaultValue          = $DefaultValue
         ForceReadFileFromDisk = $ForceReadFileFromDisk
+        ReadOnly              = $ReadOnly
     }
     if ($Modified) { $params.Modified = $Modified }
     $value = Get-WslConfigValue @params
     if ($value) { [int]$value }
-    else { $DefaultValue }
+    else { $null -eq $DefaultValue ? $null : [int]$DefaultValue }
 }
 
 function Set-WslConfigPrefixLength {
@@ -1220,7 +1233,10 @@ function Get-WslConfigDnsServers {
 
         [Parameter()]
         [Alias('Force')]
-        [switch]$ForceReadFileFromDisk
+        [switch]$ForceReadFileFromDisk,
+
+        [Parameter()]
+        [switch]$ReadOnly
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
@@ -1229,6 +1245,7 @@ function Get-WslConfigDnsServers {
         ConfigType            = $ConfigType
         DefaultValue          = $DefaultValue ? $DefaultValue : $null
         ForceReadFileFromDisk = $ForceReadFileFromDisk
+        ReadOnly              = $ReadOnly
     }
     if ($Modified) { $params.Modified = $Modified }
     $value = Get-WslConfigValue @params
@@ -1315,7 +1332,10 @@ function Get-WslConfigDynamicAdapters {
 
         [Parameter()]
         [Alias('Force')]
-        [switch]$ForceReadFileFromDisk
+        [switch]$ForceReadFileFromDisk,
+
+        [Parameter()]
+        [switch]$ReadOnly
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
     $params = @{
@@ -1324,6 +1344,7 @@ function Get-WslConfigDynamicAdapters {
         ConfigType            = $ConfigType
         DefaultValue          = $DefaultValue ? $DefaultValue : $null
         ForceReadFileFromDisk = $ForceReadFileFromDisk
+        ReadOnly              = $ReadOnly
     }
     if ($Modified) { $params.Modified = $Modified }
     $value = Get-WslConfigValue @params
