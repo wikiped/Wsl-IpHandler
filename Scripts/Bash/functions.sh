@@ -112,16 +112,23 @@ is_valid_ip_address() {
 	fi
 }
 
+format_config() {
+	local file=${1:?"Parameter #1 'Path to config file' is required in format_config"}
+	# sed -i ':a;N;$!ba;s/\n\s*//g' "$file"  # replace multiple newlines with one
+	sed -i '/^[[:blank:]]*$/d' "$file"  # remove empty lines
+	printf "\n" >> "$file"
+}
+
 set_config() {
-	local key=$1
-	local value=$2
-	local file=${3:-'/etc/wsl.conf'}
+	local key=${1:?"Parameter #1 'key' is required in set_config"}
+	local value=${2:?"Parameter #2 'value' is required in set_config"}
+	local file=${3:?"Parameter #3 'Path to config file' is required in set_config"}
 	echo_debug "Setting key: '$key' to '$value' in config file: '$file'"
 	if [[ $key != "" ]]
 	then
 		local replacement="$key = $value"
 
-		test -f "$file" || (printf "[network]\n%s\n" "$replacement" > "$file"; return 0)
+		test -f "$file" || (printf "%s\n" "$replacement" > "$file"; return 0)
 		echo_debug "Modifying existing config file..." ${LINENO}
 
 		if grep -Pqs "^\s*$key\s*=" "$file" &>/dev/null
@@ -130,21 +137,15 @@ set_config() {
 			sed -i -e "s/^\s*$key\s*=.*/$replacement/g" "$file"
 		else
 			echo_debug "Adding key: $replacement" ${LINENO}
-			if grep -Pqs '^\[network\]' "$file" 2>/dev/null
-			then
-				echo_debug "To existing [network] section" ${LINENO}
-				sed -i -e "s/^\[network\].*/[network]\n$replacement/g" "$file"
-			else
-				echo_debug "To created [network] section" ${LINENO}
-				printf "\n[network]\n%s\n" "$replacement" >> "$file"
-			fi
+			printf "%s\n" "$replacement" >> "$file"
 		fi
 	fi
+	format_config "$file"
 }
 
 remove_config() {
-	local key=$1
-	local file=${2:-'/etc/wsl.conf'}
+	local key=${1:?"Parameter #1 'key' is required in remove_config"}
+	local file=${2:?"Parameter #2 'Path to config file' is required in remove_config"}
 	echo_debug "Removing key: '$key' in config file: '$file'" ${LINENO}
 	if [[ $key != "" ]]
 	then

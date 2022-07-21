@@ -48,19 +48,19 @@ function Install-WslIpHandler {
         a) a new script will be created: /usr/local/bin/wsl-iphandler.sh
         b) a new startup script created: /etc/profile.d/run-wsl-iphandler.sh. This actually start script in a).
         c) sudo permission will be created at: /etc/sudoers.d/wsl-iphandler to enable passwordless start of script a).
-        d) /etc/wsl.conf will be modified to store Host names / IP offset
+        d) /etc/wsl-iphandler.conf will be modified to store Host names / IP offset
     @ Windows host file system:
-        a) New [ip_offsets] section in ~/.wslconfig will be created to store ip_offset for a specified WSL Instance. This offset will be used by bash startup script to create an IP Address at start time.
+        a) New [ip_offsets] section in `~\.wsl-iphandler-config` will be created to store ip_offset for a specified WSL Instance. This offset will be used by bash startup script to create an IP Address at start time.
         b) When bash startup script on WSL instance side is executed it will create (if not present already) a record binding its current IP address to it's host name (which is set by WslHostName parameter)
 
     To operate in Static Mode at the very least one parameter has to be specified: GatewayIpAddress.
     In this mode the following will happen:
     @ specified WSL instance's file system:
         a) the same scripts will be created as in Static Mode.
-        b) /etc/wsl.conf will be modified to store Host names / IP Addresses
+        b) /etc/wsl-iphandler.conf will be modified to store Host names / IP Addresses
            Note that if parameter WslInstanceIpAddress is not specified a first available IP address will be selected and will be used until the Wsl-IpHandler is Uninstalled. Otherwise specified IP address will be used.
     @ Windows host file system:
-        a) New [static_ips] section in ~/.wslconfig will be created to store ip address for a specified WSL Instance. This ip address will be used by bash startup script to bind this IP Address at start time to eth0 interface.
+        a) New [static_ips] section in `~\.wsl-iphandler-config` will be created to store ip address for a specified WSL Instance. This ip address will be used by bash startup script to bind this IP Address at start time to eth0 interface.
         b) The same as for Static Mode.
         c) Powershell profile file (CurrentUserAllHosts) will be modified: This module will be imported and an alias `wsl` to Invoke-WslExe will be created).
 
@@ -95,7 +95,7 @@ function Install-WslIpHandler {
     When this parameter is present - The Scheduled Task will be set to run when any user logs on. Otherwise (default behavior) - the task will run only when current user (who executed Install-WslIpHandler command) logs on.
 
     .PARAMETER BackupWslConfig
-    Optional. If specified will create backup of ~/.wslconfig before modifications.
+    Optional. If specified will create backup of `~\.wsl-iphandler-config` and `~\.wslconfig` before modifications.
 
     .PARAMETER NoSwapCheck
     When this parameter is present there will be no checking whether WSL2 is configured to use swap file which is compressed. Compressed swap file is a known cause of networking issue in WSL2. It is not recommended to use this parameter.
@@ -212,18 +212,19 @@ function Install-WslIpHandler {
     Write-Host "PowerShell installing Wsl-IpHandler to $WslInstanceName..."
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
-    $configModified = $false
+    $wslConfigModified = $false
+    $moduleConfigModified = $false
 
     if (-not $NoNetworkShareCheck) { Test-ModuleOnNetworkShareAndPrompt }
 
     if (-not $NoSwapCheck) {
-        Test-SwapAndPrompt -Modified ([ref]$configModified) -AutoFix:$AutoFixWslConfig
+        Test-SwapAndPrompt -Modified ([ref]$wslConfigModified) -AutoFix:$AutoFixWslConfig
     }
 
     Test-EtcWslConfAndPrompt -WslInstanceName $WslInstanceName -AutoFix:$AutoFixWslConfig
 
-    #region Save Network Parameters to .wslconfig and Setup Network Adapters
-    Set-WslNetworkConfig -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $DNSServerList -DynamicAdapters $DynamicAdapters -WindowsHostName $WindowsHostName -Modified ([ref]$configModified)
+    #region Save Network Parameters to config file and Setup Network Adapters
+    Set-WslNetworkConfig -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -DNSServerList $DNSServerList -DynamicAdapters $DynamicAdapters -WindowsHostName $WindowsHostName -Modified ([ref]$moduleConfigModified)
 
     if ($null -ne $GatewayIpAddress) {
         Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
@@ -237,7 +238,7 @@ function Install-WslIpHandler {
         Set-WslNetworkAdapter @setParams -Verbose:$($VerbosePreference -eq 'Continue')
 
         Write-Verbose "Setting Static IP Address: $WslInstanceIpAddress for $WslInstanceName."
-        Set-WslInstanceStaticIpAddress -WslInstanceName $WslInstanceName -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -WslInstanceIpAddress $WslInstanceIpAddress -Modified ([ref]$configModified)
+        Set-WslInstanceStaticIpAddress -WslInstanceName $WslInstanceName -GatewayIpAddress $GatewayIpAddress -PrefixLength $PrefixLength -WslInstanceIpAddress $WslInstanceIpAddress -Modified ([ref]$moduleConfigModified)
 
         if ($UseScheduledTaskOnUserLogOn) {
             Write-Verbose 'Registering Wsl-IpHandler scheduled task...'
@@ -254,15 +255,19 @@ function Install-WslIpHandler {
         if (-not $WslIpOffset) {
             $WslIpOffset = Get-WslConfigAvailableIpOffset
             Write-Verbose "Setting Automatic IP Offset: $WslIpOffset for $WslInstanceName."
-            Set-WslConfigIpOffset $WslInstanceName $WslIpOffset -Modified ([ref]$configModified)
+            Set-WslConfigIpOffset $WslInstanceName $WslIpOffset -Modified ([ref]$moduleConfigModified)
         }
     }
 
-    if ($configModified) {
-        Write-Verbose "Saving Configuration in .wslconfig $($BackupWslConfig ? 'with Backup ' : '')..."
-        Write-WslConfig -Backup:$BackupWslConfig
+    if ($wslConfigModified) {
+        Write-Verbose "Saving Configuration in config file$($BackupWslConfig ? ' with Backup ' : '')..."
+        Write-WslConfig Wsl -Backup:$BackupWslConfig
     }
-    #endregion Save Network Parameters to .wslconfig and Setup Network Adapters
+    if ($moduleConfigModified) {
+        Write-Verbose "Saving Configuration in .wsl-iphandler-config$($BackupWslConfig ? ' with Backup ' : '')..."
+        Write-WslConfig WslIpHandler -Backup:$BackupWslConfig
+    }
+    #endregion Save Network Parameters to config file and Setup Network Adapters
 
     #region Bash Scripts Installation
     Install-WslBashScripts -WslInstanceName $WslInstanceName -WslHostName $WslHostName
@@ -312,7 +317,7 @@ function Uninstall-WslIpHandler {
     Required. Name of the WSL Instance to Uninstall WSL Handler from (should be one of the names listed by `wsl.exe -l` command).
 
     .PARAMETER BackupWslConfig
-    Optional. If specified ~/.wslconfig file will backed up before modifications.
+    Optional. If specified config files will backed up before modifications.
 
     .EXAMPLE
     Uninstall-WslIpHandler -WslInstanceName Ubuntu
@@ -340,15 +345,15 @@ function Uninstall-WslIpHandler {
     Write-Debug "$(_@) Restarted $WslInstanceName"
     #endregion Restart WSL Instance
 
-    #region Remove WSL Instance Static IP from .wslconfig
-    $wslconfigModified = $false
-    Remove-WslInstanceStaticIpAddress -WslInstanceName $WslInstanceName -Modified ([ref]$wslconfigModified)
-    #endregion Remove WSL Instance Static IP from .wslconfig
+    #region Remove WSL Instance Static IP from config file
+    $moduleConfigModified = $false
+    Remove-WslInstanceStaticIpAddress -WslInstanceName $WslInstanceName -Modified ([ref]$moduleConfigModified)
+    #endregion Remove WSL Instance Static IP from config file
 
-    #region Remove WSL Instance IP Offset from .wslconfig
-    Write-Debug "$(_@) Removing IP address offset for $WslInstanceName from .wslconfig..."
-    Remove-WslConfigIpOffset -WslInstanceName $WslInstanceName -Modified ([ref]$wslconfigModified)
-    #endregion Remove WSL Instance IP Offset from .wslconfig
+    #region Remove WSL Instance IP Offset from config file
+    Write-Debug "$(_@) Removing IP address offset for $WslInstanceName from config file..."
+    Remove-WslConfigIpOffset -WslInstanceName $WslInstanceName -Modified ([ref]$moduleConfigModified)
+    #endregion Remove WSL Instance IP Offset from config file
 
     #region Remove WSL Instance IP from windows hosts file
     $hostsModified = $false
@@ -359,19 +364,20 @@ function Uninstall-WslIpHandler {
     Write-Debug "$(_@) Setting Windows Hosts file with $($content.Count) records ..."
     #endregion Remove WSL Instance IP from windows hosts file
 
-    #region Save Modified .wslconfig and hosts Files
+    #region Save Modified config and hosts Files
     if ($hostsModified) { Write-HostsFileContent -Records $content }
-    #endregion Save Modified .wslconfig and hosts Files
+    #endregion Save Modified config and hosts Files
 
     #region Remove Network Config and Content from Powershell Profile and ScheduledTask
-    # Clean .wslconfig, PSProfile and ScheduledTask if there are no more Static IP assignments
-    if ((Get-WslConfigStaticIpSection).Count -eq 0) {
-        Write-Debug "$(_@) No Static IPs found in .wslconfig."
+    # Clean config file, PSProfile and ScheduledTask if there are no more Static IP assignments
+    $wslConfigHasNoIpAssignments = Test-WslConfigIsSafeToDelete -ExcludeNetworkSection
+    if ($wslConfigHasNoIpAssignments) {
+        Write-Debug "$(_@) No Static IPs and no IP offsets found in config file"
 
-        #region Remove WSL Network Configuration from .wslconfig
+        #region Remove WSL Network Configuration from config file
         Write-Debug "$(_@) Removing WSL Network Configuration for $WslInstanceName ..."
-        Remove-WslNetworkConfig -Modified ([ref]$wslconfigModified)
-        #endregion Remove WSL Network Configuration from .wslconfig
+        Remove-WslNetworkConfig -Modified ([ref]$moduleConfigModified)
+        #endregion Remove WSL Network Configuration from config file
 
         Write-Debug "$(_@) Removing Powershell Profile Modifications ..."
         Remove-ProfileContent
@@ -380,12 +386,16 @@ function Uninstall-WslIpHandler {
         Remove-WslScheduledTask -CheckSuccess
     }
     else {
-        Write-Debug "$(_@) Skipping Removal of Network Config, Powershell Profile modifications and ScheduledTaskThere because there are Static IPs remaining:"
+        Write-Debug "$(_@) Skipping Removal of Network Config, Powershell Profile modifications and ScheduledTaskThere because there are Static IPs or IP offsets remaining:"
         Write-Debug "$(_@) $(Get-WslConfigStaticIpSection | Out-String)"
     }
-    if ($wslconfigModified) { Write-WslConfig -Backup:$BackupWslConfig }
+    if ($moduleConfigModified) { Write-WslConfig WslIpHandler -Backup:$BackupWslConfig }
     #endregion Remove Network Config and Content from Powershell Profile and ScheduledTask
 
+    if (Test-WslConfigIsSafeToDelete) {
+        Write-Verbose "$(_@) Deleting module config file..."
+        Remove-ModuleConfigFile -Backup:$BackupWslConfig
+    }
     Write-Host "PowerShell successfully uninstalled Wsl-IpHandler from $WslInstanceName!"
 }
 
@@ -409,7 +419,7 @@ function Install-WslBashScripts {
     .EXAMPLE
     Install-WslBashScripts -WslInstanceName Ubuntu
 
-    Will read saved configuration from .wslconfig and use this setting to apply to Ubuntu WSL Instance.
+    Will read saved configuration from config file and use this setting to apply to Ubuntu WSL Instance.
 
     .NOTES
     This command can only be used AFTER `Install-WslIpHandler` command was used to setup network configuration.
@@ -432,6 +442,8 @@ function Install-WslBashScripts {
         [switch]$BashDebug
     )
     #region Read WSL config
+    Read-WslConfig -ConfigType 'WslIpHandler' | Out-Null
+
     $existingIp = Get-WslConfigStaticIpAddress -WslInstanceName $WslInstanceName
     if ($existingIp) {
         Write-Debug "$(_@) Existing Static IP Address for $WslInstanceName = $existingIp"
@@ -456,6 +468,10 @@ function Install-WslBashScripts {
     $BashInstallScript = Get-SourcePath 'BashInstall'
     Write-Debug "$(_@) `$BashInstallScript='$BashInstallScript'"
     #endregion Bash Installation Script Path
+
+    #region Module's Bash Config Path
+    $BashConfigPath = Get-BashConfigFilePath 'WslIpHandler'
+    #endregion Module's Bash Config Path
 
     #region WSL Autorun Script Path
     # Get Path to bash script that assigns IP to wsl instance and launches PS autorun script
@@ -482,6 +498,7 @@ function Install-WslBashScripts {
         "`"$BashAutorunScriptSource`""
         "$BashAutorunScriptTarget"
         "`"$WinHostsEditScript`""
+        "$BashConfigPath"
         "$WindowsHostName"
         "$WslHostName"
         "$WslHostIpOrOffset"
@@ -549,6 +566,10 @@ function Uninstall-WslBashScripts {
     $BashAutorunScriptTarget = Get-ScriptLocation 'BashAutorun'
     #endregion WSL Autorun
 
+    #region Module's Bash Config Path
+    $BashConfigPath = Get-BashConfigFilePath 'WslIpHandler'
+    #endregion Module's Bash Config Path
+
     #region Remove Bash Autorun
     Write-Verbose "Running Bash WSL Uninstall script $BashUninstallScript"
     Write-Debug "$(_@) `$DebugPreference=$DebugPreference"
@@ -559,6 +580,7 @@ function Uninstall-WslBashScripts {
         "$bashUninstallScriptWslPath"
         "$BashAutorunScriptName"
         "$BashAutorunScriptTarget"
+        "$BashConfigPath"
     )
 
     $envVars = @()
@@ -605,7 +627,7 @@ function Update-WslBashScripts {
     .EXAMPLE
     Update-WslBashScripts -WslInstanceName Ubuntu
 
-    Will read saved configuration from .wslconfig and use this setting to apply to Ubuntu WSL Instance.
+    Will read saved configuration from config file and use this setting to apply to Ubuntu WSL Instance.
 
     .NOTES
     This command can only be used AFTER `Install-WslIpHandler` command was used to setup network configuration.
@@ -666,6 +688,10 @@ function Update-WslBashScripts {
     Write-Debug "$(_@) `$BashUpdateScriptWslPath='$BashUpdateScriptWslPath'"
     #endregion Bash Script WSL Paths
 
+    #region Module's Bash Config Path
+    $BashConfigPath = Get-BashConfigFilePath 'WslIpHandler'
+    #endregion Module's Bash Config Path
+
     #region Install Script Arguments
     # Get Path to PS Script that injects (if needed) IP-host to windows hosts on every WSL launch
     $WinHostsEditScript = Get-SourcePath 'WinHostsEdit'
@@ -700,11 +726,13 @@ function Update-WslBashScripts {
     $bashUninstallArgs = @(
         "$BashAutorunScriptName"
         "$BashAutorunScriptTarget"
+        "$BashConfigPath"
     )
     $bashInstallArgs = @(
         "`"$BashAutorunScriptSource`""
         "$BashAutorunScriptTarget"
         "`"$WinHostsEditScript`""
+        "$BashConfigPath"
         "$WindowsHostName"
         "$WslHostName"
         "$WslHostIpOrOffset"
@@ -843,7 +871,7 @@ function Set-WslInstanceStaticIpAddress {
     Optional. Reference to boolean variable. Will be set to True if given parameters will lead to change of existing settings. If this parameter is specified - any occuring changes will have to be saved with Write-WslConfig command. This parameter cannot be used together with BackupWslConfig parameter.
 
     .PARAMETER BackupWslConfig
-    Optional. If given - original version of .wslconfig file will be saved as backup. This parameter cannot be used together with Modified parameter.
+    Optional. If given - original version of config file will be saved as backup. This parameter cannot be used together with Modified parameter.
 
     .EXAMPLE
     Set-WslInstanceStaticIpAddress -WslInstanceName Ubuntu -GatewayIpAddress 172.16.0.1 -WslInstanceIpAddress 172.16.0.11
@@ -879,6 +907,8 @@ function Set-WslInstanceStaticIpAddress {
         $localModified = $false
         $Modified = [ref]$localModified
     }
+    Read-WslConfig -ConfigType 'WslIpHandler' | Out-Null
+
     if ($null -eq $WslInstanceIpAddress) {
         $existingIp = Get-WslConfigStaticIpAddress -Name $WslInstanceName
 
@@ -901,17 +931,17 @@ function Set-WslInstanceStaticIpAddress {
     Set-WslConfigStaticIpAddress -WslInstanceName $WslInstanceName -WslInstanceIpAddress $WslInstanceIpAddress -Modified $Modified
 
     if ($PSCmdlet.ParameterSetName -eq 'SaveHere' -and $localModified) {
-        Write-WslConfig -Backup:$BackupWslConfig
+        Write-WslConfig WslIpHandler -Backup:$BackupWslConfig
     }
 }
 
 function Remove-WslInstanceStaticIpAddress {
     <#
     .SYNOPSIS
-    Removes Static IP Address for the specified WSL Instance from .wslconfig.
+    Removes Static IP Address for the specified WSL Instance from config file.
 
     .DESCRIPTION
-    Removes Static IP Address for the specified WSL Instance from .wslconfig.
+    Removes Static IP Address for the specified WSL Instance from config file.
 
     .PARAMETER WslInstanceName
     Required. Name of WSL Instance as listed by `wsl.exe -l` command.
@@ -920,7 +950,7 @@ function Remove-WslInstanceStaticIpAddress {
     Optional. Reference to boolean variable. Will be set to True if given parameters will lead to change of existing settings. If this parameter is specified - any occuring changes will have to be saved with Write-WslConfig command. This parameter cannot be used together with BackupWslConfig parameter.
 
     .PARAMETER BackupWslConfig
-    Optional. If given - original version of .wslconfig file will be saved as backup. This parameter cannot be used together with Modified parameter.
+    Optional. If given - original version of config file will be saved as backup. This parameter cannot be used together with Modified parameter.
 
     .EXAMPLE
     Remove-WslInstanceStaticIpAddress -WslInstanceName Ubuntu
@@ -947,6 +977,8 @@ function Remove-WslInstanceStaticIpAddress {
         $Modified = [ref]$localModified
     }
 
+    Read-WslConfig -ConfigType 'WslIpHandler' | Out-Null
+
     Write-Debug "$(_@) Before Calling Remove-WslConfigValue `$Modified=$($Modified.Value)"
 
     Remove-WslConfigStaticIpAddress -WslInstanceName $WslInstanceName -Modified $Modified
@@ -954,17 +986,17 @@ function Remove-WslInstanceStaticIpAddress {
 
     if ($PSCmdlet.ParameterSetName -eq 'SaveHere' -and $localModified) {
         Write-Debug "$(_@) Calling Write-WslConfig -Backup:$BackupWslConfig"
-        Write-WslConfig -Backup:$BackupWslConfig
+        Write-WslConfig WslIpHandler -Backup:$BackupWslConfig
     }
 }
 
 function Set-WslNetworkConfig {
     <#
     .SYNOPSIS
-    Sets WSL Network Adapter parameters, which are stored in .wslconfig file
+    Sets WSL Network Adapter parameters, which are stored in config file
 
     .DESCRIPTION
-    Sets WSL Network Adapter parameters, which are stored in .wslconfig file
+    Sets WSL Network Adapter parameters, which are stored in config file
 
     .PARAMETER GatewayIpAddress
     Required. Gateway IP v4 Address of vEthernet (WSL) network adapter.
@@ -975,6 +1007,9 @@ function Set-WslNetworkConfig {
     .PARAMETER DNSServerList
     Optional. Defaults to GatewayIpAddress. DNS servers to set for the network adapater. The list is a string with comma separated servers.
 
+    .PARAMETER WindowsHostName
+    Optional String. Defaults to 'windows'. Specifies the host name which can be use to access Windows Hosting OS from within WSL instance.
+
     .PARAMETER DynamicAdapters
     Array of strings - names of Hyper-V Network Adapters that can be moved to other IP network space to free space for WSL adapter. Defaults to: `'Ethernet', 'Default Switch'`
 
@@ -982,16 +1017,19 @@ function Set-WslNetworkConfig {
     Optional. Reference to boolean variable. Will be set to True if given parameters will lead to change of existing settings. If this parameter is specified - any occuring changes will have to be saved with Write-WslConfig command. This parameter cannot be used together with BackupWslConfig parameter.
 
     .PARAMETER BackupWslConfig
-    Optional. If given - original version of .wslconfig file will be saved as backup. This parameter cannot be used together with Modified parameter.
+    Optional. If given - original version of config file will be saved as backup. This parameter cannot be used together with Modified parameter.
+
+    .PARAMETER ForceReadFileFromDisk
+    Switch Parameter to force the module to read its configuration files from disk. Without this parameter the module uses the cache reflecting initial state of the configuration files and all the changes made by this module.
 
     .EXAMPLE
     Set-WslNetworkConfig -GatewayIpAddress 172.16.0.1 -BackupWslConfig
 
     Will set Gateway IP Address to 172.16.0.1, SubNet length to 24 and DNS Servers to 172.16.0.1.
-    Will save the changes in .wslconfig and create backup version of the file.
+    Will save the changes in config file and create backup version of the file.
 
     .NOTES
-    This command only changes parameters of the network adapter in .wslconfig file, without any effect on active adapter (if it exists). To apply these settings use command Set-WslNetworkAdapter.
+    This command only changes parameters of the network adapter in module's configuration file, without any effect on active adapter (if it exists). To apply these settings use command Set-WslNetworkAdapter.
     #>
     param (
         [Parameter()][Alias('Gateway')]
@@ -1022,6 +1060,7 @@ function Set-WslNetworkConfig {
     Write-Debug "$(_@) Setting WslConfig Network Parameters:"
     Write-Debug "$(_@) WindowsHostName=$WindowsHostName"
 
+    Read-WslConfig -ConfigType 'WslIpHandler' | Out-Null
     Set-WslConfigWindowsHostName $WindowsHostName -Modified $Modified
 
     if ($null -ne $GatewayIpAddress) {
@@ -1038,7 +1077,7 @@ function Set-WslNetworkConfig {
     }
 
     if ($PSCmdlet.ParameterSetName -eq 'SaveHere' -and $localModified) {
-        Write-WslConfig -Backup:$BackupWslConfig
+        Write-WslConfig WslIpHandler -Backup:$BackupWslConfig
     }
 }
 
@@ -1048,24 +1087,24 @@ function Remove-WslNetworkConfig {
     Removes all WSL network adapter parameters that are set by Set-WslNetworkConfig command.
 
     .DESCRIPTION
-    Removes all WSL network adapter parameters that are set by Set-WslNetworkConfig command: -GatewayIpAddress, -PrefixLength, -DNSServerList. If there are any static ip address assignments in a .wslconfig file there will be a warning and command will have no effect. To override this limitation use -Force parameter.
+    Removes all WSL network adapter parameters that are set by Set-WslNetworkConfig command: -GatewayIpAddress, -PrefixLength, -DNSServerList. If there are any static ip address assignments in a config file there will be a warning and command will have no effect. To override this limitation use -Force parameter.
 
     .PARAMETER Modified
     Optional. Reference to boolean variable. Will be set to True if given parameters will lead to change of existing settings. If this parameter is specified - any occuring changes will have to be saved with Write-WslConfig command. This parameter cannot be used together with BackupWslConfig parameter.
 
     .PARAMETER BackupWslConfig
-    Optional. If given - original version of .wslconfig file will be saved as backup. This parameter cannot be used together with Modified parameter.
+    Optional. If given - original version of config file will be saved as backup. This parameter cannot be used together with Modified parameter.
 
     .PARAMETER Force
-    Optional. If specified will clear network parameters from .wslconfig file even if there are static ip address assignments remaining. This might make those static ip addresses invalid.
+    Optional. If specified will clear network parameters from config file even if there are static ip address assignments remaining. This might make those static ip addresses invalid.
 
     .EXAMPLE
     Remove-WslNetworkConfig -Force
 
-    Clears GatewayIpAddress, PrefixLength and DNSServerList settings from .wsl.config file, without saving a backup.
+    Clears GatewayIpAddress, PrefixLength and DNSServerList settings from config file, without saving a backup.
 
     .NOTES
-    This command only clears parameters of the network adapter in .wslconfig file, without any effect on active adapter (if it exists). To remove adapter itself use command Remove-WslNetworkAdapter.
+    This command only clears parameters of the network adapter in config file, without any effect on active adapter (if it exists). To remove adapter itself use command Remove-WslNetworkAdapter.
     #>
     param (
         [Parameter(Mandatory, ParameterSetName = 'SaveExternally')]
@@ -1080,10 +1119,12 @@ function Remove-WslNetworkConfig {
         $localModified = $false
         $Modified = [ref]$localModified
     }
+    Read-WslConfig -ConfigType 'WslIpHandler' | Out-Null
+    $ipOffsetSectionCount = Get-WslConfigSectionCount -SectionName (Get-IpOffsetSectionName)
 
-    $staticIpSection = Get-WslConfigStaticIpSection
+    $staticIpSectionCount = Get-WslConfigSectionCount -SectionName (Get-StaticIpAddressesSectionName)
 
-    if ($Force -or ($staticIpSection.Count -le 0)) {
+    if ($Force -or ($staticIpSectionCount -eq 0 -and $ipOffsetSectionCount -eq 0)) {
         Remove-WslConfigGatewayIpAddress -Modified $Modified
 
         Remove-WslConfigPrefixLength -Modified $Modified
@@ -1095,12 +1136,12 @@ function Remove-WslNetworkConfig {
         Remove-WslConfigDynamicAdapters -Modified $Modified
     }
     else {
-        Write-Warning "Network Parameters in .wslconfig will not be removed because there are Static IP Addresses remaining in .wslconfig:`n$(($staticIpSection.GetEnumerator() | ForEach-Object { "$($_.Key) = $($_.Value)"}) -join "`n")"`
+        Write-Warning "Network Parameters in config will not be removed because there are Static IP Addresses remaining:`n$(($staticIpSection.GetEnumerator() | ForEach-Object { "$($_.Key) = $($_.Value)"}) -join "`n")"`
 
     }
 
     if ($PSCmdlet.ParameterSetName -eq 'SaveHere' -and $localModified) {
-        Write-WslConfig -Backup:$BackupWslConfig
+        Write-WslConfig WslIpHandler -Backup:$BackupWslConfig
     }
 }
 
@@ -1113,7 +1154,7 @@ function Set-WslNetworkAdapter {
     Sets up WSL network adapter. Requires Administrator privileges. If executed from non elevated powershell prompt - will ask for confirmation to grant required permissions. Any running WSL Instances will be shutdown before the adapter is installed. If there is adapter with required parameters - no changes will be made.
 
     .PARAMETER GatewayIpAddress
-    Optional. Gateway IP v4 Address of vEthernet (WSL) network adapter. Defaults to the setting in .wslconfig file. If there is not value in .wslconfig will issue a warning and exit.
+    Optional. Gateway IP v4 Address of vEthernet (WSL) network adapter. Defaults to the setting in config file. If there is not value in config file will issue a warning and exit.
 
     .PARAMETER PrefixLength
     Optional. Defaults to 24. WSL network SubNet Length.
@@ -1140,12 +1181,12 @@ function Set-WslNetworkAdapter {
     Set-WslNetworkConfig -GatewayIpAddress 172.16.0.1
     Set-WslNetworkAdapter
 
-    First command will set Gateway IP Address to 172.16.0.1, SubNet length to 24 and DNS Servers to 172.16.0.1 saving the settings in .wslconfig file.
+    First command will set Gateway IP Address to 172.16.0.1, SubNet length to 24 and DNS Servers to 172.16.0.1 saving the settings in config file.
     Second command will actually put these settings in effect. If there was active WSL network adapter in the system - it will be removed beforehand. Any running WSL instances will be shutdown.
 
     .NOTES
-    Executing this command will not save specified parameters to .wslconfig. To save settings use command Set-WslNetworkConfig.
-    Or preferably first run Set-WslNetworkConfig with required parameters and then execute Set-WslNetworkAdapter without parameters for this command to read settings from .wslconfig.
+    Executing this command will not save specified parameters to config file. To save settings use command Set-WslNetworkConfig.
+    Or preferably first run Set-WslNetworkConfig with required parameters and then execute Set-WslNetworkAdapter without parameters for this command to read settings from config file.
     #>
     param(
         [Parameter()][Alias('Gateway')]
@@ -1177,6 +1218,8 @@ function Set-WslNetworkAdapter {
     )
     Write-Debug "$(_@) `$PSBoundParameters: $(& {$args} @PSBoundParameters)"
 
+    Read-WslConfig -ConfigType 'WslIpHandler' | Out-Null
+
     $GatewayIpAddress ??= Get-WslConfigGatewayIpAddress
     Write-Debug "$(_@) `$GatewayIpAddress='$GatewayIpAddress'"
 
@@ -1191,7 +1234,7 @@ function Set-WslNetworkAdapter {
     }
 
     if ($null -eq $GatewayIpAddress) {
-        $msg = "Gateway IP Address is not specified neither as parameter nor in .wslconfig.`nWSL Hyper-V Network Adapter cannot be setup without Gateway IP Address!"
+        $msg = "Gateway IP Address is not specified neither as parameter nor in config file.`nWSL Hyper-V Network Adapter cannot be setup without Gateway IP Address!"
         if ($ShowToast) { Show-ToastMessage -Text "$msg" -Type 'Info' @toastParams }
         Throw "$msg"
     }
@@ -1606,6 +1649,8 @@ function Test-WslInstallation {
     )
     $failed = $false
 
+    Read-WslConfig -ConfigType 'WslIpHandler' | Out-Null
+
     if (-not $PSBoundParameters.ContainsKey('WindowsHostName')) {
         $WindowsHostName = Get-WslConfigWindowsHostName -DefaultValue 'windows'
     }
@@ -1844,7 +1889,7 @@ function Get-WslStatus {
         $status.WslSwapEnabled = $swapSize -ne '0'
         $null = $propertiesToDisplay.Add('WslSwapEnabled')
     }
-    if ($WslSwapFile -or $WslSwapFileCompressed) {
+    if ($status.WslSwapEnabled -and ($WslSwapFile -or $WslSwapFileCompressed)) {
         $defaultSwapFile = '%USERPROFILE%\AppData\Local\Temp\swap.vhdx'
         $swapFile = Get-WslConfigSwapFile -ExpandEnvironmentVariables:$ExpandEnvironmentVariables
         if (-not $swapFile) {
@@ -1969,6 +2014,9 @@ function Get-WslInstanceStatus {
         [switch]$WslConf,
 
         [Parameter(ParameterSetName = 'Part')]
+        [switch]$ModuleConf,
+
+        [Parameter(ParameterSetName = 'Part')]
         [switch]$ModuleScript,
 
         [Parameter(ParameterSetName = 'Part')]
@@ -1979,6 +2027,7 @@ function Get-WslInstanceStatus {
     )
     $status = [PSCustomObject][ordered]@{
         WslInstanceName    = $WslInstanceName
+        ModuleConfigFile   = $null
         StaticIp           = $null
         DynamicIp          = $null
         WslHostName        = $null
@@ -1996,6 +2045,7 @@ function Get-WslInstanceStatus {
     if ($PSCmdlet.ParameterSetName -eq 'All') {
         $WslIpHandlerConf = $true
         $WslConf = $true
+        $ModuleConf = $true
         $ModuleScript = $true
         $ModuleSudoers = $true
     }
@@ -2003,18 +2053,6 @@ function Get-WslInstanceStatus {
     if ($WslConf) {
         $wslConfData = wsl.exe -d $WslInstanceName cat /etc/wsl.conf | ConvertFrom-IniContent
         Write-Debug "$(_@) wslConf:`n$($wslConfData | Out-String)"
-
-        $staticIp = $wslConfData['network']?['static_ip']
-        if ($staticIp) { $status.StaticIp = $staticIp }
-
-        $dynamicIp = $wslConfData['network']?['ip_offset']
-        if ($dynamicIp) { $status.DynamicIp = $true }  #  else { $status.DynamicIp = $false }
-
-        $wslHostName = $wslConfData['network']?['wsl_host']
-        if ($wslHostName) { $status.WslHostName = $wslHostName }
-
-        $windowsHostName = $wslConfData['network']?['windows_host']
-        if ($windowsHostName) { $status.WindowsHostName = $windowsHostName }
 
         $generateResolvConf = $wslConfData['network']?['generateResolvConf']
         $status.GenerateResolvConf = $null -eq $generateResolvConf -or $generateResolvConf -eq 'true'
@@ -2027,6 +2065,43 @@ function Get-WslInstanceStatus {
 
         $automountEnabled = $wslConfData['automount']?['enabled']
         $status.AutomountEnabled = $null -eq $automountEnabled -or $automountEnabled -eq 'true'
+    }
+
+    if ($ModuleConf) {
+        $moduleConfPath = Get-BashConfigFilePath -ConfigType 'WslIpHandler'
+
+        $moduleConfExists = (wsl.exe -d $WslInstanceName -- test -f $moduleConfPath && Write-Output 1 || Write-Output 0) -eq 1
+
+        if ($moduleConfExists) {
+            $status.ModuleConfigFile = $moduleConfPath
+
+            $moduleConfData = wsl.exe -d $WslInstanceName cat "$moduleConfPath" | ConvertFrom-IniContent
+            Write-Debug "$(_@) wslConf:`n$($moduleConfData | Out-String)"
+
+            $staticIp = $moduleConfData['_']?['static_ip']
+            if ($staticIp) { $status.StaticIp = $staticIp }
+
+            $dynamicIp = $moduleConfData['_']?['ip_offset']
+            if ($dynamicIp) { $status.DynamicIp = $true }  #  else { $status.DynamicIp = $false }
+
+            $wslHostName = $moduleConfData['_']?['wsl_host']
+            if ($wslHostName) { $status.WslHostName = $wslHostName }
+
+            $windowsHostName = $moduleConfData['_']?['windows_host']
+            if ($windowsHostName) { $status.WindowsHostName = $windowsHostName }
+        }
+
+        # $staticIp = $wslConfData['network']?['static_ip']
+        # if ($staticIp) { $status.StaticIp = $staticIp }
+
+        # $dynamicIp = $wslConfData['network']?['ip_offset']
+        # if ($dynamicIp) { $status.DynamicIp = $true }  #  else { $status.DynamicIp = $false }
+
+        # $wslHostName = $wslConfData['network']?['wsl_host']
+        # if ($wslHostName) { $status.WslHostName = $wslHostName }
+
+        # $windowsHostName = $wslConfData['network']?['windows_host']
+        # if ($windowsHostName) { $status.WindowsHostName = $windowsHostName }
     }
 
     if ($ModuleScript) {
@@ -2164,11 +2239,11 @@ function Uninstall-WslIpHandlerModule {
 function Invoke-WslExe {
     <#
     .SYNOPSIS
-    Takes any parameters and passes them transparently to wsl.exe. If parameter(s) requires actually starting up WSL Instance - will set up WSL Network Adapter using settings in .wslconfig. Requires administrator privileges if required adapter is not active.
+    Takes any parameters and passes them transparently to wsl.exe. If parameter(s) requires actually starting up WSL Instance - will set up WSL Network Adapter using settings in `~\.wsl-iphandler-config`. Requires administrator privileges if required adapter is not active.
 
     .DESCRIPTION
     This command acts a wrapper around `wsl.exe` taking all it's parameters and passing them along.
-    Before actually executing `wsl.exe` this command checks if WSL Network Adapter with required parameters is active (i.e. checks if network parameters in .wslconfig are in effect). If active adapter parameters are different from those in .wslconfig - active adapter is removed and new one with required parameters is activated. Requires administrator privileges if required adapter is not active.
+    Before actually executing `wsl.exe` this command checks if WSL Network Adapter with required parameters is active (i.e. checks if network parameters in `~\.wsl-iphandler-config` are in effect). If active adapter parameters are different from those in `~\.wsl-iphandler-config` - active adapter is removed and new one with required parameters is activated. Requires administrator privileges if required adapter is not active.
 
     .PARAMETER Timeout
     Number of seconds to wait for vEthernet (WSL) Network Connection to become available when WSL Hyper-V Network Adapter had to be created.
@@ -2270,9 +2345,9 @@ function Invoke-WslExe {
         if ($networkShareCheck) { Test-ModuleOnNetworkShareAndPrompt }
 
         if ($swapCheck) {
-            $configModified = $false
-            Test-SwapAndPrompt -Modified ([ref]$configModified) -AutoFix:$AutoFix
-            if ($configModified) { Write-WslConfig }
+            $wslConfigModified = $false
+            Test-SwapAndPrompt -Modified ([ref]$wslConfigModified) -AutoFix:$AutoFix
+            if ($wslConfigModified) { Write-WslConfig Wsl }
         }
 
         if ('-d' -in $argsCopy -or '--distribution' -in $argsCopy) {
@@ -2840,15 +2915,20 @@ if (Test-Path $modulesUpdaterPath -PathType Leaf) {
     Import-Module $modulesUpdaterPath -Verbose:$false -Debug:$false
 
     Write-Verbose "Checking if there is a new version of '$moduleName' available..."
-    $versions = Get-ModuleVersions -ModuleNameOrPath $PSScriptRoot -TimeoutSec 5 -ErrorAction Ignore
-    if ($versions.LocalVersion -lt $versions.RemoteVersion) {
-        $msg = "New version of '$moduleName' is available. Command to update:`n"
-        $msg += 'Update-WslIpHandlerModule'
-        Write-Warning $msg
-        Remove-Variable msg
+    try {
+        $versions = Get-ModuleVersions -ModuleNameOrPath $PSScriptRoot -TimeoutSec 5 -ErrorAction Ignore
+        if ($versions.LocalVersion -lt $versions.RemoteVersion) {
+            $msg = "New version of '$moduleName' is available. Command to update:`n"
+            $msg += 'Update-WslIpHandlerModule'
+            Write-Warning $msg
+            Remove-Variable msg
+        }
+        Remove-Variable moduleName
+        Remove-Variable versions
+        Remove-Module (Split-Path $modulesUpdaterPath -LeafBase) -Force -ErrorAction Ignore
     }
-    Remove-Variable moduleName
-    Remove-Variable versions
-    Remove-Module (Split-Path $modulesUpdaterPath -LeafBase) -Force -ErrorAction Ignore
+    catch {
+        Write-Debug "$(_@) $($_.Exception.Message)" -ErrorAction 'Continue'
+    }
 }
 Remove-Variable modulesUpdaterPath

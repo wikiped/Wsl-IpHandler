@@ -12,13 +12,20 @@ if (!(Test-Path function:\_@)) {
 
 $WslPrivateData = $null
 
+#region Imports
+if (-not ('ConfigType' -as [Type])) {
+    . (Join-Path $PSScriptRoot 'Enums.ps1' -Resolve) | Out-Null
+}
+#endregion Imports
+
+#region PrivateData Getter
 function Get-ModuleInfo {
     [CmdletBinding()]
     param()
     $ModuleInfo = $MyInvocation.MyCommand.Module
     if ($null -eq $ModuleInfo) {
-        Write-Debug "$(_@) `$MyInvocation: $($MyInvocation | Out-String)"
-        Throw 'ModuleInfo is not available!'
+        Write-Debug "$(_@) `$MyInvocation has no Module: $($MyInvocation | Out-String)"
+        Throw "$(Split-Path $MyInvocation.ScriptName -Leaf) has no ModuleInfo!"
     }
     else {
         Write-Debug "$(_@) `$MyInvocation.MyCommand.Module.Name: $($ModuleInfo.Name)"
@@ -26,31 +33,40 @@ function Get-ModuleInfo {
     }
 }
 
+function Get-ModulePath {
+    [CmdletBinding()]
+    param()
+    try {
+        Get-ModuleInfo | Select-Object -ExpandProperty ModuleBase -ErrorAction Stop
+    }
+    catch {
+        $PSScriptRoot | Split-Path | Split-Path
+    }
+}
+
 function Get-PrivateData {
     param([Parameter()][switch]$Force)
     if ($Force -or $null -eq $script:WslPrivateData) {
         Write-Debug "$(_@) `$WslPrivateData is null or -Force parameter has been set!"
-        $ModuleInfo = Get-ModuleInfo
-        Write-Debug "$(_@) `$ModuleInfo: $($ModuleInfo | Out-String)"
         $errorMessage = $null
-        if ($null -eq $ModuleInfo) {
-            $modulePsdFile = Join-Path $PSScriptRoot '..\..\Wsl-IpHandler.psd1' -Resolve
+        try {
+            $ModuleInfo = Get-ModuleInfo
+            $privateData = $ModuleInfo | Select-Object -ExpandProperty PrivateData -ErrorAction Ignore
+            $errorMessage = "$($MyInvocation.MyCommand.Name) Could not find PrivateData in Module"
+            $errorObject = $MyInvocation
+        }
+        catch {
+            Write-Debug "$(_@) Error getting ModuleInfo: $($_.Exception.Message)"
+            $modulePath = Get-ModulePath
+            $modulePsdFile = Join-Path $modulePath "$(Split-Path $modulePath -Leaf).psd1" -Resolve
             Write-Debug "$(_@) `$modulePsdFile: $($modulePsdFile | Out-String)"
             $modulePsd = Import-Psd $modulePsdFile -ErrorAction Stop
+            Write-Debug "$(_@) `$modulePsd: $($modulePsd | Out-String)"
             $privateData = $modulePsd | Select-Object -ExpandProperty PrivateData -ErrorAction Ignore
-            if ($null -eq $privateData) {
-                $errorMessage = "$($MyInvocation.MyCommand.Name) Could not find PrivateData in file: '$modulePsdFile'"
-                $errorObject = $modulePsd
-            }
+            $errorMessage = "$($MyInvocation.MyCommand.Name) Could not find PrivateData in file: '$modulePsdFile'"
+            $errorObject = $modulePsd
         }
-        else {
-            $privateData = $ModuleInfo | Select-Object -ExpandProperty PrivateData -ErrorAction Ignore
-            if ($null -eq $privateData) {
-                $errorMessage = "$($MyInvocation.MyCommand.Name) Could not find PrivateData in Module: '$($ModuleInfo.Name)'"
-                $errorObject = $ModuleInfo
-            }
-        }
-        if ($errorMessage) {
+        if ($null -eq $privateData) {
             $PSCmdlet.ThrowTerminatingError(
                 [System.Management.Automation.ErrorRecord]::new(
                     ([System.ArgumentNullException]$errorMessage),
@@ -74,104 +90,131 @@ function Get-PrivateData {
         $script:WslPrivateData
     }
 }
+#endregion PrivateData Getter
 
+#region Files Names and Paths
 function Get-ScriptName {
-    param(
-        [Parameter(Mandatory)]
-        [string]$ScriptName
-    )
-    $local:ScriptNames = (Get-PrivateData)['ScriptNames']
+    param([Parameter(Mandatory)][string]$ScriptName)
+    $ScriptNames = Get-PrivateData | Select-Object -ExpandProperty ScriptNames -ErrorAction Stop
     $errorMessage = "Wrong ScriptName: '$ScriptName'. Valid names:`n$($ScriptNames.Keys | Out-String)"
-    $local:ScriptNames.Contains($ScriptName) ? $local:ScriptNames[$ScriptName] : (Write-Error "$errorMessage" -ErrorAction Stop)
+    $ScriptNames.Contains($ScriptName) ? $ScriptNames[$ScriptName] : (Write-Error "$errorMessage" -ErrorAction Stop)
 }
 
 function Get-ScriptLocation {
-    [CmdletBinding()]
     param([Parameter(Mandatory)][string]$ScriptName)
-    $local:ScriptLocations = (Get-PrivateData)['ScriptLocations']
+    $ScriptLocations = Get-PrivateData | Select-Object -ExpandProperty ScriptLocations -ErrorAction Stop
     $errorMessage = "Wrong ScriptName: '$ScriptName'. Valid names:`n$($ScriptLocations.Keys | Out-String)"
-    $local:ScriptLocations.Contains($ScriptName) ? $local:ScriptLocations[$ScriptName] : (Write-Error "$errorMessage" -ErrorAction Stop)
+    $ScriptLocations.Contains($ScriptName) ? $ScriptLocations[$ScriptName] : (Write-Error "$errorMessage" -ErrorAction Stop)
 }
 
 function Get-SourcePath {
-    [CmdletBinding()]
     param([Parameter(Mandatory)][string]$ScriptName)
-    $moduleInfo = Get-ModuleInfo
-    Join-Path $moduleInfo.ModuleBase (Get-ScriptName $ScriptName) -Resolve
+    Join-Path (Get-ModulePath) (Get-ScriptName $ScriptName) -Resolve
 }
 
 function Get-TargetPath {
-    [CmdletBinding()]
     param([Parameter(Mandatory)][string]$ScriptName)
     $targetLocation = Get-ScriptLocation -ScriptName $ScriptName
-    "$targetLocation/$(Get-ScriptName -ScriptName $ScriptName)"
+    "$targetLocation/$(Get-ScriptName -ScriptName $ScriptName | Split-Path -Leaf)"
+}
+#endregion Files Names and Paths
+
+#region Common Accessors
+function Get-SectionFromPrivateData {
+    [CmdletBinding(DefaultParameterSetName = 'ConfigType')]
+    param(
+        [Parameter(Mandatory, Position = 0, ParameterSetName = 'ConfigType')]
+        [ConfigType]$ConfigType,
+
+        [Parameter(Mandatory, ParameterSetName = 'SectionName')]
+        [string]$SectionName
+    )
+    if ($PSCmdlet.ParameterSetName -eq 'ConfigType') {
+        $SectionName = switch ($ConfigType) {
+            "$([ConfigType]::Wsl)" { 'WslConfig' }
+            "$([ConfigType]::WslIpHandler)" { 'WslIpHandlerConfig' }
+            Default {
+                Write-Error "$_ is not one of supported ConfigTypes: $([ConfigType].GetEnumNames())"
+            }
+        }
+    }
+    Get-PrivateData | Select-Object -ExpandProperty $SectionName
 }
 
 function Get-GlobalSectionName {
-    [CmdletBinding()]param()
-    (Get-PrivateData).WslConfig.GlobalSectionName
+    param([Parameter(Mandatory)][ConfigType]$ConfigType)
+    Get-SectionFromPrivateData $ConfigType | Select-Object -ExpandProperty GlobalSectionName
 }
 
 function Get-NetworkSectionName {
-    [CmdletBinding()]param()
-    (Get-PrivateData).WslConfig.NetworkSectionName
+    param([Parameter(Mandatory)][ConfigType]$ConfigType)
+    Get-SectionFromPrivateData $ConfigType | Select-Object -ExpandProperty NetworkSectionName
 }
 
-function Get-StaticIpAddressesSectionName {
-    [CmdletBinding()]param()
-    (Get-PrivateData).WslConfig.StaticIpAddressesSectionName
+function Get-BashConfigFilePath {
+    param([Parameter()][ConfigType]$ConfigType)
+    Get-SectionFromPrivateData $ConfigType | Select-Object -ExpandProperty FilePath
 }
+#endregion Common Accessors
 
-function Get-IpOffsetSectionName {
-    [CmdletBinding()]param()
-    (Get-PrivateData).WslConfig.IpOffsetSectionName
-}
-
+#region WslConfig Accessors
 function Get-SwapSizeKeyName {
-    [CmdletBinding()]param()
-    (Get-PrivateData).WslConfig.SwapSizeKeyName
+    param([Parameter()][ConfigType]$ConfigType = [ConfigType]::Wsl)
+    Get-SectionFromPrivateData $ConfigType | Select-Object -ExpandProperty SwapSizeKeyName
 }
 
 function Get-SwapFileKeyName {
-    [CmdletBinding()]param()
-    (Get-PrivateData).WslConfig.SwapFileKeyName
+    param([Parameter()][ConfigType]$ConfigType = [ConfigType]::Wsl)
+    Get-SectionFromPrivateData $ConfigType | Select-Object -ExpandProperty SwapFileKeyName
+}
+#endregion WslConfig Accessors
+
+#region WslIpHandler Accessors
+function Get-StaticIpAddressesSectionName {
+    param([Parameter()][ConfigType]$ConfigType = [ConfigType]::WslIpHandler)
+    Get-SectionFromPrivateData $ConfigType | Select-Object -ExpandProperty StaticIpAddressesSectionName
+}
+
+function Get-IpOffsetSectionName {
+    param([Parameter()][ConfigType]$ConfigType = [ConfigType]::WslIpHandler)
+    Get-SectionFromPrivateData $ConfigType | Select-Object -ExpandProperty IpOffsetSectionName
 }
 
 function Get-GatewayIpAddressKeyName {
-    [CmdletBinding()]param()
-    (Get-PrivateData).WslConfig.GatewayIpAddressKeyName
+    param([Parameter()][ConfigType]$ConfigType = [ConfigType]::WslIpHandler)
+    Get-SectionFromPrivateData $ConfigType | Select-Object -ExpandProperty GatewayIpAddressKeyName
 }
 
 function Get-PrefixLengthKeyName {
-    [CmdletBinding()]param()
-    (Get-PrivateData).WslConfig.PrefixLengthKeyName
+    param([Parameter()][ConfigType]$ConfigType = [ConfigType]::WslIpHandler)
+    Get-SectionFromPrivateData $ConfigType | Select-Object -ExpandProperty PrefixLengthKeyName
 }
 
 function Get-DnsServersKeyName {
-    [CmdletBinding()]param()
-    (Get-PrivateData).WslConfig.DnsServersKeyName
+    param([Parameter()][ConfigType]$ConfigType = [ConfigType]::WslIpHandler)
+    Get-SectionFromPrivateData $ConfigType | Select-Object -ExpandProperty DnsServersKeyName
 }
 
 function Get-WindowsHostNameKeyName {
-    [CmdletBinding()]param()
-    (Get-PrivateData).WslConfig.WindowsHostNameKeyName
+    param([Parameter()][ConfigType]$ConfigType = [ConfigType]::WslIpHandler)
+    Get-SectionFromPrivateData $ConfigType | Select-Object -ExpandProperty WindowsHostNameKeyName
 }
 
 function Get-DynamicAdaptersKeyName {
-    [CmdletBinding()]param()
-    (Get-PrivateData).WslConfig.DynamicAdaptersKeyName
+    param([Parameter()][ConfigType]$ConfigType = [ConfigType]::WslIpHandler)
+    Get-SectionFromPrivateData $ConfigType | Select-Object -ExpandProperty DynamicAdaptersKeyName
 }
 
 function Get-ProfileContentTemplate {
     [CmdletBinding()]param()
-    $content = (Get-PrivateData).ProfileContent
-    $modulePath = (Get-ModuleInfo).ModuleBase
+    $content = Get-SectionFromPrivateData -SectionName ProfileContent
+    $modulePath = Get-ModulePath
     Write-Debug "$(_@) modulePath: $modulePath"
 
     # If module was not installed in a standard location replace module name with module's path
     $paths = $Env:PSModulePath -split ';'
     $onPath = $false
-    foreach ($path in $paths) { if ($modulePath.Contains($path)) { $onPath = $true; break } }
+    foreach ($path in $paths) { if ($modulePath.ToLower().Contains($path.ToLower())) { $onPath = $true; break } }
     if (-not $onPath) {
         Write-Debug "$(_@) modulePath is not in: $($Env:PSModulePath)"
         $content = $content -replace 'Import-Module Wsl-IpHandler', "Import-Module '$modulePath'"
@@ -183,23 +226,25 @@ function Get-ProfileContentTemplate {
     $content
 }
 
-function Get-ScheduledTaskName {
+function Get-ScheduledTaskHashTable {
     [CmdletBinding()]param()
-    (Get-PrivateData).ScheduledTask.TaskName
+    Get-SectionFromPrivateData -SectionName ScheduledTask
 }
 
 function Get-ScheduledTaskName {
     [CmdletBinding()]param()
-    (Get-PrivateData).ScheduledTask.Name
+    Get-ScheduledTaskHashTable | Select-Object -ExpandProperty Name
 }
 
 function Get-ScheduledTaskPath {
     [CmdletBinding()]param()
-    (Get-PrivateData).ScheduledTask.Path
+    Get-ScheduledTaskHashTable | Select-Object -ExpandProperty Path
 }
 
 function Get-ScheduledTaskDescription {
     [CmdletBinding()]param()
-    (Get-PrivateData).ScheduledTask.Description
+    Get-ScheduledTaskHashTable | Select-Object -ExpandProperty Description
 }
+#endregion WslIpHandler Accessors
+
 #endregion Helper Functions

@@ -30,9 +30,9 @@ echo_debug "DEBUG=${DEBUG:-}" ${LINENO}
 echo_debug "VERBOSE=${VERBOSE:-}" ${LINENO}
 
 # shellcheck source=/dev/null
-source "$(resolve uninstall-wsl-iphandler.sh)" "${@:1:2}" || error ${LINENO} "executing uninstall-wsl-iphandler.sh"
+source "$(resolve uninstall-wsl-iphandler.sh)" "${@:1:3}" || error ${LINENO} "executing uninstall-wsl-iphandler.sh"
 
 # shellcheck source=/dev/null
-source "$(resolve install-wsl-iphandler.sh)" "${@:3}" || error ${LINENO} "executing install-wsl-iphandler.sh"
+source "$(resolve install-wsl-iphandler.sh)" "${@:4}" || error ${LINENO} "executing install-wsl-iphandler.sh"
 
 echo_verbose "Bash Updated Wsl-IpHandler..."

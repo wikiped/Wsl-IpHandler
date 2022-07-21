@@ -14,6 +14,7 @@ set -o pipefail
 
 declare -r dev='eth0'
 declare -r win_hosts_edit_script='Should be substituted during installation by install-wsl-iphandler.sh'
+declare -r config='Should be substituted during installation by install-wsl-iphandler.sh'
 
 echo_log() {
 	local message="$1"
@@ -89,23 +90,25 @@ set_or_echo() {
 
 get_config() {
 	local key
-	local default
 	local value
+	local default
 	local caller
+	local file
 	if [[ ${#FUNCNAME[@]} = 1 ]]; then
 		caller="${FUNCNAME[0]}"
 	else
 		caller="${FUNCNAME[1]}"
 	fi
-	key="${1:?"Key cannot be empty in get_config"}"
-	default="${2}"
-	value=$(grep -Po --color=never "$key\s*=.*" /etc/wsl.conf 2>/dev/null | cut -d= -f2 | sed 's/^[[:space:]]*//' 2>/dev/null)
+	key="${1:?"Arg #1: 'key' cannot be empty in get_config"}"
+	file="${2:?"Arg #3: 'file' cannot be empty in get_config"}"
+	default="${3}"
+	value=$(grep -Po --color=never "$key\s*=.*" "$file" 2>/dev/null | cut -d= -f2 | sed 's/^[[:space:]]*//' 2>/dev/null)
 
 	if [[ -n "$value" ]]; then
 		echo "$value"
 	else
-		if [[ "$#" -eq 1 ]]; then
-			error "${LINENO}" "${caller}: Could not find Key '$key' in /etc/wsl.conf" 11
+		if [[ "$#" -eq 2 ]]; then
+			error "${LINENO}" "${caller}: Could not find Key '$key' in $file" 11
 		else
 			echo "$default"
 		fi
@@ -115,6 +118,7 @@ get_config() {
 get_config_in_section() {
 	local section
 	local key
+	local file
 	local default
 	local value
 	local caller
@@ -123,18 +127,19 @@ get_config_in_section() {
 	else
 		caller="${FUNCNAME[1]}"
 	fi
-	section="${1:?"Section cannot be empty in get_config_in_section"}"
-	key="${2:?"Key cannot be empty in get_config_in_section"}"
-	default="${3}"
-	value=$(sed -nr "/^\[""$section""\]/ { :l /^""$key""[ ]*=/ { s/.*=[ ]*//; p; q;}; n; b l;}" /etc/wsl.conf 2>/dev/null)
+	section="${1:?"Arg #1: 'section' cannot be empty in get_config_in_section"}"
+	key="${2:?"Arg #2 'key' cannot be empty in get_config_in_section"}"
+	file="${3:?"Arg #3 'file' cannot be empty in get_config_in_section"}"
+	default="${4}"
+	value=$(sed -nr "/^\[""$section""\]/ { :l /^""$key""[ ]*=/ { s/.*=[ ]*//; p; q;}; n; b l;}" "$file" 2>/dev/null)
 
 	if [[ -n "$value" ]]; then
 		echo "$value"
 	else
-		if [[ "$#" -gt 2 ]]; then
+		if [[ "$#" -gt 3 ]]; then
 			echo "$default"
 		else
-			error "${LINENO}" "${caller}: Could not find Key '$key' in /etc/wsl.conf" 11
+			error "${LINENO}" "${caller}: Could not find Key '$key' in $file" 11
 		fi
 	fi
 }
@@ -326,14 +331,15 @@ check_wsl_conf_settings() {
 	key="${2:?"Arg #2: 'Key' cannot be empty in check_wsl_conf_settings"}"
 	expected="${3:?"Arg #3: 'Expected' value cannot be empty in check_wsl_conf_settings"}"
 	default="${4}"
+	local -r file='/etc/wsl.conf'
 
-	echo_verbose "Checking if /etc/wsl.conf has '$key = $expected' in section: [$section]..."
+	echo_verbose "Checking if $file has '$key = $expected' in section: [$section]..."
 	local value
-	value="$(get_config_in_section "$section" "$key" "$default")"
+	value="$(get_config_in_section "$section" "$key" "$file" "$default")"
 	echo_debug "actual value of $key in $section: '$value'"
 	if [[ "$value" != "$expected" ]]
 	then
-		error "${LINENO}" "For WSL IpHandler to operate correctly /etc/wsl.conf must have '$key = $expected' in section: [$section], current setting: '$key = $value'!"
+		error "${LINENO}" "For WSL IpHandler to operate correctly $file must have '$key = $expected' in section: [$section], current setting: '$key = $value'!"
 	fi
 }
 
@@ -351,7 +357,7 @@ main() {
 
 	# Process Local IP and Host
 	local ip_address
-	ip_address=$(get_config 'static_ip' '')
+	ip_address=$(get_config 'static_ip' "$config" '')
 	echo_debug "ip_address=$ip_address"
 
 	# Get IP address for this WSL Instance
@@ -377,7 +383,7 @@ main() {
 		echo_debug "gateway_ip_with_prefix=$gateway_ip_with_prefix"
 
 		local offset
-		offset=$(get_config 'ip_offset')
+		offset=$(get_config 'ip_offset' "$config")
 		echo_debug "offset=$offset"
 		wsl_ip_address="$(get_new_ip_with_prefix_from_offset "$gateway_ip_with_prefix" "$offset")"
 		echo_debug "wsl_ip_address=$wsl_ip_address"
@@ -388,7 +394,7 @@ main() {
 	add_wsl_ip_address "$wsl_ip_address"
 
 	local wsl_host
-	wsl_host="$(get_config 'wsl_host')"
+	wsl_host="$(get_config 'wsl_host' "$config")"
 	echo_debug "wsl_host=$wsl_host"
 
 	# Process locally Windows Host and IP
@@ -398,7 +404,7 @@ main() {
 	echo_debug "windows_ip=$windows_ip"
 
 	local windows_host
-	windows_host="$(get_config 'windows_host')"
+	windows_host="$(get_config 'windows_host' "$config")"
 	echo_debug "windows_host=$windows_host"
 
 	process_windows_host_and_ip "$windows_ip" "$windows_host"
