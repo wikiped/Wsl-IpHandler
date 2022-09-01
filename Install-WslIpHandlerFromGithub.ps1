@@ -95,8 +95,7 @@ else {
     Rename-Item -Path "${ModuleName}-master" -NewName $ModuleName -Force
 }
 
-$psdFile = "$ModuleName.psd1"
-$version = (Import-LocalizedData -BaseDirectory ([System.IO.Path]::GetDirectoryName($targetDirectory)) -FileName ([System.IO.Path]::GetFileName($psdFile)) -ErrorAction Ignore | Select-Object -ExpandProperty ModuleVersion -ErrorAction Ignore) ?? ""
+$version = (Import-LocalizedData -BaseDirectory $targetDirectory -FileName $ModuleName -ErrorAction Ignore | Select-Object -ExpandProperty ModuleVersion -ErrorAction Ignore) ?? ""
 if ($version) { $version = "version: $version " }
 Write-Host "Wsl-IpHandler ${version}was installed in: '$targetDirectory'"
 Pop-Location
