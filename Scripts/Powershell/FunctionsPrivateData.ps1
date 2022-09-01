@@ -60,7 +60,7 @@ function Get-PrivateData {
             $modulePath = Get-ModulePath
             $modulePsdFile = Join-Path $modulePath "$(Split-Path $modulePath -Leaf).psd1" -Resolve
             Write-Debug "$(_@) `$modulePsdFile: $($modulePsdFile | Out-String)"
-            $modulePsd = Import-Psd $modulePsdFile -ErrorAction Stop
+            $modulePsd = Import-LocalizedData -BaseDirectory $modulePath -FileName (Split-Path $modulePath -Leaf) -ErrorAction Stop
             Write-Debug "$(_@) `$modulePsd: $($modulePsd | Out-String)"
             $privateData = $modulePsd | Select-Object -ExpandProperty PrivateData -ErrorAction Ignore
             $errorMessage = "$($MyInvocation.MyCommand.Name) Could not find PrivateData in file: '$modulePsdFile'"

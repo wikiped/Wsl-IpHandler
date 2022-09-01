@@ -96,7 +96,7 @@ else {
 }
 
 $psdFile = "$ModuleName.psd1"
-$version = (Import-Psd (Join-Path $targetDirectory $psdFile) -ErrorAction Ignore | Select-Object -ExpandProperty ModuleVersion -ErrorAction Ignore) ?? ""
+$version = (Import-LocalizedData -BaseDirectory ([System.IO.Path]::GetDirectoryName($targetDirectory)) -FileName ([System.IO.Path]::GetFileName($psdFile)) -ErrorAction Ignore | Select-Object -ExpandProperty ModuleVersion -ErrorAction Ignore) ?? ""
 if ($version) { $version = "version: $version " }
 Write-Host "Wsl-IpHandler ${version}was installed in: '$targetDirectory'"
 Pop-Location
