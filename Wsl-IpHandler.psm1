@@ -2715,7 +2715,7 @@ function Test-EtcWslConfAndPrompt {
 
     $instanceStatus = Get-WslInstanceStatus -WslInstanceName $WslInstanceName -WslConf
 
-    Write-Debug "$(_@) `$instanceStatus: $($instanceStatus | Out-String)"
+    Write-Debug "$(_@) `$instanceStatus:$($instanceStatus | Out-String)"
 
     $promptParams = @{
         Text         = 'This setting must be enabled for Wsl-IpHandler to work. Please confirm if you want to continue:'
@@ -2805,6 +2805,7 @@ function Test-EtcWslConfAndPrompt {
             }
         }
     }
+    Write-Debug "$(_@) Completed"
 }
 
 function Test-NtfsCompressionEnabled {
