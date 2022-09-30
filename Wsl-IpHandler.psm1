@@ -2024,6 +2024,8 @@ function Get-WslInstanceStatus {
         [Parameter(ParameterSetName = 'All')]
         [switch]$All
     )
+    Write-Debug "$(_@) BoundParameters:$($PSBoundParameters | Out-String)"
+
     $status = [PSCustomObject][ordered]@{
         WslInstanceName    = $WslInstanceName
         ModuleConfigFile   = $null
@@ -2039,7 +2041,10 @@ function Get-WslInstanceStatus {
         AppendWindowsPath  = $null
         PSTypeName         = 'WslInstanceStatus'
     }
+    Write-Debug "$(_@) `$status: $status"
+
     $isRunningOnStart = Test-WslInstanceIsRunning $WslInstanceName
+    Write-Debug "$(_@) `$isRunningOnStart: $isRunningOnStart"
 
     if ($PSCmdlet.ParameterSetName -eq 'All') {
         $WslIpHandlerConf = $true
@@ -2072,25 +2077,35 @@ function Get-WslInstanceStatus {
 
     if ($ModuleConf) {
         $moduleConfPath = Get-BashConfigFilePath -ConfigType 'WslIpHandler'
+        Write-Debug "$(_@) `$moduleConfPath: $moduleConfPath"
 
         $moduleConfExists = (wsl.exe -d $WslInstanceName -- test -f $moduleConfPath && Write-Output 1 || Write-Output 0) -eq 1
+        Write-Debug "$(_@) `$moduleConfExists: $moduleConfExists"
 
         if ($moduleConfExists) {
             $status.ModuleConfigFile = $moduleConfPath
 
             $moduleConfData = wsl.exe -d $WslInstanceName cat "$moduleConfPath" | ConvertFrom-IniContent
-            Write-Debug "$(_@) wslConf:`n$($moduleConfData | Out-String)"
+            Write-Debug "$(_@) moduleConfData:$($moduleConfData | Out-String)"
 
             $staticIp = $moduleConfData['_']?['static_ip']
+            Write-Debug "$(_@) `$staticIp: $staticIp"
+
             if ($staticIp) { $status.StaticIp = $staticIp }
 
             $dynamicIp = $moduleConfData['_']?['ip_offset']
+            Write-Debug "$(_@) `$dynamicIp: $dynamicIp"
+
             if ($dynamicIp) { $status.DynamicIp = $true }  #  else { $status.DynamicIp = $false }
 
             $wslHostName = $moduleConfData['_']?['wsl_host']
+            Write-Debug "$(_@) `$wslHostName: $wslHostName"
+
             if ($wslHostName) { $status.WslHostName = $wslHostName }
 
             $windowsHostName = $moduleConfData['_']?['windows_host']
+            Write-Debug "$(_@) `$windowsHostName: $windowsHostName"
+
             if ($windowsHostName) { $status.WindowsHostName = $windowsHostName }
         }
 
@@ -2109,12 +2124,16 @@ function Get-WslInstanceStatus {
 
     if ($ModuleScript) {
         $moduleScriptExists = wsl.exe -d $WslInstanceName test -f '/usr/local/bin/wsl-iphandler.sh' && 1 || 0
+        Write-Debug "$(_@) `$moduleScriptExists: $moduleScriptExists"
+
         if ($moduleScriptExists -eq '1') { $status.ModuleScript = $true }
         else { $status.ModuleScript = $false }
     }
 
     if ($ModuleSudoers) {
         $moduleSudoersExists = wsl.exe -d $WslInstanceName test -f '/etc/sudoers.d/wsl-iphandler' && 1 || 0
+        Write-Debug "$(_@) `$moduleSudoersExists: $moduleSudoersExists"
+
         if ($moduleSudoersExists -eq '1') { $status.ModuleSudoers = $true }
         else { $status.ModuleSudoers = $false }
     }
@@ -2692,6 +2711,8 @@ function Test-EtcWslConfAndPrompt {
         [Parameter()]
         [switch]$AutoFix
     )
+    Write-Debug "$(_@) BoundParameters:$($PSBoundParameters | Out-String)"
+
     $instanceStatus = Get-WslInstanceStatus -WslInstanceName $WslInstanceName -WslConf
 
     Write-Debug "$(_@) `$instanceStatus: $($instanceStatus | Out-String)"
