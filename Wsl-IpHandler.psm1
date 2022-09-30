@@ -2730,12 +2730,14 @@ function Test-EtcWslConfAndPrompt {
         $sed = '/^\[network\]$/,/^\[/ s/^\(generateResolvConf\s*=\s*\)false/\1true/'
 
         if ($AutoFix) {
+            Write-Debug "$(_@) Autofixing generateResolvConf in /etc/wsl.conf"
             wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
         }
         else {
             $promptParams.Title = "Setting 'generateResolvConf' is disabled in /etc/wsl.conf!"
             switch (PromptForChoice @promptParams) {
                 0 {
+                    Write-Debug "$(_@) User confirmed to fix generateResolvConf in /etc/wsl.conf"
                     wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
                 }
                 1 {
@@ -2749,6 +2751,7 @@ function Test-EtcWslConfAndPrompt {
         $sed = '/^\[automount\]$/,/^\[/ s/^\(enabled\s*=\s*\)false/\1true/'
 
         if ($AutoFix) {
+            Write-Debug "$(_@) Autofixing automount in /etc/wsl.conf"
             wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
         }
         else {
@@ -2756,6 +2759,7 @@ function Test-EtcWslConfAndPrompt {
 
             switch (PromptForChoice @promptParams) {
                 0 {
+                    Write-Debug "$(_@) User confirmed to fix automount in /etc/wsl.conf"
                     wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
                 }
                 1 {
@@ -2769,6 +2773,7 @@ function Test-EtcWslConfAndPrompt {
         $sed = '/^\[interop\]$/,/^\[/ s/^\(enabled\s*=\s*\)false/\1true/'
 
         if ($AutoFix) {
+            Write-Debug "$(_@) Autofixing interop in /etc/wsl.conf"
             wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
         }
         else {
@@ -2776,6 +2781,7 @@ function Test-EtcWslConfAndPrompt {
 
             switch (PromptForChoice @promptParams) {
                 0 {
+                    Write-Debug "$(_@) User confirmed to fix interop in /etc/wsl.conf"
                     wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
                     $instanceStatus.InteropEnabled = $true
                 }
@@ -2790,6 +2796,7 @@ function Test-EtcWslConfAndPrompt {
         $sed = '/^\[interop\]$/,/^\[/ s/^\(appendWindowsPath\s*=\s*\)false/\1true/'
 
         if ($AutoFix) {
+            Write-Debug "$(_@) Autofixing appendWindowsPath in /etc/wsl.conf"
             wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
         }
         else {
@@ -2797,6 +2804,7 @@ function Test-EtcWslConfAndPrompt {
 
             switch (PromptForChoice @promptParams) {
                 0 {
+                    Write-Debug "$(_@) User confirmed to fix appendWindowsPath in /etc/wsl.conf"
                     wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
                 }
                 1 {
