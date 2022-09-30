@@ -2054,15 +2054,19 @@ function Get-WslInstanceStatus {
         Write-Debug "$(_@) wslConf:`n$($wslConfData | Out-String)"
 
         $generateResolvConf = $wslConfData['network']?['generateResolvConf']
+        Write-Debug "$(_@) `$generateResolvConf: $generateResolvConf"
         $status.GenerateResolvConf = $null -eq $generateResolvConf -or $generateResolvConf -eq 'true'
 
         $interopEnabled = $wslConfData['interop']?['enabled']
+        Write-Debug "$(_@) `$interopEnabled: $interopEnabled"
         $status.InteropEnabled = $null -eq $interopEnabled -or $interopEnabled -eq 'true'
 
         $appendWindowsPath = $wslConfData['interop']?['appendWindowsPath']
+        Write-Debug "$(_@) `$appendWindowsPath: $appendWindowsPath"
         $status.AppendWindowsPath = $null -eq $appendWindowsPath -or $appendWindowsPath -eq 'true'
 
         $automountEnabled = $wslConfData['automount']?['enabled']
+        Write-Debug "$(_@) `$automountEnabled: $automountEnabled"
         $status.AutomountEnabled = $null -eq $automountEnabled -or $automountEnabled -eq 'true'
     }
 
@@ -2116,6 +2120,7 @@ function Get-WslInstanceStatus {
     }
 
     if (-not $isRunningOnStart) { wsl.exe -t $WslInstanceName }
+    Write-Debug "$(_@) `$status: $status"
     $status
 }
 
@@ -2688,6 +2693,9 @@ function Test-EtcWslConfAndPrompt {
         [switch]$AutoFix
     )
     $instanceStatus = Get-WslInstanceStatus -WslInstanceName $WslInstanceName -WslConf
+
+    Write-Debug "$(_@) `$instanceStatus: $($instanceStatus | Out-String)"
+
     $promptParams = @{
         Text         = 'This setting must be enabled for Wsl-IpHandler to work. Please confirm if you want to continue:'
         FirstOption  = 'Fix'
