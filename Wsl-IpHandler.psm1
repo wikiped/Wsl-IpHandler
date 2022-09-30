@@ -281,7 +281,7 @@ function Install-WslIpHandler {
 
     #region Restart WSL Instance
     Write-Verbose "Terminating running instances of $WslInstanceName ..."
-    wsl.exe -t $WslInstanceName
+    wsl.exe -t $WslInstanceName | Out-Null
     #endregion Restart WSL Instance
 
     #region Test IP and host Assignments
@@ -297,7 +297,7 @@ function Install-WslIpHandler {
     }
     finally {
         Write-Verbose 'Finished Testing Activation of WSL IP Handler.'
-        wsl.exe -t $WslInstanceName
+        wsl.exe -t $WslInstanceName | Out-Null
     }
     #endregion Test IP and host Assignments
 
@@ -340,7 +340,7 @@ function Uninstall-WslIpHandler {
     #endregion Bash Scripts UnInstallation
 
     #region Restart WSL Instance
-    wsl.exe -t $WslInstanceName
+    wsl.exe -t $WslInstanceName | Out-Null
     Write-Debug "$(_@) Restarted $WslInstanceName"
     #endregion Restart WSL Instance
 
@@ -2138,7 +2138,7 @@ function Get-WslInstanceStatus {
         else { $status.ModuleSudoers = $false }
     }
 
-    if (-not $isRunningOnStart) { wsl.exe -t $WslInstanceName }
+    if (-not $isRunningOnStart) { wsl.exe -t $WslInstanceName | Out-Null }
     Write-Debug "$(_@) `$status: $status"
     $status
 }
@@ -2716,6 +2716,7 @@ function Test-EtcWslConfAndPrompt {
     $instanceStatus = Get-WslInstanceStatus -WslInstanceName $WslInstanceName -WslConf
 
     Write-Debug "$(_@) `$instanceStatus:$($instanceStatus | Out-String)"
+    Write-Debug "$(_@) Type of `$instanceStatus: $($instanceStatus.GetType())"
 
     $promptParams = @{
         Text         = 'This setting must be enabled for Wsl-IpHandler to work. Please confirm if you want to continue:'
