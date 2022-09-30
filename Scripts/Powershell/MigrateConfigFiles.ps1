@@ -163,7 +163,7 @@ function Invoke-MigrateWslInstanceConfig {
                 }
             }
         }
-        finally { if (-not $wslInstanceWasRunning) { wsl.exe -t $_ } }
+        finally { if (-not $wslInstanceWasRunning) { wsl.exe -t $_ | Out-Null } }
     }
     Write-Verbose "Finished migrating config file at WSL Instance: $WslInstanceName ..."
 }

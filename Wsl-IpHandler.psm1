@@ -281,7 +281,7 @@ function Install-WslIpHandler {
 
     #region Restart WSL Instance
     Write-Verbose "Terminating running instances of $WslInstanceName ..."
-    wsl.exe -t $WslInstanceName
+    wsl.exe -t $WslInstanceName | Out-Null
     #endregion Restart WSL Instance
 
     #region Test IP and host Assignments
@@ -297,7 +297,7 @@ function Install-WslIpHandler {
     }
     finally {
         Write-Verbose 'Finished Testing Activation of WSL IP Handler.'
-        wsl.exe -t $WslInstanceName
+        wsl.exe -t $WslInstanceName | Out-Null
     }
     #endregion Test IP and host Assignments
 
@@ -340,7 +340,7 @@ function Uninstall-WslIpHandler {
     #endregion Bash Scripts UnInstallation
 
     #region Restart WSL Instance
-    wsl.exe -t $WslInstanceName
+    wsl.exe -t $WslInstanceName | Out-Null
     Write-Debug "$(_@) Restarted $WslInstanceName"
     #endregion Restart WSL Instance
 
@@ -2024,6 +2024,8 @@ function Get-WslInstanceStatus {
         [Parameter(ParameterSetName = 'All')]
         [switch]$All
     )
+    Write-Debug "$(_@) BoundParameters:$($PSBoundParameters | Out-String)"
+
     $status = [PSCustomObject][ordered]@{
         WslInstanceName    = $WslInstanceName
         ModuleConfigFile   = $null
@@ -2039,7 +2041,10 @@ function Get-WslInstanceStatus {
         AppendWindowsPath  = $null
         PSTypeName         = 'WslInstanceStatus'
     }
+    Write-Debug "$(_@) `$status: $status"
+
     $isRunningOnStart = Test-WslInstanceIsRunning $WslInstanceName
+    Write-Debug "$(_@) `$isRunningOnStart: $isRunningOnStart"
 
     if ($PSCmdlet.ParameterSetName -eq 'All') {
         $WslIpHandlerConf = $true
@@ -2054,39 +2059,53 @@ function Get-WslInstanceStatus {
         Write-Debug "$(_@) wslConf:`n$($wslConfData | Out-String)"
 
         $generateResolvConf = $wslConfData['network']?['generateResolvConf']
+        Write-Debug "$(_@) `$generateResolvConf: $generateResolvConf"
         $status.GenerateResolvConf = $null -eq $generateResolvConf -or $generateResolvConf -eq 'true'
 
         $interopEnabled = $wslConfData['interop']?['enabled']
+        Write-Debug "$(_@) `$interopEnabled: $interopEnabled"
         $status.InteropEnabled = $null -eq $interopEnabled -or $interopEnabled -eq 'true'
 
         $appendWindowsPath = $wslConfData['interop']?['appendWindowsPath']
+        Write-Debug "$(_@) `$appendWindowsPath: $appendWindowsPath"
         $status.AppendWindowsPath = $null -eq $appendWindowsPath -or $appendWindowsPath -eq 'true'
 
         $automountEnabled = $wslConfData['automount']?['enabled']
+        Write-Debug "$(_@) `$automountEnabled: $automountEnabled"
         $status.AutomountEnabled = $null -eq $automountEnabled -or $automountEnabled -eq 'true'
     }
 
     if ($ModuleConf) {
         $moduleConfPath = Get-BashConfigFilePath -ConfigType 'WslIpHandler'
+        Write-Debug "$(_@) `$moduleConfPath: $moduleConfPath"
 
         $moduleConfExists = (wsl.exe -d $WslInstanceName -- test -f $moduleConfPath && Write-Output 1 || Write-Output 0) -eq 1
+        Write-Debug "$(_@) `$moduleConfExists: $moduleConfExists"
 
         if ($moduleConfExists) {
             $status.ModuleConfigFile = $moduleConfPath
 
             $moduleConfData = wsl.exe -d $WslInstanceName cat "$moduleConfPath" | ConvertFrom-IniContent
-            Write-Debug "$(_@) wslConf:`n$($moduleConfData | Out-String)"
+            Write-Debug "$(_@) moduleConfData:$($moduleConfData | Out-String)"
 
             $staticIp = $moduleConfData['_']?['static_ip']
+            Write-Debug "$(_@) `$staticIp: $staticIp"
+
             if ($staticIp) { $status.StaticIp = $staticIp }
 
             $dynamicIp = $moduleConfData['_']?['ip_offset']
+            Write-Debug "$(_@) `$dynamicIp: $dynamicIp"
+
             if ($dynamicIp) { $status.DynamicIp = $true }  #  else { $status.DynamicIp = $false }
 
             $wslHostName = $moduleConfData['_']?['wsl_host']
+            Write-Debug "$(_@) `$wslHostName: $wslHostName"
+
             if ($wslHostName) { $status.WslHostName = $wslHostName }
 
             $windowsHostName = $moduleConfData['_']?['windows_host']
+            Write-Debug "$(_@) `$windowsHostName: $windowsHostName"
+
             if ($windowsHostName) { $status.WindowsHostName = $windowsHostName }
         }
 
@@ -2105,17 +2124,22 @@ function Get-WslInstanceStatus {
 
     if ($ModuleScript) {
         $moduleScriptExists = wsl.exe -d $WslInstanceName test -f '/usr/local/bin/wsl-iphandler.sh' && 1 || 0
+        Write-Debug "$(_@) `$moduleScriptExists: $moduleScriptExists"
+
         if ($moduleScriptExists -eq '1') { $status.ModuleScript = $true }
         else { $status.ModuleScript = $false }
     }
 
     if ($ModuleSudoers) {
         $moduleSudoersExists = wsl.exe -d $WslInstanceName test -f '/etc/sudoers.d/wsl-iphandler' && 1 || 0
+        Write-Debug "$(_@) `$moduleSudoersExists: $moduleSudoersExists"
+
         if ($moduleSudoersExists -eq '1') { $status.ModuleSudoers = $true }
         else { $status.ModuleSudoers = $false }
     }
 
-    if (-not $isRunningOnStart) { wsl.exe -t $WslInstanceName }
+    if (-not $isRunningOnStart) { wsl.exe -t $WslInstanceName | Out-Null }
+    Write-Debug "$(_@) `$status: $status"
     $status
 }
 
@@ -2687,7 +2711,13 @@ function Test-EtcWslConfAndPrompt {
         [Parameter()]
         [switch]$AutoFix
     )
+    Write-Debug "$(_@) BoundParameters:$($PSBoundParameters | Out-String)"
+
     $instanceStatus = Get-WslInstanceStatus -WslInstanceName $WslInstanceName -WslConf
+
+    Write-Debug "$(_@) `$instanceStatus:$($instanceStatus | Out-String)"
+    Write-Debug "$(_@) Type of `$instanceStatus: $($instanceStatus.GetType())"
+
     $promptParams = @{
         Text         = 'This setting must be enabled for Wsl-IpHandler to work. Please confirm if you want to continue:'
         FirstOption  = 'Fix'
@@ -2701,12 +2731,14 @@ function Test-EtcWslConfAndPrompt {
         $sed = '/^\[network\]$/,/^\[/ s/^\(generateResolvConf\s*=\s*\)false/\1true/'
 
         if ($AutoFix) {
+            Write-Debug "$(_@) Autofixing generateResolvConf in /etc/wsl.conf"
             wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
         }
         else {
             $promptParams.Title = "Setting 'generateResolvConf' is disabled in /etc/wsl.conf!"
             switch (PromptForChoice @promptParams) {
                 0 {
+                    Write-Debug "$(_@) User confirmed to fix generateResolvConf in /etc/wsl.conf"
                     wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
                 }
                 1 {
@@ -2720,6 +2752,7 @@ function Test-EtcWslConfAndPrompt {
         $sed = '/^\[automount\]$/,/^\[/ s/^\(enabled\s*=\s*\)false/\1true/'
 
         if ($AutoFix) {
+            Write-Debug "$(_@) Autofixing automount in /etc/wsl.conf"
             wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
         }
         else {
@@ -2727,6 +2760,7 @@ function Test-EtcWslConfAndPrompt {
 
             switch (PromptForChoice @promptParams) {
                 0 {
+                    Write-Debug "$(_@) User confirmed to fix automount in /etc/wsl.conf"
                     wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
                 }
                 1 {
@@ -2740,6 +2774,7 @@ function Test-EtcWslConfAndPrompt {
         $sed = '/^\[interop\]$/,/^\[/ s/^\(enabled\s*=\s*\)false/\1true/'
 
         if ($AutoFix) {
+            Write-Debug "$(_@) Autofixing interop in /etc/wsl.conf"
             wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
         }
         else {
@@ -2747,6 +2782,7 @@ function Test-EtcWslConfAndPrompt {
 
             switch (PromptForChoice @promptParams) {
                 0 {
+                    Write-Debug "$(_@) User confirmed to fix interop in /etc/wsl.conf"
                     wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
                     $instanceStatus.InteropEnabled = $true
                 }
@@ -2761,6 +2797,7 @@ function Test-EtcWslConfAndPrompt {
         $sed = '/^\[interop\]$/,/^\[/ s/^\(appendWindowsPath\s*=\s*\)false/\1true/'
 
         if ($AutoFix) {
+            Write-Debug "$(_@) Autofixing appendWindowsPath in /etc/wsl.conf"
             wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
         }
         else {
@@ -2768,6 +2805,7 @@ function Test-EtcWslConfAndPrompt {
 
             switch (PromptForChoice @promptParams) {
                 0 {
+                    Write-Debug "$(_@) User confirmed to fix appendWindowsPath in /etc/wsl.conf"
                     wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
                 }
                 1 {
@@ -2776,6 +2814,7 @@ function Test-EtcWslConfAndPrompt {
             }
         }
     }
+    Write-Debug "$(_@) Completed"
 }
 
 function Test-NtfsCompressionEnabled {
