@@ -2184,7 +2184,7 @@ function Update-WslIpHandlerModule {
     Adding -GitExePath parameter will allow to use git.exe that is not on PATH.
     All files in this Module's folder will be removed before update!
     #>
-    [CmdletBinding(DefaultParameterSetName = 'Git')]
+    [CmdletBinding(DefaultParameterSetName = 'Git', SupportsShouldProcess)]
     param(
         [Parameter(ParameterSetName = 'Git', Position = 0)]
         [ValidateScript({ Test-Path $_ -PathType Leaf -Include 'git.exe' })]
@@ -2206,6 +2206,8 @@ function Update-WslIpHandlerModule {
         [Parameter()]
         [object]$PostUpdateCommand = "$PSScriptRoot\PostUpdateScript.ps1"
     )
+    Write-Debug "$(_@) BoundParameters:$($PSBoundParameters | Out-String)"
+
     $moduleName = $MyInvocation.MyCommand.ModuleName
     $modulePath = $MyInvocation.MyCommand.Module.ModuleBase
 
@@ -2225,18 +2227,21 @@ function Update-WslIpHandlerModule {
     Write-Debug "$(_@) `$updaterModulePath: $updaterModulePath"
     Import-Module $updaterModulePath -Force -Verbose:$false -Debug:$false
 
-    $commonParameters = @{ ErrorAction = 'SilentlyContinue' }
+    $commonParameters = @{ ErrorAction = 'SilentlyContinue'; WhatIf = $WhatIfPreference }
     if ($VerbosePreference -eq 'Continue') { $commonParameters.Verbose = $true }
     if ($DebugPreference -eq 'Continue') { $commonParameters.Debug = $true }
 
     Write-Debug "$(_@) Update-ModuleFromGithub $(& {$args} @params) $(& {$args} @commonParameters)"
+
     $result = Update-ModuleFromGithub @params @commonParameters
 
-    switch ($result.Status) {
-        'Updated' { return }
-        'UpToDate' { return }
-        'Error' { Write-Error -ErrorRecord $result.Error }
-        Default { Write-Error "Unknown Error occurred while updating '$moduleName'!" }
+    if ($PSCmdlet.ShouldProcess('Write Errors of Update-WslIpHandlerModule', 'Errors', 'Write')) {
+        switch -wildcard ($result.Status) {
+            '*Updated' { return }
+            'UpToDate' { return }
+            'Error' { Write-Error -ErrorRecord $result.Error }
+            Default { Write-Error "Unknown Error occurred while updating '$moduleName'!" }
+        }
     }
 }
 
@@ -2952,12 +2957,11 @@ if (Test-Path $modulesUpdaterPath -PathType Leaf) {
     $moduleName = Split-Path $PSScriptRoot -LeafBase
     Import-Module $modulesUpdaterPath -Verbose:$false -Debug:$false
 
-    Write-Verbose "Checking if there is a new version of '$moduleName' available..."
+    Write-Information "Checking if there is a new version of '$moduleName' available..."
     try {
         $versions = Get-ModuleVersions -ModuleNameOrPath $PSScriptRoot -TimeoutSec 5 -ErrorAction Ignore
         if ($versions.LocalVersion -lt $versions.RemoteVersion) {
-            $msg = "New version of '$moduleName' is available. Command to update:`n"
-            $msg += 'Update-WslIpHandlerModule'
+            $msg = "There is new version of '{0}': {1}. Installed: {2}. Command to update:`n{3}" -f $moduleName, $versions.RemoteVersion, $versions.LocalVersion, 'Update-WslIpHandlerModule'
             Write-Warning $msg
             Remove-Variable msg
         }
@@ -2966,7 +2970,7 @@ if (Test-Path $modulesUpdaterPath -PathType Leaf) {
         Remove-Module (Split-Path $modulesUpdaterPath -LeafBase) -Force -ErrorAction Ignore
     }
     catch {
-        Write-Debug "$(_@) $($_.Exception.Message)" -ErrorAction 'Continue'
+        Write-Error "$(_@) $($_.Exception.Message)" -ErrorAction 'Continue'
     }
 }
 Remove-Variable modulesUpdaterPath

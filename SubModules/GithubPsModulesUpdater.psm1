@@ -102,7 +102,7 @@ function Get-PsdUri {
     "https://raw.githubusercontent.com/${GithubUserName}/${RepoName}/${Branch}/${RepoName}.psd1"
 }
 
-function Test-UriIsAccessible {
+function Assert-UriIsAccessible {
     param(
         [Parameter(Mandatory)][ValidateNotNullOrEmpty()]
         [uri]$Uri
@@ -128,7 +128,7 @@ function Get-FileContentFromGithub {
         [Parameter()]
         [int]$TimeoutSec = 10
     )
-    Test-UriIsAccessible $Uri
+    Assert-UriIsAccessible $Uri
 
     try {
         $webResponse = Invoke-WebRequest -Uri $Uri -TimeoutSec $TimeoutSec -ErrorAction Stop
@@ -245,10 +245,17 @@ function Test-DirectoryIsGitRepository {
         [Alias('Git')]
         [string]$GitExePath
     )
-    (. $GitExePath rev-parse --is-inside-work-tree 2>$null) -eq 'true'
+    Push-Location -LiteralPath $Path
+    try {
+        (. $GitExePath rev-parse --is-inside-work-tree 2>$null) -eq 'true'
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 function Update-WithGit {
+    [CmdletBinding(SupportsShouldProcess)]
     param (
         [Parameter(Mandatory)]
         [ValidateScript({ Test-Path $_ -PathType Container })]
@@ -276,29 +283,60 @@ function Update-WithGit {
 
     $isRepoDirectory = Test-DirectoryIsGitRepository -Path $ModuleFolderPath -GitExePath $GitExePath
 
-    $currentBranch = . $GitExePath symbolic-ref --short HEAD 2>$null  # v2.22+ (. $GitExePath branch --show-current)
-
     Push-Location $ModuleFolderPath
 
+    $currentBranch = . $GitExePath symbolic-ref --short HEAD 2>$null  # v2.22+ (. $GitExePath branch --show-current)
+
     if ($isRepoDirectory -and $Branch -eq $currentBranch) {
-        . $GitExePath pull origin $Branch | Out-Null
+        $result = ''
+
+        if ($PSCmdlet.ShouldProcess($Branch, "$GitExePath pull origin")) {
+            $result = . $GitExePath pull origin $Branch 2>&1
+        }
+
         Pop-Location
+
+        if ($result) {
+            if ("$result".StartsWith('fatal:')) {
+                Write-Error "Command failed: $GitExePath pull origin $Branch" -ea Continue
+                Write-Error "With error:`n$result" -ErrorAction Stop
+            }
+            else {
+                Write-Verbose "$result"
+            }
+        }
         return
     }
 
     if ($PSCmdlet.ParameterSetName -eq 'Clone') {
         $RepoUri = Get-RepoUri -RepoName $RepoName -GithubUserName $GithubUserName
 
-        Test-UriIsAccessible $RepoUri
+        Assert-UriIsAccessible $RepoUri
 
         Push-Location ..
 
-        Remove-Item (Join-Path $ModuleFolderPath '*') -Recurse -Force
+        if ($PSCmdlet.ShouldProcess("$(Join-Path $ModuleFolderPath '*')", 'Remove-Item -Recurse -Force')) {
+            Remove-Item (Join-Path $ModuleFolderPath '*') -Recurse -Force -Confirm:$false
+        }
 
-        . $GitExePath clone --branch $Branch "`"$RepoUri`"" | Out-Null
+        $result = ''
+
+        if ($PSCmdlet.ShouldProcess($RepoUri, "$GitExePath clone --branch $Branch")) {
+            $result = . $GitExePath clone --branch $Branch $RepoUri 2>&1
+        }
 
         Pop-Location
         Pop-Location
+
+        if ($result) {
+            if ("$result".StartsWith('fatal:')) {
+                Write-Error "Command failed: $GitExePath clone --branch $Branch $RepoUri" -ea Continue
+                Write-Error "With error:`n$result" -ErrorAction Stop
+            }
+            else {
+                Write-Verbose "$result"
+            }
+        }
     }
     else {
         Pop-Location
@@ -307,6 +345,7 @@ function Update-WithGit {
 }
 
 function Update-WithWebRequest {
+    [CmdletBinding(SupportsShouldProcess)]
     param (
         [Parameter(Mandatory)][ValidateNotNull()]
         [uri]$Uri,
@@ -335,16 +374,24 @@ function Update-WithWebRequest {
     }
 
     Write-Debug "$(_@) Expand-Archive -Path $outputPath -DestinationPath $outputDir"
-    Expand-Archive -Path $outputPath -DestinationPath $outputDir
+    if ($PSCmdlet.ShouldProcess("$outputPath to: $outputDir", 'Expand-Archive')) {
+        Expand-Archive -Path $outputPath -DestinationPath $outputDir
+    }
 
     $expandedDirectory = $outputDir.GetDirectories() | Select-Object -First 1 -ExpandProperty FullName
     Write-Debug "$(_@) Remove-Item -Path $(Join-Path $ModuleFolderPath '*') -Recurse -Force"
-    Remove-Item -Path (Join-Path $ModuleFolderPath '*') -Recurse -Force
+    if ($PSCmdlet.ShouldProcess("$(Join-Path $ModuleFolderPath '*')", 'Remove-Item -Recurse -Force')) {
+        Remove-Item -Path (Join-Path $ModuleFolderPath '*') -Recurse -Force -Confirm:$false
+    }
 
     Write-Debug "$(_@) Move-Item -Path $(Join-Path $expandedDirectory '*') -Destination $ModuleFolderPath -Force"
-    Move-Item -Path (Join-Path $expandedDirectory '*') -Destination $ModuleFolderPath -Force
+    if ($PSCmdlet.ShouldProcess("$(Join-Path $expandedDirectory '*') to '$ModuleFolderPath'", 'Move-Item -Force')) {
+        Move-Item -Path (Join-Path $expandedDirectory '*') -Destination $ModuleFolderPath -Force
+    }
 
-    Remove-Item -Path $outputDir -Recurse -Force
+    if ($PSCmdlet.ShouldProcess("$outputDir", 'Remove-Item -Recurse -Force')) {
+        Remove-Item -LiteralPath $outputDir -Recurse -Force
+    }
 }
 
 function Get-ModuleVersions {
@@ -594,7 +641,7 @@ function Update-ModuleFromGithub {
     Adding -GitExePath parameter will allow to use git.exe that is not on PATH.
     All files in this Module's folder will be removed before update!
     #>
-    [CmdletBinding(DefaultParameterSetName = 'Git')]
+    [CmdletBinding(DefaultParameterSetName = 'Git', SupportsShouldProcess)]
     param(
         [Parameter(Mandatory, Position = 0)]
         [ValidateNotNullOrEmpty()]
@@ -672,14 +719,14 @@ function Update-ModuleFromGithub {
     try {
         if ($updateIsNeeded) {
             $moduleToImport = Get-ModuleQualifiedName -ModuleInfo $moduleInfo
-            $params = @{ ModuleFolderPath = $moduleInfo.ModuleBase }
+            $params = @{ ModuleFolderPath = $moduleInfo.ModuleBase; WhatIf = $WhatIfPreference }
             if ($NoGit) {
                 $result.Method = 'http'
                 $params.Uri = Get-ZipUri -RepoName $moduleInfo.Name -GithubUserName $GithubUserName -Branch $Branch
                 Write-Debug "$(_@) Invoking Update-WithWebRequest with parameters: $($params | Out-String)"
                 Write-Verbose 'Updating via HTTP protocol...'
 
-                Test-UriIsAccessible $params.Uri
+                Assert-UriIsAccessible $params.Uri
 
                 Update-WithWebRequest @params | Out-Null
             }
@@ -694,14 +741,18 @@ function Update-ModuleFromGithub {
 
                 Update-WithGit -Branch $Branch @params | Out-Null
             }
-            $result.Status = 'Updated'
 
-            Invoke-PostUpdateCommand -ModuleBase $moduleInfo.ModuleBase -VersionBefore $versions.LocalVersion -VersionAfter $versions.RemoteVersion -PostUpdateCommand $PostUpdateCommand
-
-            # Attempting to Import-Module ... -Force here will fail.
-            # The user has to Import-Module ... -Force manually!
-            Write-Information "$($moduleInfo.Name) was successfully updated from version: $($moduleInfo.Version) to: $($versions.RemoteVersion)!"
-            Write-Warning "To use updated version of $($moduleInfo.Name) in current session execute:`nImport-Module $moduleToImport -Force"
+            if ($PSCmdlet.ShouldProcess($moduleInfo.ModuleBase, "Invoke-PostUpdateCommand -PostUpdateCommand $PostUpdateCommand")) {
+                $result.Status = 'Updated'
+                Invoke-PostUpdateCommand -ModuleBase $moduleInfo.ModuleBase -VersionBefore $versions.LocalVersion -VersionAfter $versions.RemoteVersion -PostUpdateCommand $PostUpdateCommand
+                # Attempting to Import-Module ... -Force here will fail.
+                # The user has to Import-Module ... -Force manually!
+                Write-Information "$($moduleInfo.Name) was successfully updated from version: $($moduleInfo.Version) to: $($versions.RemoteVersion)!"
+                Write-Warning "To use updated version of $($moduleInfo.Name) in current session execute:`nImport-Module $moduleToImport -Force"
+            }
+            else {
+                $result.Status = 'What if: Updated'
+            }
         }
         else {
             $result.Status = 'UpToDate'
