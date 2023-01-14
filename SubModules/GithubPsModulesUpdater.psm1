@@ -299,10 +299,10 @@ function Update-WithGit {
         if ($result) {
             if ("$result".StartsWith('fatal:')) {
                 Write-Error "Command failed: $GitExePath pull origin $Branch" -ea Continue
-                Write-Error "With error:`n$result" -ErrorAction Stop
+                Write-Error "With error:`n$($result | Out-String)" -ErrorAction Stop
             }
             else {
-                Write-Verbose "$result"
+                Write-Verbose "$($result | Out-String)"
             }
         }
         return
@@ -331,10 +331,10 @@ function Update-WithGit {
         if ($result) {
             if ("$result".StartsWith('fatal:')) {
                 Write-Error "Command failed: $GitExePath clone --branch $Branch $RepoUri" -ea Continue
-                Write-Error "With error:`n$result" -ErrorAction Stop
+                Write-Error "With error:`n$($result | Out-String)" -ErrorAction Stop
             }
             else {
-                Write-Verbose "$result"
+                Write-Verbose "$($result | Out-String)"
             }
         }
     }
