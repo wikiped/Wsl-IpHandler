@@ -141,22 +141,22 @@ function Invoke-MigrateWslInstanceConfig {
     $WslInstanceName | ForEach-Object {
         try {
             $wslInstanceWasRunning = Test-WslInstanceIsRunning $_
-            $modConfExists = (wsl.exe -d $_ test -f $modConf && 1) -eq 1
+            $modConfExists = (wsl.exe -d $_ -e test -f $modConf && 1) -eq 1
             Write-Debug "Module Config '$modConf' exists: $modConfExists"
             if (-not $modConfExists) {
-                Write-Debug "$wslConf before:`n$(wsl.exe -d $_ cat $wslConf)"
+                Write-Debug "$wslConf before:`n$(wsl.exe -d $_ -e cat $wslConf)"
                 foreach ($option in @('static_ip', 'ip_offset', 'windows_host', 'wsl_host')) {
                     Write-Debug "Migrating option: $option"
-                    $line = wsl.exe -d $_ grep -P "^${option}\\s*=.*$" $wslConf
+                    $line = wsl.exe -d $_ -e grep -P "^${option}\\s*=.*$" $wslConf
                     if ($line) {
                         Write-Debug "Line with ${option}: '$line'"
-                        wsl.exe -d $_ echo $line `>> $modConf
-                        wsl.exe -d $_ sed -i "/${line}/d" $wslConf
+                        wsl.exe -d $_ -e echo $line `>> $modConf
+                        wsl.exe -d $_ -e sed -i "/${line}/d" $wslConf
                     }
                 }
-                Write-Debug "$wslConf after:`n$(wsl.exe -d $_ cat $wslConf)"
-                if ((wsl.exe -d $_ test -f $modConf && 1) -eq 1) {
-                    Write-Debug "$modConf after:`n$(wsl.exe -d $_ cat $modConf)"
+                Write-Debug "$wslConf after:`n$(wsl.exe -d $_ -e cat $wslConf)"
+                if ((wsl.exe -d $_ -e test -f $modConf && 1) -eq 1) {
+                    Write-Debug "$modConf after:`n$(wsl.exe -d $_ -e cat $modConf)"
                 }
                 else {
                     Write-Error "Error migrating config file: '$modConf' - file was not created."

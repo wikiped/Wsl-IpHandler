@@ -9,6 +9,8 @@
 
 [Overview](#overview)
 
+[Prerequisites](#prerequisites)
+
 [How to get this module?](#how-to-get-this-module)
 
 [Where the module is installed?](#where-the-module-is-installed)
@@ -81,21 +83,32 @@ In other words what WSL should have been doing out-of-the-box.
 
 ---
 
-## How to get this module
+## Prerequisites
 
-### Prerequisites
+1. Windows 10.
+
+    > Please be aware that the module is not being tested to work on Windows 11. Which does not mean it will not work, but since Windows 11 introduced new WSL features this might affect how the module operates.
 
 1. PowerShell 7.1+.
 
     [How to install Powershell Core.](https://docs.microsoft.com/en-us/powershell/scripting/install/installing-powershell-on-windows?view=powershell-7.1)
 
-1. [WSL 2](https://github.com/microsoft/WSL) (This module has not been tested with WSL 1)
+1. [WSL 2](https://github.com/microsoft/WSL) enabled / installed.
+
+    > This module is not being tested to work with WSL 1
 
 1. Administrative access on the windows machine, where the module will be used.
 
 1. Ubuntu or Fedora family OS as WSL instance.
 
+    > Other versions might work, but the module is being tested only with the above two.
+
 1. Unicode UTF-8 support [enabled](#how-to-enable-unicode-utf-8-support-on-windows) in Windows Settings.
+
+---
+
+## How to get this module
+
 
 To download and copy the module to Modules folder of Powershell profile for Current User run the following commands from Powershell prompt:
 
@@ -134,7 +147,7 @@ Rename-Item -Path 'Wsl-IpHandler-master' -NewName 'Wsl-IpHandler'
 
 After executing above commands in [How to get this module](#how-to-get-this-module) the module is installed in a Powershell profile directory for the current user.
 
-Run `Split-Path $Profile` to see location of this profile directory.
+Run `Split-Path $Profile` to see location of the profile directory.
 
 When `Import-Module SomeModule` command is executed, Powershell looks for `SomeModule` in this directory (among others).
 
@@ -275,7 +288,7 @@ In all other cases when `wsl` is executed to open a terminal (i.e. interactive s
 > A workaround to ensure execution of profile script in non-interactive Bash session is to run command like this (from Powershell):
 
 ```powershell
-wsl.exe env BASH_ENV=/etc/profile bash -c `"ping windows.host`"
+wsl.exe -e env BASH_ENV=/etc/profile bash -c 'ping windows.host'
 ```
 
 ---

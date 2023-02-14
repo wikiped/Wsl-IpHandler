@@ -24,13 +24,22 @@ echo_verbose "Bash Installing Wsl-IpHandler..."
 
 # Prcess Incoming Arguments
 echo_debug "Starting '$0' with User ID: $EUID" ${LINENO}
-echo_debug "$0 Processing Incoming Arguments:" ${LINENO}
+echo_debug "Incoming Arguments:" ${LINENO}
 echo_debug "$*" ${LINENO}
 echo_debug "Current Directory: '$(pwd)'" ${LINENO}
 echo_debug "DEBUG=${DEBUG:-}" ${LINENO}
 echo_debug "VERBOSE=${VERBOSE:-}" ${LINENO}
+echo_debug "arg1=${1}" ${LINENO}
+echo_debug "arg2=${2}" ${LINENO}
+echo_debug "arg3=${3}" ${LINENO}
+echo_debug "arg4=${4}" ${LINENO}
+echo_debug "arg5=${5}" ${LINENO}
+echo_debug "arg6=${6}" ${LINENO}
+echo_debug "arg7=${7}" ${LINENO}
 
-script_source="$(wslpath "$1" 2>/dev/null)"
+script_source=$(wslpath -u "$1" 2>/dev/null)
+echo_debug "script_source:               $script_source" ${LINENO}
+
 test -f "${script_source}" || error ${LINENO} "File Not Found: $script_source"
 
 readonly script_target="${2%/}/${script_source##*/}"  # Use file name only: ##*/ -> removes path
@@ -40,7 +49,6 @@ readonly windows_host=$5
 readonly wsl_host=$6
 readonly wsl_static_ip_or_offset=$7
 
-echo_debug "script_source:               $script_source" ${LINENO}
 echo_debug "script_target:               $script_target" ${LINENO}
 echo_debug "config:                      $config" ${LINENO}
 echo_debug "windows_host:                $windows_host" ${LINENO}

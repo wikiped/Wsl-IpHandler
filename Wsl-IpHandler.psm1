@@ -491,17 +491,17 @@ function Install-WslBashScripts {
     Write-Debug "$(_@) `$DebugPreference=$DebugPreference"
     Write-Debug "$(_@) `$VerbosePreference=$VerbosePreference"
 
-    $bashInstallScriptWslPath = '$(wslpath "' + "$BashInstallScript" + '")'
+    $bashInstallScriptWslPath = "`$(wslpath '$BashInstallScript')"
     $bashCommand = @(
         $bashInstallScriptWslPath
-        "`"$BashAutorunScriptSource`""
+        "'$BashAutorunScriptSource'"
         "$BashAutorunScriptTarget"
-        "`"$WinHostsEditScript`""
+        "'$WinHostsEditScript'"
         "$BashConfigPath"
         "$WindowsHostName"
         "$WslHostName"
         "$WslHostIpOrOffset"
-    )
+    ) -join ' '
 
     $envVars = @()
     if ($DebugPreference -gt 0) { $envVars += 'DEBUG=1' }
@@ -511,8 +511,8 @@ function Install-WslBashScripts {
     if ($BashVerbose) { $bashArgs += '--verbose' }
     if ($BashDebug) { $bashArgs += '--debug' }
 
-    Write-Debug "$(_@) Invoking: wsl.exe -d $WslInstanceName sudo -E env '`"PATH=`$PATH`"' $envVars bash $bashArgs $bashCommand"
-    $bashInstallScriptOutput = wsl.exe -d $WslInstanceName sudo -E env '"PATH=$PATH"' @envVars bash @bashArgs @bashCommand
+    Write-Debug "$(_@) Invoking: wsl.exe -d $WslInstanceName -e sudo -E env $envVars bash $bashArgs -c $bashCommand"
+    $bashInstallScriptOutput = wsl.exe -d $WslInstanceName -e sudo -E env @envVars bash @bashArgs -c $bashCommand
 
     if ($DebugPreference -gt 0 -or $VerbosePreference -gt 0) {
         Write-Host "$($bashInstallScriptOutput -join "`n")"
@@ -574,13 +574,13 @@ function Uninstall-WslBashScripts {
     Write-Debug "$(_@) `$DebugPreference=$DebugPreference"
     Write-Debug "$(_@) `$VerbosePreference=$VerbosePreference"
 
-    $bashUninstallScriptWslPath = '$(wslpath "' + "$BashUninstallScript" + '")'
+    $bashUninstallScriptWslPath = "`$(wslpath '$BashUninstallScript')"
     $bashCommand = @(
-        "$bashUninstallScriptWslPath"
-        "$BashAutorunScriptName"
-        "$BashAutorunScriptTarget"
-        "$BashConfigPath"
-    )
+        $bashUninstallScriptWslPath
+        $BashAutorunScriptName
+        $BashAutorunScriptTarget
+        $BashConfigPath
+    ) -join ' '
 
     $envVars = @()
     if ($DebugPreference -gt 0) { $envVars += 'DEBUG=1' }
@@ -590,8 +590,8 @@ function Uninstall-WslBashScripts {
     if ($BashVerbose) { $bashArgs += '--verbose' }
     if ($BashDebug) { $bashArgs += '--debug' }
 
-    Write-Debug "$(_@) Invoking: wsl.exe -d $WslInstanceName sudo -E env '`"PATH=`$PATH`"' $envVars bash $bashArgs $bashCommand"
-    $bashUninstallScriptOutput = wsl.exe -d $WslInstanceName sudo -E env '"PATH=$PATH"' @envVars bash @bashArgs @bashCommand
+    Write-Debug "$(_@) Invoking: wsl.exe -d $WslInstanceName -e sudo -E env $envVars bash $bashArgs -c $bashCommand"
+    $bashUninstallScriptOutput = wsl.exe -d $WslInstanceName -e sudo -E env @envVars bash @bashArgs -c $bashCommand
 
     if ($DebugPreference -gt 0 -or $VerbosePreference -gt 0) {
         Write-Host "$($bashUninstallScriptOutput -join "`n")"
@@ -683,7 +683,7 @@ function Update-WslBashScripts {
     #endregion WSL Autorun
 
     #region Bash Script WSL Paths
-    $BashUpdateScriptWslPath = '$(wslpath "' + "$BashUpdateScript" + '")'
+    $BashUpdateScriptWslPath = "`$(wslpath '$BashUpdateScript')"
     Write-Debug "$(_@) `$BashUpdateScriptWslPath='$BashUpdateScriptWslPath'"
     #endregion Bash Script WSL Paths
 
@@ -728,26 +728,27 @@ function Update-WslBashScripts {
         "$BashConfigPath"
     )
     $bashInstallArgs = @(
-        "`"$BashAutorunScriptSource`""
-        "$BashAutorunScriptTarget"
-        "`"$WinHostsEditScript`""
-        "$BashConfigPath"
-        "$WindowsHostName"
-        "$WslHostName"
-        "$WslHostIpOrOffset"
+        "'$BashAutorunScriptSource'"
+        "'$BashAutorunScriptTarget'"
+        "'$WinHostsEditScript'"
+        $BashConfigPath
+        $WindowsHostName
+        $WslHostName
+        $WslHostIpOrOffset
     )
 
     $bashCommand = @($BashUpdateScriptWslPath)
     $bashCommand = + $bashUninstallArgs
     $bashCommand = + $bashInstallArgs
+    $bashCommand = $bashCommand -join ' '
 
     $envVars = @()
     $bashArgs = @()
     if ($VerbosePreference -eq 'Continue') { $envVars += 'VERBOSE=1'; $bashArgs += '--verbose' }
     if ($DebugPreference -eq 'Continue') { $envVars += 'DEBUG=1'; $bashArgs += '--debug' }
 
-    Write-Debug "$(_@) Invoking: wsl.exe -d $WslInstanceName sudo -E env '`"PATH=``$PATH`"' $envVars bash $bashArgs $bashCommand"
-    $bashUpdateScriptOutput = wsl.exe -d $WslInstanceName sudo -E env '"PATH=$PATH"' @envVars bash @bashArgs @bashCommand
+    Write-Debug "$(_@) Invoking: wsl.exe -d $WslInstanceName -e sudo -E env $envVars bash $bashArgs -c $bashCommand"
+    $bashUpdateScriptOutput = wsl.exe -d $WslInstanceName -e sudo -E env @envVars bash @bashArgs -c $bashCommand
 
     if ($DebugPreference -gt 0 -or $VerbosePreference -gt 0) {
         Write-Host "$($bashUpdateScriptOutput -join "`n")"
@@ -1656,9 +1657,9 @@ function Test-WslInstallation {
 
     $error_message = @()
 
-    $bashTestCommand = "ping -c1 $WindowsHostName 1>/dev/null && echo 1"
-    Write-Verbose "Testing Ping from WSL instance ${WslInstanceName}: `"$bashTestCommand`" ..."
-    $wslTest = Invoke-WslExe -NoSwapCheck -d $WslInstanceName env BASH_ENV=/etc/profile bash -c `"$bashTestCommand`"
+    $bashTestCommand = 'ping -c1 ' + $WindowsHostName + ' 1>/dev/null && echo 1'
+    Write-Verbose "Testing Ping from WSL instance ${WslInstanceName}: '$bashTestCommand' ..."
+    $wslTest = Invoke-WslExe -NoSwapCheck -d $WslInstanceName -e env BASH_ENV=/etc/profile bash -c $bashTestCommand
 
     Write-Debug "$(_@) `$wslTest: $wslTest"
 
@@ -1672,7 +1673,7 @@ function Test-WslInstallation {
 
     Write-Debug "$(_@) Starting WSL instance $WslInstanceName for testing ping from Windows."
     $runCommand = 'sleep 60; exit'
-    $wslJob = Invoke-WslExe -NoSwapCheck -d $WslInstanceName env BASH_ENV=/etc/profile bash -c "`"$runCommand`"" &
+    $wslJob = Invoke-WslExe -NoSwapCheck -d $WslInstanceName -e env BASH_ENV=/etc/profile bash -c $runCommand &
     Start-Sleep -Seconds 7  # let WSL startup before pinging
 
     Write-Verbose "Testing Ping from Windows to WSL instance ${WslInstanceName} ..."
@@ -2055,7 +2056,7 @@ function Get-WslInstanceStatus {
     }
 
     if ($WslConf) {
-        $wslConfData = wsl.exe -d $WslInstanceName cat /etc/wsl.conf | ConvertFrom-IniContent
+        $wslConfData = wsl.exe -d $WslInstanceName -e cat /etc/wsl.conf | ConvertFrom-IniContent
         Write-Debug "$(_@) wslConf:`n$($wslConfData | Out-String)"
 
         $generateResolvConf = $wslConfData['network']?['generateResolvConf']
@@ -2079,13 +2080,13 @@ function Get-WslInstanceStatus {
         $moduleConfPath = Get-BashConfigFilePath -ConfigType 'WslIpHandler'
         Write-Debug "$(_@) `$moduleConfPath: $moduleConfPath"
 
-        $moduleConfExists = (wsl.exe -d $WslInstanceName -- test -f $moduleConfPath && Write-Output 1 || Write-Output 0) -eq 1
+        $moduleConfExists = (wsl.exe -d $WslInstanceName -e test -f $moduleConfPath && Write-Output 1 || Write-Output 0) -eq 1
         Write-Debug "$(_@) `$moduleConfExists: $moduleConfExists"
 
         if ($moduleConfExists) {
             $status.ModuleConfigFile = $moduleConfPath
 
-            $moduleConfData = wsl.exe -d $WslInstanceName cat "$moduleConfPath" | ConvertFrom-IniContent
+            $moduleConfData = wsl.exe -d $WslInstanceName -e cat $moduleConfPath | ConvertFrom-IniContent
             Write-Debug "$(_@) moduleConfData:$($moduleConfData | Out-String)"
 
             $staticIp = $moduleConfData['_']?['static_ip']
@@ -2123,7 +2124,7 @@ function Get-WslInstanceStatus {
     }
 
     if ($ModuleScript) {
-        $moduleScriptExists = wsl.exe -d $WslInstanceName test -f '/usr/local/bin/wsl-iphandler.sh' && 1 || 0
+        $moduleScriptExists = wsl.exe -d $WslInstanceName -e test -f '/usr/local/bin/wsl-iphandler.sh' && 1 || 0
         Write-Debug "$(_@) `$moduleScriptExists: $moduleScriptExists"
 
         if ($moduleScriptExists -eq '1') { $status.ModuleScript = $true }
@@ -2131,7 +2132,7 @@ function Get-WslInstanceStatus {
     }
 
     if ($ModuleSudoers) {
-        $moduleSudoersExists = wsl.exe -d $WslInstanceName test -f '/etc/sudoers.d/wsl-iphandler' && 1 || 0
+        $moduleSudoersExists = wsl.exe -d $WslInstanceName -e test -f '/etc/sudoers.d/wsl-iphandler' && 1 || 0
         Write-Debug "$(_@) `$moduleSudoersExists: $moduleSudoersExists"
 
         if ($moduleSudoersExists -eq '1') { $status.ModuleSudoers = $true }
@@ -2737,14 +2738,14 @@ function Test-EtcWslConfAndPrompt {
 
         if ($AutoFix) {
             Write-Debug "$(_@) Autofixing generateResolvConf in /etc/wsl.conf"
-            wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+            wsl.exe -d $WslInstanceName -e sed -irn $sed /etc/wsl.conf
         }
         else {
             $promptParams.Title = "Setting 'generateResolvConf' is disabled in /etc/wsl.conf!"
             switch (PromptForChoice @promptParams) {
                 0 {
                     Write-Debug "$(_@) User confirmed to fix generateResolvConf in /etc/wsl.conf"
-                    wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+                    wsl.exe -d $WslInstanceName -e sed -irn $sed /etc/wsl.conf
                 }
                 1 {
                     Throw "Operation was cancelled by user because Setting 'generateResolvConf' is disabled in /etc/wsl.conf."
@@ -2758,7 +2759,7 @@ function Test-EtcWslConfAndPrompt {
 
         if ($AutoFix) {
             Write-Debug "$(_@) Autofixing automount in /etc/wsl.conf"
-            wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+            wsl.exe -d $WslInstanceName -e sed -irn $sed /etc/wsl.conf
         }
         else {
             $promptParams.Title = 'Automount settings section is disabled in /etc/wsl.conf!'
@@ -2766,7 +2767,7 @@ function Test-EtcWslConfAndPrompt {
             switch (PromptForChoice @promptParams) {
                 0 {
                     Write-Debug "$(_@) User confirmed to fix automount in /etc/wsl.conf"
-                    wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+                    wsl.exe -d $WslInstanceName -e sed -irn $sed /etc/wsl.conf
                 }
                 1 {
                     Throw 'Operation was cancelled by user because Automount settings section is disabled in /etc/wsl.conf.'
@@ -2780,7 +2781,7 @@ function Test-EtcWslConfAndPrompt {
 
         if ($AutoFix) {
             Write-Debug "$(_@) Autofixing interop in /etc/wsl.conf"
-            wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+            wsl.exe -d $WslInstanceName -e sed -irn $sed /etc/wsl.conf
         }
         else {
             $promptParams.Title = 'Interop settings section is disabled in /etc/wsl.conf!'
@@ -2788,7 +2789,7 @@ function Test-EtcWslConfAndPrompt {
             switch (PromptForChoice @promptParams) {
                 0 {
                     Write-Debug "$(_@) User confirmed to fix interop in /etc/wsl.conf"
-                    wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+                    wsl.exe -d $WslInstanceName -e sed -irn $sed /etc/wsl.conf
                     $instanceStatus.InteropEnabled = $true
                 }
                 1 {
@@ -2803,7 +2804,7 @@ function Test-EtcWslConfAndPrompt {
 
         if ($AutoFix) {
             Write-Debug "$(_@) Autofixing appendWindowsPath in /etc/wsl.conf"
-            wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+            wsl.exe -d $WslInstanceName -e sed -irn $sed /etc/wsl.conf
         }
         else {
             $promptParams.Title = "Settings 'appendWindowsPath' in [interop] section is disabled in /etc/wsl.conf!"
@@ -2811,7 +2812,7 @@ function Test-EtcWslConfAndPrompt {
             switch (PromptForChoice @promptParams) {
                 0 {
                     Write-Debug "$(_@) User confirmed to fix appendWindowsPath in /etc/wsl.conf"
-                    wsl.exe -d $WslInstanceName sed -irn $sed /etc/wsl.conf
+                    wsl.exe -d $WslInstanceName -e sed -irn $sed /etc/wsl.conf
                 }
                 1 {
                     Throw "Operation was cancelled by user because Settings 'appendWindowsPath' in [interop] section is disabled in /etc/wsl.conf."
