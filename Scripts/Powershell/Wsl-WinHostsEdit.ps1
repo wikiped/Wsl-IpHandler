@@ -24,12 +24,12 @@ if ($null -eq $HostName) { $errorMessage += 'Host Name(s) must be provided.' }
 if ($errorMessage) { Write-Error "$errorMessage" -ErrorAction Stop }
 
 $originalHostsContent = Get-HostsFileContent
-Write-Debug "$(_@) Lines in Hosts File Before Processing: $($originalHostsContent.Count)"
+Write-Debug "$(_@) Lines in Hosts File Before Processing: $(@($originalHostsContent).Count)"
 
 $contentModified = $false
 
 $newHostsContent = Add-IpAddressHostRecord -Records $originalHostsContent -HostIpAddress $HostIpAddress -HostName $HostName -Modified ([ref]$contentModified) -ReplaceExistingHosts
-Write-Debug "$(_@) Lines in Hosts File After Processing: $($newHostsContent.Count)"
+Write-Debug "$(_@) Lines in Hosts File After Processing: $(@($newHostsContent).Count)"
 Write-Debug "$(_@) Was Hosts File modified?: $contentModified"
 
 
