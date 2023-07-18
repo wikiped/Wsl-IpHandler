@@ -491,13 +491,13 @@ function Install-WslBashScripts {
     Write-Debug "$(_@) `$DebugPreference=$DebugPreference"
     Write-Debug "$(_@) `$VerbosePreference=$VerbosePreference"
 
-    $bashInstallScriptWslPath = "`$(wslpath '$BashInstallScript')"
+    $bashInstallScriptWslPath = "`"`$(wslpath '$BashInstallScript')`""
     $bashCommand = @(
         $bashInstallScriptWslPath
         "'$BashAutorunScriptSource'"
-        "$BashAutorunScriptTarget"
+        "'$BashAutorunScriptTarget'"
         "'$WinHostsEditScript'"
-        "$BashConfigPath"
+        "'$BashConfigPath'"
         "$WindowsHostName"
         "$WslHostName"
         "$WslHostIpOrOffset"
@@ -574,7 +574,7 @@ function Uninstall-WslBashScripts {
     Write-Debug "$(_@) `$DebugPreference=$DebugPreference"
     Write-Debug "$(_@) `$VerbosePreference=$VerbosePreference"
 
-    $bashUninstallScriptWslPath = "`$(wslpath '$BashUninstallScript')"
+    $bashUninstallScriptWslPath = "`"`$(wslpath '$BashUninstallScript')`""
     $bashCommand = @(
         $bashUninstallScriptWslPath
         $BashAutorunScriptName
@@ -683,7 +683,7 @@ function Update-WslBashScripts {
     #endregion WSL Autorun
 
     #region Bash Script WSL Paths
-    $BashUpdateScriptWslPath = "`$(wslpath '$BashUpdateScript')"
+    $BashUpdateScriptWslPath = "`"`$(wslpath '$BashUpdateScript')`""
     Write-Debug "$(_@) `$BashUpdateScriptWslPath='$BashUpdateScriptWslPath'"
     #endregion Bash Script WSL Paths
 
