@@ -442,9 +442,9 @@ In Dynamic mode WSL IP Handler does not interfere with how Windows manages WSL n
 
 If Powershell is not part of day-to-day use it is still possible to benefit from this module's features.
 
-Powershell is need to 1) install (i.e. download) and 2) activate the module for all WSL instances where IP address control is required.
+Powershell is needed to 1) install (i.e. download) and 2) activate the module for all WSL instances where IP address control is required.
 
-For this to work the module has to activated with two switch parameters to `Install-WslIpHandler`:
+For this to work the module has to be activated with two switch parameters to `Install-WslIpHandler`:
 
 ```powershell
 Install-WslIpHandler <...other parameters...> -DontModifyPsProfile -UseScheduledTaskOnUserLogOn
